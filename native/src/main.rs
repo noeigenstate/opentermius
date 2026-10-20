@@ -1514,6 +1514,9 @@ fn run() -> anyhow::Result<()> {
     if smoke && scene == "editor" {
         ui.invoke_new_host();
     }
+    if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
+        ui.invoke_open_section(section.into());
+    }
     if smoke && scene == "sftp" {
         with_state(|s| {
             let folder = s.store.lock().unwrap().path.parent().unwrap().join("files");
