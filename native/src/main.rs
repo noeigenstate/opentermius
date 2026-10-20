@@ -3,7 +3,7 @@ use anyhow::Context;
 use opentermius::{
     ssh::{self, Command, Event},
     store::{self, Profile, Store},
-    terminal::{Snapshot, Terminal},
+    terminal::{self, Snapshot, Terminal},
 };
 use slint::Model;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
@@ -27,6 +27,7 @@ struct SessionView {
     snapshot: Snapshot,
     status: String,
     connected: bool,
+    ended: bool,
     selection: Option<((i32, i32), (i32, i32))>,
 }
 enum Prompt {
@@ -51,6 +52,14 @@ enum Prompt {
         reply: oneshot::Sender<Option<Vec<String>>>,
     },
 }
+impl Prompt {
+    fn session_id(&self) -> &str {
+        match self {
+            Self::Username { id } | Self::Credential { id }
+            | Self::Host { id, .. } | Self::Auth { id, .. } => id,
+        }
+    }
+}
 struct State {
     ui: slint::Weak<AppWindow>,
     store: Arc<Mutex<Store>>,
@@ -70,6 +79,8 @@ struct State {
     local_request: u64,
     pending_sftp: Option<String>,
     render_model: Rc<VecModel<TerminalRun>>,
+    selecting: bool,
+    mouse_button: Option<terminal::MouseButton>,
     forwards: BTreeMap<String, opentermius::forwarding::RunningRule>,
     forward_errors: BTreeMap<String, String>,
     forwarding_timer: slint::Timer,
@@ -113,6 +124,31 @@ fn drag_window(window: &slint::Window) {
             }
         }
     }
+}
+
+fn keypad_key(key: slint::winit_030::winit::keyboard::PhysicalKey) -> Option<char> {
+    use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
+    Some(match key {
+        PhysicalKey::Code(KeyCode::Numpad0) => '0',
+        PhysicalKey::Code(KeyCode::Numpad1) => '1',
+        PhysicalKey::Code(KeyCode::Numpad2) => '2',
+        PhysicalKey::Code(KeyCode::Numpad3) => '3',
+        PhysicalKey::Code(KeyCode::Numpad4) => '4',
+        PhysicalKey::Code(KeyCode::Numpad5) => '5',
+        PhysicalKey::Code(KeyCode::Numpad6) => '6',
+        PhysicalKey::Code(KeyCode::Numpad7) => '7',
+        PhysicalKey::Code(KeyCode::Numpad8) => '8',
+        PhysicalKey::Code(KeyCode::Numpad9) => '9',
+        PhysicalKey::Code(KeyCode::NumpadDecimal) => '.',
+        PhysicalKey::Code(KeyCode::NumpadComma) => ',',
+        PhysicalKey::Code(KeyCode::NumpadAdd) => '+',
+        PhysicalKey::Code(KeyCode::NumpadSubtract) => '-',
+        PhysicalKey::Code(KeyCode::NumpadMultiply | KeyCode::NumpadStar) => '*',
+        PhysicalKey::Code(KeyCode::NumpadDivide) => '/',
+        PhysicalKey::Code(KeyCode::NumpadEqual) => '=',
+        PhysicalKey::Code(KeyCode::NumpadEnter) => '\r',
+        _ => return None,
+    })
 }
 
 impl State {
@@ -181,6 +217,8 @@ impl State {
                             } else {
                                 s.status.clone().into()
                             },
+                            disconnected: s.ended,
+                            local: s.local,
                         })
                     })
                     .collect(),
@@ -223,6 +261,7 @@ impl State {
                 ui.set_cursor_row(view.snapshot.cursor.0 as i32);
                 ui.set_cursor_col(view.snapshot.cursor.1 as i32);
                 ui.set_cursor_visible(view.connected && view.snapshot.cursor_visible);
+                ui.set_reconnect_hint(view.ended && !view.local && !view.connected);
                 let mut selected = Vec::new();
                 if let Some((mut from, mut to)) = view.selection.filter(|(a, b)| a != b) {
                     if from > to {
@@ -253,7 +292,8 @@ impl State {
                 ui.set_local_session(false);
                 ui.set_active_host("".into());
                 self.render_model.set_vec(Vec::new());
-                ui.set_cursor_visible(false)
+                ui.set_cursor_visible(false);
+                ui.set_reconnect_hint(false)
             }
         }
     }
@@ -361,11 +401,14 @@ impl State {
                 snapshot: Terminal::new(self.rows, self.cols).snapshot(),
                 status: "等待认证".into(),
                 connected: false,
+                ended: false,
                 selection: None,
             },
         );
         self.order.push(id.clone());
         self.active = Some(id.clone());
+        self.selecting = false;
+        self.mouse_button = None;
         self.reset_files();
         self.tabs();
         self.display();
@@ -449,11 +492,14 @@ impl State {
                 snapshot: Terminal::new(self.rows, self.cols).snapshot(),
                 status: "Starting".into(),
                 connected: false,
+                ended: false,
                 selection: None,
             },
         );
         self.order.push(id.clone());
         self.active = Some(id);
+        self.selecting = false;
+        self.mouse_button = None;
         self.reset_files();
         self.tabs();
         self.display();
@@ -491,10 +537,229 @@ impl State {
         self.order.retain(|i| i != id);
         if self.active.as_deref() == Some(id) {
             self.active = self.order.last().cloned();
+            self.selecting = false;
+            self.mouse_button = None;
             self.reset_files();
+        }
+        self.queue.retain(|prompt| prompt.session_id() != id);
+        if self.prompt.as_ref().is_some_and(|prompt| prompt.session_id() == id) {
+            self.answer(false, String::new());
         }
         self.tabs();
         self.display();
+    }
+    fn reconnect(&mut self, id: &str) {
+        let Some(view) = self.sessions.get(id) else {
+            return;
+        };
+        if view.local || !view.ended {
+            return;
+        }
+        let profile = view.profile.clone();
+        let position = self.order.iter().position(|item| item == id).unwrap_or(0);
+        // A fresh transport ID prevents a delayed Closed/Screen event from the
+        // previous connection from changing the replacement session.
+        self.close(id);
+        self.connect_profile(profile);
+        if let Some(new_id) = self.active.clone() {
+            self.order.retain(|item| item != &new_id);
+            self.order.insert(position.min(self.order.len()), new_id);
+        }
+        self.tabs();
+        self.focus_terminal();
+    }
+    fn duplicate(&mut self, id: &str) {
+        let Some(view) = self.sessions.get(id) else {
+            return;
+        };
+        if view.local {
+            self.open_terminal();
+        } else {
+            let profile = view.profile.clone();
+            self.connect_profile(profile);
+        }
+        self.focus_terminal();
+    }
+    fn focus_terminal(&self) {
+        if self.prompt.is_none() {
+            if let Some(ui) = self.ui.upgrade() {
+                ui.invoke_focus_terminal();
+            }
+        }
+    }
+    fn select(&mut self, row: i32, col: i32, extend: bool) {
+        if let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get_mut(id)) {
+            let p = (
+                row.clamp(0, view.snapshot.rows.saturating_sub(1) as i32),
+                col.clamp(0, view.snapshot.cols.saturating_sub(1) as i32),
+            );
+            view.selection = Some(if extend {
+                (view.selection.map_or(p, |selection| selection.0), p)
+            } else {
+                (p, p)
+            });
+        }
+        self.display();
+    }
+    fn pointer(&mut self, kind: i32, button: i32, row: i32, col: i32, ctrl: bool, alt: bool, shift: bool) {
+        let Some((mode, encoding, rows, cols)) = self
+            .active
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .map(|view| {
+                (
+                    view.snapshot.mouse_mode,
+                    view.snapshot.mouse_encoding,
+                    view.snapshot.rows,
+                    view.snapshot.cols,
+                )
+            })
+        else {
+            return;
+        };
+        let row = row.clamp(0, rows.saturating_sub(1) as i32);
+        let col = col.clamp(0, cols.saturating_sub(1) as i32);
+        // Finish a drag through the same path even if Shift changes mid-drag.
+        let tracking = mode != vt100::MouseProtocolMode::None
+            && ((!shift && !self.selecting) || self.mouse_button.is_some());
+        if !tracking {
+            match kind {
+                0 if button == 0 => {
+                    self.selecting = true;
+                    self.select(row, col, shift);
+                }
+                1 | 3 => self.selecting = false,
+                2 => {
+                    if self.selecting {
+                        self.select(row, col, true);
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+        let button = match button {
+            0 => terminal::MouseButton::Left,
+            1 => terminal::MouseButton::Right,
+            2 => terminal::MouseButton::Middle,
+            _ => terminal::MouseButton::None,
+        };
+        let mods = terminal::MouseMods {
+            ctrl,
+            alt,
+            shift: false,
+        };
+        let event = match kind {
+            0 => {
+                if button == terminal::MouseButton::None {
+                    return;
+                }
+                self.mouse_button = Some(button);
+                terminal::MouseEvent {
+                    kind: terminal::MouseKind::Press,
+                    button,
+                    row: row as u16 + 1,
+                    col: col as u16 + 1,
+                    mods,
+                }
+            }
+            1 | 3 => {
+                let button = self.mouse_button.take().unwrap_or(button);
+                if button == terminal::MouseButton::None {
+                    return;
+                }
+                terminal::MouseEvent {
+                    kind: terminal::MouseKind::Release,
+                    button,
+                    row: row as u16 + 1,
+                    col: col as u16 + 1,
+                    mods,
+                }
+            }
+            _ => {
+                let button = match self.mouse_button {
+                    Some(button) => button,
+                    None if mode == vt100::MouseProtocolMode::AnyMotion => {
+                        terminal::MouseButton::None
+                    }
+                    None => return,
+                };
+                terminal::MouseEvent {
+                    kind: terminal::MouseKind::Motion,
+                    button,
+                    row: row as u16 + 1,
+                    col: col as u16 + 1,
+                    mods,
+                }
+            }
+        };
+        if let Some(data) = terminal::encode_mouse(event, mode, encoding) {
+            self.send(Command::Input(data));
+        }
+    }
+    fn wheel(&mut self, row: i32, col: i32, delta: i32, ctrl: bool, alt: bool, shift: bool) {
+        if delta == 0 {
+            return;
+        }
+        let Some((mode, encoding, rows, cols)) = self
+            .active
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .map(|view| {
+                (
+                    view.snapshot.mouse_mode,
+                    view.snapshot.mouse_encoding,
+                    view.snapshot.rows,
+                    view.snapshot.cols,
+                )
+            })
+        else {
+            return;
+        };
+        if mode == vt100::MouseProtocolMode::None || shift {
+            self.send(Command::Scroll(delta));
+            return;
+        }
+        let row = row.clamp(0, rows.saturating_sub(1) as i32) as u16 + 1;
+        let col = col.clamp(0, cols.saturating_sub(1) as i32) as u16 + 1;
+        let kind = if delta > 0 {
+            terminal::MouseKind::WheelUp
+        } else {
+            terminal::MouseKind::WheelDown
+        };
+        let mods = terminal::MouseMods {
+            ctrl,
+            alt,
+            shift: false,
+        };
+        let mut data = Vec::new();
+        for _ in 0..delta.unsigned_abs().min(10) {
+            if let Some(bytes) = terminal::encode_mouse(
+                terminal::MouseEvent {
+                    kind,
+                    button: terminal::MouseButton::None,
+                    row,
+                    col,
+                    mods,
+                },
+                mode,
+                encoding,
+            ) {
+                data.extend_from_slice(&bytes);
+            }
+        }
+        if !data.is_empty() {
+            self.send(Command::Input(data));
+        }
+    }
+    fn ime(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        let data = terminal::encode_text(text);
+        if data.len() <= 1024 * 1024 {
+            self.send(Command::Input(data));
+        }
     }
     fn next_prompt(&mut self) {
         if self.prompt.is_some() {
@@ -582,8 +847,10 @@ impl State {
                     }
                     self.credentials(id);
                 } else if let Some(view) = self.sessions.get_mut(&id) {
-                    view.status = "Cancelled".into();
+                    view.status = "已取消".into();
+                    view.ended = true;
                     self.tabs();
+                    self.display();
                 }
             }
             Some(Prompt::Credential { id }) => {
@@ -591,7 +858,9 @@ impl State {
                     self.start(&id, std::mem::take(&mut answer))
                 } else if let Some(s) = self.sessions.get_mut(&id) {
                     s.status = "已取消".into();
+                    s.ended = true;
                     self.tabs();
+                    self.display();
                 }
             }
             Some(Prompt::Host {
@@ -644,8 +913,17 @@ impl State {
         }
         answer.zeroize();
         self.next_prompt();
+        self.focus_terminal();
     }
     fn event(&mut self, event: Event) {
+        let id = match &event {
+            Event::Status { id, .. } | Event::Screen { id, .. } | Event::HostKey { id, .. }
+            | Event::AuthPrompt { id, .. } | Event::Files { id, .. } | Event::Transfer { id, .. }
+            | Event::OverwriteRequired { id, .. } | Event::Closed { id } => id,
+        };
+        if !self.sessions.contains_key(id) {
+            return;
+        }
         match event {
             Event::Status {
                 id,
@@ -655,6 +933,9 @@ impl State {
             } => {
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = connected;
+                    if connected {
+                        s.ended = false;
+                    }
                     s.status = if connected {
                         "已连接".into()
                     } else {
@@ -662,6 +943,8 @@ impl State {
                     };
                 }
                 if connected {
+                    self.selecting = false;
+                    self.mouse_button = None;
                     if let Some(ui) = self.ui.upgrade() {
                         self.cols = ui.get_terminal_cols().clamp(2, 500) as u16;
                         self.rows = ui.get_terminal_rows().clamp(2, 300) as u16;
@@ -816,9 +1099,14 @@ impl State {
                 pages::logs::closed(&id);
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = false;
+                    s.ended = true;
                     if s.status == "已连接" || s.status == "连接中" {
                         s.status = "已断开".into();
                     }
+                }
+                if self.active.as_deref() == Some(&id) {
+                    self.selecting = false;
+                    self.mouse_button = None;
                 }
                 self.queue.retain(|prompt| match prompt {
                     Prompt::Username { id: pending }
@@ -849,86 +1137,47 @@ impl State {
             self.paste();
             return;
         }
-        use slint::platform::Key;
-        if shift
-            && (text == SharedString::from(Key::PageUp).as_str()
-                || text == SharedString::from(Key::PageDown).as_str())
-        {
-            self.send(Command::Scroll(
-                if text == SharedString::from(Key::PageUp).as_str() {
-                    self.rows as i32
-                } else {
-                    -(self.rows as i32)
-                },
-            ));
+        let Some(id) = self.active.clone() else {
+            return;
+        };
+        let Some((ended, local, app_cursor)) = self
+            .sessions
+            .get(&id)
+            .map(|view| (view.ended, view.local, view.snapshot.application_cursor))
+        else {
+            return;
+        };
+        if ended {
+            if !local
+                && !ctrl
+                && !alt
+                && matches!(
+                    terminal::Key::from_text(text),
+                    Some(terminal::Key::Named(terminal::NamedKey::Enter))
+                )
+            {
+                self.reconnect(&id);
+            }
             return;
         }
-        let application = self
-            .active
-            .as_ref()
-            .and_then(|id| self.sessions.get(id))
-            .is_some_and(|s| s.snapshot.application_cursor);
-        let arrows = [
-            (Key::UpArrow, 'A'),
-            (Key::DownArrow, 'B'),
-            (Key::RightArrow, 'C'),
-            (Key::LeftArrow, 'D'),
-        ];
-        let mut data = if let Some((_, suffix)) = arrows
-            .iter()
-            .find(|(key, _)| text == SharedString::from(*key).as_str())
-        {
-            format!("\x1b{}{suffix}", if application { "O" } else { "[" }).into_bytes()
-        } else {
-            let mut special = None;
-            for (k, v) in [
-                (Key::Return, "\r"),
-                (Key::Backspace, "\x7f"),
-                (Key::Tab, "\t"),
-                (Key::Escape, "\x1b"),
-                (Key::Delete, "\x1b[3~"),
-                (Key::Home, "\x1b[H"),
-                (Key::End, "\x1b[F"),
-                (Key::PageUp, "\x1b[5~"),
-                (Key::PageDown, "\x1b[6~"),
-                (Key::Insert, "\x1b[2~"),
-                (Key::F1, "\x1bOP"),
-                (Key::F2, "\x1bOQ"),
-                (Key::F3, "\x1bOR"),
-                (Key::F4, "\x1bOS"),
-                (Key::F5, "\x1b[15~"),
-                (Key::F6, "\x1b[17~"),
-                (Key::F7, "\x1b[18~"),
-                (Key::F8, "\x1b[19~"),
-                (Key::F9, "\x1b[20~"),
-                (Key::F10, "\x1b[21~"),
-                (Key::F11, "\x1b[23~"),
-                (Key::F12, "\x1b[24~"),
-            ] {
-                if text == SharedString::from(k).as_str() {
-                    special = Some(v.as_bytes().to_vec());
-                    break;
-                }
-            }
-            if let Some(data) = special {
-                data
-            } else if ctrl && text.len() == 1 {
-                let c = text.as_bytes()[0];
-                if (b'@'..=b'_').contains(&c.to_ascii_uppercase()) {
-                    vec![c.to_ascii_uppercase() & 0x1f]
-                } else {
-                    text.as_bytes().to_vec()
-                }
-            } else {
-                text.as_bytes().to_vec()
-            }
+        let Some(key) = terminal::Key::from_text(text) else {
+            return;
         };
-        if alt && !data.starts_with(b"\x1b") {
-            data.insert(0, 0x1b)
-        }
-        if !data.is_empty() {
+        let mods = terminal::KeyMods::new(ctrl, alt, shift);
+        if let Some(data) = terminal::encode_key(key, mods, app_cursor) {
             self.send(Command::Input(data));
         }
+    }
+    fn keypad(&self, key: char, mods: terminal::KeyMods) -> bool {
+        let application = self.active.as_ref().and_then(|id| self.sessions.get(id))
+            .is_some_and(|view| !view.ended && view.snapshot.application_keypad);
+        if application {
+            if let Some(data) = terminal::encode_keypad(key, mods, true) {
+                self.send(Command::Input(data));
+                return true;
+            }
+        }
+        false
     }
     fn copy(&self) {
         if let Some(s) = self.active.as_ref().and_then(|id| self.sessions.get(id)) {
@@ -1218,6 +1467,8 @@ fn run() -> anyhow::Result<()> {
             local_request: 0,
             pending_sftp: None,
             render_model: Rc::new(VecModel::from(Vec::new())),
+            selecting: false,
+            mouse_button: None,
             forwards: BTreeMap::new(),
             forward_errors: BTreeMap::new(),
             forwarding_timer: slint::Timer::default(),
@@ -1304,6 +1555,8 @@ fn run() -> anyhow::Result<()> {
     });
     ui.on_select_session(|id| {
         with_state(|s| {
+            s.selecting = false;
+            s.mouse_button = None;
             s.active = if id.is_empty() {
                 None
             } else {
@@ -1329,6 +1582,31 @@ fn run() -> anyhow::Result<()> {
     ui.on_terminal_key(|text, ctrl, alt, shift| {
         with_state(|s| s.key(&text, ctrl, alt, shift));
     });
+    // Public Slint key events omit the physical key location. Handle the
+    // application keypad before normalization, including NumLock-off keys.
+    {
+        use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        let weak = ui.as_weak();
+        let mut modifiers = winit::keyboard::ModifiersState::empty();
+        ui.window().on_winit_window_event(move |_, event| {
+            if let winit::event::WindowEvent::ModifiersChanged(value) = event {
+                modifiers = value.state();
+            }
+            if let winit::event::WindowEvent::KeyboardInput { event, is_synthetic: false, .. } = event {
+                if event.state == winit::event::ElementState::Pressed
+                    && weak.upgrade().is_some_and(|ui| ui.get_terminal_has_focus())
+                {
+                    if let Some(key) = keypad_key(event.physical_key) {
+                        let mods = terminal::KeyMods::new(modifiers.control_key(), modifiers.alt_key(), modifiers.shift_key());
+                        if with_state(|s| s.keypad(key, mods)).unwrap_or(false) {
+                            return EventResult::PreventDefault;
+                        }
+                    }
+                }
+            }
+            EventResult::Propagate
+        });
+    }
     ui.on_terminal_size(|cols, rows| {
         with_state(|s| {
             s.cols = cols.clamp(2, 500) as u16;
@@ -1342,21 +1620,23 @@ fn run() -> anyhow::Result<()> {
     ui.on_terminal_scroll(|delta| {
         with_state(|s| s.send(Command::Scroll(delta)));
     });
+    ui.on_terminal_pointer(|kind, button, row, col, ctrl, alt, shift| {
+        with_state(|s| s.pointer(kind, button, row, col, ctrl, alt, shift));
+    });
+    ui.on_terminal_wheel(|row, col, delta, ctrl, alt, shift| {
+        with_state(|s| s.wheel(row, col, delta, ctrl, alt, shift));
+    });
+    ui.on_terminal_ime(|text| {
+        with_state(|s| s.ime(&text));
+    });
+    ui.on_reconnect_session(|id| {
+        with_state(|s| s.reconnect(&id));
+    });
+    ui.on_duplicate_session(|id| {
+        with_state(|s| s.duplicate(&id));
+    });
     ui.on_select_terminal(|row, col, extend| {
-        with_state(|s| {
-            if let Some(view) = s.active.as_ref().and_then(|id| s.sessions.get_mut(id)) {
-                let p = (
-                    row.clamp(0, view.snapshot.rows.saturating_sub(1) as i32),
-                    col.clamp(0, view.snapshot.cols.saturating_sub(1) as i32),
-                );
-                view.selection = Some(if extend {
-                    (view.selection.map_or(p, |selection| selection.0), p)
-                } else {
-                    (p, p)
-                });
-            }
-            s.display();
-        });
+        with_state(|s| s.select(row, col, extend));
     });
     ui.on_copy_terminal(|| {
         with_state(|s| s.copy());
@@ -1574,7 +1854,34 @@ fn run() -> anyhow::Result<()> {
     if smoke && scene == "editor" {
         ui.invoke_new_host();
     }
-    if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
+    if smoke && (scene == "section-terminal" || scene == "section-terminal-menu") {
+        // Deterministic disconnected SSH fixture; no network or saved secrets.
+        with_state(|s| {
+            let mut terminal = Terminal::new(s.rows, s.cols);
+            terminal.feed("\x1b[32mdev@workspace\x1b[0m:~$ echo 'Terminal ready · 中文输入'\r\nTerminal ready · 中文输入\r\n\r\n\x1b[33mSSH session ended.\x1b[0m\r\n".as_bytes());
+            let id = "terminal-smoke".to_string();
+            s.sessions.insert(id.clone(), SessionView {
+                local: false,
+                profile: Profile {
+                    id: "smoke-profile".into(), name: "Development".into(), host: "localhost".into(),
+                    port: 22, username: "dev".into(), auth_type: "password".into(),
+                    private_key_path: String::new(), group: String::new(), encrypted_secret: None,
+                },
+                transport: None, snapshot: terminal.snapshot(), status: "已断开".into(),
+                connected: false, ended: true, selection: None,
+            });
+            s.order.push(id.clone());
+            s.active = Some(id);
+            s.tabs();
+            s.display();
+        });
+        ui.invoke_focus_terminal();
+        if scene == "section-terminal-menu" {
+            ui.set_tab_menu_session("terminal-smoke".into());
+            ui.set_tab_menu_reconnectable(true);
+            ui.set_tab_menu_x(410.0);
+        }
+    } else if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
         if section == "xshell-import" {
             ui.invoke_open_section("hosts".into());
             ui.set_menu_open(true);
@@ -1613,8 +1920,8 @@ fn run() -> anyhow::Result<()> {
                     let Some(ui)=weak.upgrade()else{return Ok(true)};
                     anyhow::ensure!(started.elapsed()<Duration::from_secs(18),"原生界面连接自检超时：{}",ui.get_status_text());
                     if ui.get_prompt_visible(){if ui.get_prompt_is_key(){anyhow::ensure!(ui.get_prompt_message().contains("SHA256:"),"未显示主机指纹");fingerprint=true;ui.invoke_answer_prompt(true,"".into());}else{credentials=true;ui.invoke_answer_prompt(true,"test-password".into());}}
-                    let (connected,echo)=with_state(|s|s.active.as_ref().and_then(|id|s.sessions.get(id)).map(|v|(v.connected,v.snapshot.lines.iter().any(|l|l.contains("native-ui-test")))).unwrap_or_default()).unwrap_or_default();
-                    if stage==0&&connected{ui.invoke_terminal_key("native-ui-test\r".into(),false,false,false);stage=1;}
+                    let (connected,echo)=with_state(|s|s.active.as_ref().and_then(|id|s.sessions.get(id)).map(|v|(v.connected,v.snapshot.lines.iter().any(|l|l.contains("中文native-ui-test")))).unwrap_or_default()).unwrap_or_default();
+                    if stage==0&&connected{ui.invoke_focus_terminal();ui.window().dispatch_event(slint::platform::WindowEvent::KeyPressed{text:"中文native-ui-test\r".into()});stage=1;}
                     if stage==1&&echo{ui.invoke_list_files(".".into());stage=2;}
                     if stage==2&&ui.get_files().row_count()>0{paint_at=std::time::Instant::now();stage=3;}
                     if stage==3&&paint_at.elapsed()>Duration::from_millis(250){
@@ -1671,5 +1978,182 @@ fn main() {
             .set_level(rfd::MessageLevel::Error)
             .show();
         std::process::exit(1)
+    }
+}
+
+#[cfg(test)]
+mod terminal_ux_tests {
+    use super::*;
+
+    pub(super) fn state() -> State {
+        let (events, _) = mpsc::channel(32);
+        State {
+            ui: slint::Weak::default(),
+            store: Arc::new(Mutex::new(Store { path: PathBuf::new(), data: store::Data::default() })),
+            runtime: tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap(),
+            events, sessions: BTreeMap::new(), order: Vec::new(), active: None,
+            queue: VecDeque::new(), prompt: None, cols: 80, rows: 24,
+            file_path: String::new(), search: String::new(), group_filter: String::new(),
+            local_path: PathBuf::new(), local_request: 0, pending_sftp: None,
+            render_model: Rc::new(VecModel::from(Vec::new())),
+            selecting: false, mouse_button: None,
+            forwards: BTreeMap::new(), forward_errors: BTreeMap::new(),
+            forwarding_timer: slint::Timer::default(),
+        }
+    }
+
+    fn profile() -> Profile {
+        Profile {
+            id: "profile".into(), name: "Test SSH".into(), host: "localhost".into(), port: 2222,
+            username: "tester".into(), auth_type: "password".into(),
+            private_key_path: String::new(), group: "Development".into(), encrypted_secret: None,
+        }
+    }
+
+    pub(super) fn session(state: &mut State) -> mpsc::Receiver<Command> {
+        let (commands, rx) = mpsc::channel(32);
+        let task = state.runtime.spawn(async {});
+        state.sessions.insert("old".into(), SessionView {
+            local: false, profile: profile(),
+            transport: Some(ssh::Session { id: "old".into(), commands, task }),
+            snapshot: Terminal::new(24, 80).snapshot(), status: "已连接".into(),
+            connected: true, ended: false, selection: None,
+        });
+        state.order.push("old".into());
+        state.active = Some("old".into());
+        rx
+    }
+
+    fn input(rx: &mut mpsc::Receiver<Command>) -> Vec<u8> {
+        match rx.try_recv().unwrap() {
+            Command::Input(bytes) => bytes,
+            other => panic!("expected input, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn slint_keys_and_committed_text_reach_transport() {
+        let mut s = state();
+        let mut rx = session(&mut s);
+        for (key, expected) in [
+            (slint::platform::Key::F12, b"\x1b[24~".as_slice()),
+            (slint::platform::Key::Backspace, b"\x7f".as_slice()),
+            (slint::platform::Key::Backtab, b"\x1b[Z".as_slice()),
+        ] {
+            s.key(SharedString::from(key).as_str(), false, false, false);
+            assert_eq!(input(&mut rx), expected);
+        }
+        s.key("中文输入", false, false, false);
+        assert_eq!(input(&mut rx), "中文输入".as_bytes());
+        s.ime("你好，世界");
+        assert_eq!(input(&mut rx), "你好，世界".as_bytes());
+        s.key(" ", true, false, false);
+        assert_eq!(input(&mut rx), [0]);
+        s.sessions.get_mut("old").unwrap().snapshot.application_cursor = true;
+        s.key(SharedString::from(slint::platform::Key::UpArrow).as_str(), false, false, false);
+        assert_eq!(input(&mut rx), b"\x1bOA");
+        s.key(SharedString::from(slint::platform::Key::PageUp).as_str(), true, false, true);
+        assert_eq!(input(&mut rx), b"\x1b[5;6~");
+    }
+
+    #[test]
+    fn physical_keypad_mapping_and_application_dispatch() {
+        use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
+        let mut s = state();
+        let mut rx = session(&mut s);
+        for (code, character, expected) in [
+            (KeyCode::Numpad0, '0', "\x1bOp"), (KeyCode::Numpad1, '1', "\x1bOq"),
+            (KeyCode::Numpad2, '2', "\x1bOr"), (KeyCode::Numpad3, '3', "\x1bOs"),
+            (KeyCode::Numpad4, '4', "\x1bOt"), (KeyCode::Numpad5, '5', "\x1bOu"),
+            (KeyCode::Numpad6, '6', "\x1bOv"), (KeyCode::Numpad7, '7', "\x1bOw"),
+            (KeyCode::Numpad8, '8', "\x1bOx"), (KeyCode::Numpad9, '9', "\x1bOy"),
+            (KeyCode::NumpadDecimal, '.', "\x1bOn"), (KeyCode::NumpadComma, ',', "\x1bOl"),
+            (KeyCode::NumpadAdd, '+', "\x1bOk"), (KeyCode::NumpadSubtract, '-', "\x1bOm"),
+            (KeyCode::NumpadMultiply, '*', "\x1bOj"), (KeyCode::NumpadDivide, '/', "\x1bOo"),
+            (KeyCode::NumpadEqual, '=', "\x1bOX"), (KeyCode::NumpadEnter, '\r', "\x1bOM"),
+        ] {
+            assert_eq!(keypad_key(PhysicalKey::Code(code)), Some(character));
+            s.sessions.get_mut("old").unwrap().snapshot.application_keypad = false;
+            assert!(!s.keypad(character, terminal::KeyMods::default()));
+            s.sessions.get_mut("old").unwrap().snapshot.application_keypad = true;
+            assert!(s.keypad(character, terminal::KeyMods::default()));
+            assert_eq!(input(&mut rx), expected.as_bytes());
+            // Main keyboard digits and Enter retain their normal encoding.
+            let text = if character == '\r' { "\n".to_string() } else { character.to_string() };
+            s.key(&text, false, false, false);
+            assert_eq!(input(&mut rx), character.to_string().as_bytes());
+        }
+        assert_eq!(keypad_key(PhysicalKey::Code(KeyCode::Enter)), None);
+        assert_eq!(keypad_key(PhysicalKey::Code(KeyCode::Digit1)), None);
+    }
+
+    #[test]
+    fn wheel_and_pointer_follow_remote_mouse_modes() {
+        let mut s = state();
+        let mut rx = session(&mut s);
+        s.wheel(0, 0, 3, false, false, false);
+        assert!(matches!(rx.try_recv().unwrap(), Command::Scroll(3)));
+        s.pointer(0, 1, 2, 3, false, false, false);
+        assert!(!s.selecting); // Right-click never begins a text selection.
+        s.pointer(0, 0, 2, 3, false, false, false);
+        s.pointer(2, -1, 2, 8, false, false, false);
+        s.pointer(1, 0, 2, 8, false, false, false);
+        assert_eq!(s.sessions["old"].selection, Some(((2, 3), (2, 8))));
+        let mut t = Terminal::new(24, 80);
+        t.feed(b"\x1b[?1002h\x1b[?1006h");
+        s.sessions.get_mut("old").unwrap().snapshot = t.snapshot();
+        s.pointer(0, 0, 2, 3, true, false, false);
+        assert_eq!(input(&mut rx), b"\x1b[<16;4;3M");
+        s.pointer(2, -1, 3, 4, true, false, false);
+        assert_eq!(input(&mut rx), b"\x1b[<48;5;4M");
+        s.pointer(1, 0, 3, 4, true, false, false);
+        assert_eq!(input(&mut rx), b"\x1b[<16;5;4m");
+        s.wheel(3, 4, -2, false, true, false);
+        assert_eq!(input(&mut rx), b"\x1b[<73;5;4M\x1b[<73;5;4M");
+        s.wheel(3, 4, 2, false, false, true);
+        assert!(matches!(rx.try_recv().unwrap(), Command::Scroll(2)));
+        s.pointer(2, -1, 0, 0, false, false, false);
+        assert!(rx.try_recv().is_err()); // Button-motion mode needs a held button.
+    }
+
+    #[test]
+    fn reconnect_reuses_profile_without_reusing_transport_id() {
+        let mut s = state();
+        let _rx = session(&mut s);
+        s.reconnect("old");
+        assert_eq!(s.active.as_deref(), Some("old")); // Connected/connecting tabs are protected.
+        s.event(Event::Closed { id: "old".into() });
+        assert!(s.sessions["old"].ended);
+        s.key(SharedString::from(slint::platform::Key::Return).as_str(), false, false, false);
+        let new_id = s.active.clone().unwrap();
+        assert_ne!(new_id, "old");
+        assert_eq!(s.sessions.len(), 1);
+        assert_eq!(s.order, [new_id.clone()]);
+        let view = &s.sessions[&new_id];
+        assert_eq!(view.profile.host, "localhost");
+        assert_eq!(view.profile.port, 2222);
+        assert_eq!(view.profile.username, "tester");
+        assert!(!view.ended);
+        assert!(matches!(s.prompt, Some(Prompt::Credential { .. })));
+        s.event(Event::Closed { id: "old".into() });
+        assert!(!s.sessions[&new_id].ended);
+        s.answer(false, String::new());
+        assert!(s.sessions[&new_id].ended);
+    }
+
+    #[test]
+    fn duplicate_session_keeps_original_and_uses_its_profile() {
+        let mut s = state();
+        let _rx = session(&mut s);
+        s.duplicate("old");
+        assert_eq!(s.sessions.len(), 2);
+        let id = s.active.clone().unwrap();
+        assert_ne!(id, "old");
+        assert_eq!(s.sessions[&id].profile.id, s.sessions["old"].profile.id);
+        assert!(s.sessions["old"].connected);
+        s.close(&id);
+        assert_eq!(s.order, ["old"]);
+        assert_eq!(s.active.as_deref(), Some("old"));
+        assert!(s.prompt.is_none());
     }
 }

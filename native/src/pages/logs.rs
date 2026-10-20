@@ -331,6 +331,53 @@ mod tests {
     }
 
     #[test]
+    fn reconnect_records_a_new_attempt_through_state_start() {
+        let temp = tempfile::tempdir().unwrap();
+        LOGS.with(|slot| {
+            *slot.borrow_mut() = LogsState {
+                book: Some(LogBook::open(temp.path()).unwrap()),
+                ..LogsState::default()
+            };
+        });
+        let mut state = crate::terminal_ux_tests::state();
+        // Keep transport tasks pending: this test exercises the real State
+        // lifecycle and history hooks without opening a network connection.
+        state.runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _input = crate::terminal_ux_tests::session(&mut state);
+        state.start("old", "test-only".into());
+        state.event(crate::Event::Status {
+            id: "old".into(), connected: true, message: String::new(), error: false,
+        });
+        let first = LogBook::open(temp.path()).unwrap().recent(10);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].status, logs::CONNECTED);
+
+        state.event(crate::Event::Closed { id: "old".into() });
+        state.reconnect("old");
+        let replacement = state.active.clone().unwrap();
+        assert_ne!(replacement, "old");
+        state.answer(true, "test-only".into());
+        let entries = LogBook::open(temp.path()).unwrap().recent(10);
+        assert_eq!(entries.len(), 2);
+        assert_ne!(entries[0].id, entries[1].id);
+        assert_eq!(entries[0].host_id, first[0].host_id);
+        assert_eq!(entries[0].address, first[0].address);
+        assert_eq!(entries[0].status, logs::CONNECTING);
+        assert_eq!(entries[1].status, logs::CLOSED);
+        assert!(entries[1].ended_at.is_some());
+
+        // Delayed events from the old transport must not close the new entry.
+        state.event(crate::Event::Closed { id: "old".into() });
+        assert_eq!(LogBook::open(temp.path()).unwrap().recent(10)[0].status, logs::CONNECTING);
+        state.close(&replacement);
+        assert_eq!(LogBook::open(temp.path()).unwrap().recent(10)[0].status, logs::CLOSED);
+        LOGS.with(|slot| *slot.borrow_mut() = LogsState::default());
+    }
+
+    #[test]
     fn session_hooks_persist_lifecycle_and_keep_failed_status_after_close() {
         let temp = tempfile::tempdir().unwrap();
         LOGS.with(|slot| {
