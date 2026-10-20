@@ -132,16 +132,35 @@ pub fn spawn(
     }
 }
 
-struct Client {
+pub(crate) struct Client {
     id: String,
     host: String,
     port: u16,
     known: Option<String>,
     events: mpsc::Sender<Event>,
     cancelled: watch::Receiver<bool>,
+    forwarding: Option<ForwardTarget>,
 }
 impl client::Handler for Client {
     type Error = anyhow::Error;
+    // A forwarding connection accepts only channels for its own remote rule.
+    async fn server_channel_open_forwarded_tcpip(
+        &mut self,
+        channel: russh::Channel<client::Msg>,
+        address: &str,
+        port: u32,
+        _: &str,
+        _: u32,
+        reply: client::ChannelOpenHandle,
+        _: &mut client::Session,
+    ) -> Result<()> {
+        if let Some(target) = &self.forwarding {
+            if target.address == address && target.port == port {
+                let _ = target.incoming.try_send(Forwarded { channel, reply });
+            }
+        }
+        Ok(())
+    }
     async fn check_server_key(
         &mut self,
         key: &russh::keys::PublicKeyOrCertificate,
@@ -184,6 +203,7 @@ async fn connect(
     known: Option<String>,
     events: &mpsc::Sender<Event>,
     cancelled: watch::Receiver<bool>,
+    forwarding: Option<ForwardTarget>,
 ) -> Result<client::Handle<Client>> {
     let config = Arc::new(client::Config {
         keepalive_interval: Some(Duration::from_secs(15)),
@@ -199,6 +219,7 @@ async fn connect(
         known,
         events: events.clone(),
         cancelled,
+        forwarding,
     };
     let mut ssh = timeout(
         Duration::from_secs(150),
@@ -292,6 +313,40 @@ async fn connect(
     Ok(ssh)
 }
 
+// Forwarding uses the same host-key and credential authentication as terminals.
+pub(crate) struct Forwarded {
+    pub channel: russh::Channel<client::Msg>,
+    pub reply: client::ChannelOpenHandle,
+}
+pub(crate) struct ForwardTarget {
+    pub address: String,
+    pub port: u32,
+    pub incoming: mpsc::Sender<Forwarded>,
+}
+pub(crate) async fn connect_forwarding(
+    p: &Profile,
+    secret: &str,
+    known: String,
+    cancelled: watch::Receiver<bool>,
+    target: Option<ForwardTarget>,
+) -> Result<client::Handle<Client>> {
+    ensure!(!known.is_empty(), "请先连接此主机一次并信任主机指纹");
+    let (events, mut rx) = mpsc::channel(8);
+    let connecting = connect(&p.id, p, secret, Some(known), &events, cancelled, target);
+    tokio::pin!(connecting);
+    loop {
+        tokio::select! {
+            result = &mut connecting => return result,
+            event = rx.recv() => match event {
+                Some(Event::AuthPrompt { .. } | Event::HostKey { .. }) => {
+                    bail!("转发需要交互认证，请先连接此主机一次并保存可用凭据")
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 // Cancelling the owning session also cancels the SFTP task and closes its channels.
 struct AbortOnDrop(JoinHandle<()>);
 impl Drop for AbortOnDrop {
@@ -322,7 +377,7 @@ async fn run(
     let (cancel_tx, cancel_rx) = watch::channel(false);
     let _cancellation = CancelOnDrop(cancel_tx);
     let ssh = {
-        let connecting = connect(id, &p, &secret, known, &events, cancel_rx);
+        let connecting = connect(id, &p, &secret, known, &events, cancel_rx, None);
         tokio::pin!(connecting);
         loop {
             tokio::select! {

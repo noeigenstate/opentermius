@@ -1,10 +1,81 @@
 import { Theme, Action, Input, Field } from "../common.slint";
+import { ComboBox, CheckBox, ScrollView } from "std-widgets.slint";
 
-// Rust reads and drives this page through the global bridge.
+export struct ForwardRow { id: string, label: string, route: string, status: string, busy: bool, error: bool, connections: int }
+export struct ForwardDraft { id: string, label: string, kind-index: int, host-index: int, bind-address: string, bind-port: string, destination-host: string, destination-port: string, auto-start: bool }
 export global ForwardingBridge {
+    in-out property <[ForwardRow]> rules;
+    in-out property <[string]> hosts;
+    in-out property <ForwardDraft> draft;
+    in-out property <bool> editor-open: false;
+    in-out property <string> message;
+    callback new-rule;
+    callback edit-rule(string);
+    callback delete-rule(string);
+    callback toggle-rule(string);
+    callback save-rule;
 }
 
 export component ForwardingPage inherits Rectangle {
     background: Theme.base;
-    Text { text: "Port Forwarding"; color: Theme.secondary; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+    VerticalLayout {
+        padding: 24px; spacing: 16px;
+        HorizontalLayout {
+            height: 32px; vertical-stretch: 0;
+            Text { text: "Port Forwarding"; color: Theme.text; font-size: 22px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+            Action { text: "New forwarding rule"; primary: true; horizontal-stretch: 0; clicked => { ForwardingBridge.new-rule(); } }
+        }
+        Text { text: "Secure TCP tunnels through your saved SSH hosts."; color: Theme.secondary; font-size: 14px; height: 20px; vertical-stretch: 0; }
+        if !ForwardingBridge.editor-open && ForwardingBridge.rules.length == 0: Rectangle {
+            border-radius: 10px; border-width: 1px; border-color: Theme.border; background: Theme.high;
+            VerticalLayout { alignment: center; spacing: 12px;
+                Text { text: "Your tunnels, in one place"; color: Theme.text; font-size: 18px; horizontal-alignment: center; }
+                Text { text: "Create a local, remote, or SOCKS5 forwarding rule to get started."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+            }
+        }
+        if !ForwardingBridge.editor-open && ForwardingBridge.rules.length > 0: ScrollView {
+            VerticalLayout { spacing: 10px;
+                for rule in ForwardingBridge.rules: Rectangle {
+                    height: 112px; border-radius: 10px; border-width: 1px; border-color: Theme.border; background: Theme.highest;
+                    VerticalLayout { padding: 14px; spacing: 8px;
+                        HorizontalLayout { spacing: 10px;
+                            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: rule.error ? #c44a4a : rule.busy ? #21a67a : Theme.secondary; y: 10px; }
+                            Text { text: rule.label; font-size: 15px; font-weight: 600; color: Theme.text; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; min-width: 0px; }
+                            Action { text: rule.busy ? "Stop" : "Start"; primary: !rule.busy; horizontal-stretch: 0; clicked => { ForwardingBridge.toggle-rule(rule.id); } }
+                            Action { text: "Edit"; disabled: rule.busy; horizontal-stretch: 0; clicked => { ForwardingBridge.edit-rule(rule.id); } }
+                            Action { text: "Delete"; disabled: rule.busy; horizontal-stretch: 0; clicked => { ForwardingBridge.delete-rule(rule.id); } }
+                        }
+                        Text { text: rule.route; font-size: 13px; color: Theme.secondary; overflow: elide; }
+                        Text { text: rule.status + " · " + rule.connections + " connections"; font-size: 12px; color: rule.error ? #c44a4a : Theme.secondary; overflow: elide; }
+                    }
+                }
+            }
+        }
+        if ForwardingBridge.editor-open: ScrollView {
+            VerticalLayout { spacing: 12px; padding: 20px; alignment: start;
+                Text { text: ForwardingBridge.draft.id == "" ? "New forwarding rule" : "Edit forwarding rule"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Field { label: "Label"; placeholder: "Development database"; text <=> ForwardingBridge.draft.label; }
+                Text { text: "Type"; color: Theme.secondary; font-size: 12px; }
+                ComboBox { model: ["Local", "Remote", "Dynamic"]; current-index <=> ForwardingBridge.draft.kind-index; }
+                Text { text: ForwardingBridge.draft.kind-index == 0 ? "Local port → SSH host → destination" : ForwardingBridge.draft.kind-index == 1 ? "SSH host port → this computer → destination" : "Local SOCKS5 proxy → SSH host → requested destination"; font-size: 13px; color: Theme.secondary; }
+                Text { text: "SSH host"; color: Theme.secondary; font-size: 12px; }
+                ComboBox { model: ForwardingBridge.hosts; current-index <=> ForwardingBridge.draft.host-index; }
+                if ForwardingBridge.hosts.length == 0: Text { text: "请先在 Hosts 中保存 SSH 主机并连接一次。"; color: #c44a4a; font-size: 13px; }
+                HorizontalLayout { spacing: 16px;
+                    Field { label: "Bind address"; text <=> ForwardingBridge.draft.bind-address; placeholder: "127.0.0.1"; }
+                    Field { label: "Bind port"; text <=> ForwardingBridge.draft.bind-port; placeholder: "8080"; }
+                }
+                if ForwardingBridge.draft.kind-index != 2: HorizontalLayout { spacing: 16px;
+                    Field { label: "Destination host"; text <=> ForwardingBridge.draft.destination-host; placeholder: "127.0.0.1"; }
+                    Field { label: "Destination port"; text <=> ForwardingBridge.draft.destination-port; placeholder: "5432"; }
+                }
+                CheckBox { text: "Start automatically at launch"; checked <=> ForwardingBridge.draft.auto-start; }
+                HorizontalLayout { alignment: end; spacing: 10px;
+                    Action { text: "Cancel"; clicked => { ForwardingBridge.editor-open = false; ForwardingBridge.message = ""; } }
+                    Action { text: "Save"; primary: true; clicked => { ForwardingBridge.save-rule(); } }
+                }
+            }
+        }
+        if ForwardingBridge.message != "": Text { text: ForwardingBridge.message; color: #c44a4a; font-size: 13px; wrap: word-wrap; }
+    }
 }

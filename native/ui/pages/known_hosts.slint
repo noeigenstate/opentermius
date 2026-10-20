@@ -1,10 +1,138 @@
-import { Theme, Action, Input, Field } from "../common.slint";
+import { Theme, Action, Input } from "../common.slint";
+import { ListView } from "std-widgets.slint";
+
+// One trusted fingerprint; `usage` lists the saved hosts that connect with it.
+export struct KnownHostRow {
+    host: string,
+    port: int,
+    fingerprint: string,
+    usage: string,
+}
 
 // Rust reads and drives this page through the global bridge.
 export global KnownHostsBridge {
+    in-out property <string> search;
+    in property <[KnownHostRow]> entries;
+    in property <int> total;
+    in property <string> status;
+    in property <bool> status-error;
+    callback refresh;
+    callback page-shown;
+    callback import-known-hosts;
+    callback remove-host(string, int);
 }
 
 export component KnownHostsPage inherits Rectangle {
     background: Theme.base;
-    Text { text: "Known Hosts"; color: Theme.secondary; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+    property <bool> confirm-visible: false;
+    property <string> pending-host;
+    property <int> pending-port;
+    property <string> pending-fingerprint;
+    init => { KnownHostsBridge.page-shown(); }
+
+    VerticalLayout {
+        padding-top: 20px;
+        padding-left: 30px;
+        padding-right: 30px;
+        padding-bottom: 14px;
+        spacing: 0px;
+
+        Rectangle { height: 50px; background: transparent;
+            HorizontalLayout { spacing: 10px;
+                VerticalLayout { horizontal-stretch: 1; alignment: center; spacing: 2px;
+                    Text { text: "Known Hosts"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                    Text {
+                        text: KnownHostsBridge.total == 1 ? "1 trusted server fingerprint" : KnownHostsBridge.total + " trusted server fingerprints";
+                        color: Theme.secondary; font-size: 12px;
+                    }
+                }
+                Action { text: "Import from OpenSSH known_hosts"; clicked => { KnownHostsBridge.import-known-hosts(); } }
+                Action { text: "Refresh"; flat: true; clicked => { KnownHostsBridge.refresh(); } }
+            }
+        }
+        Rectangle { height: 14px; background: transparent; }
+        Rectangle { height: 36px; background: transparent;
+            Input {
+                x: 0px;
+                width: 380px;
+                height: 36px;
+                text <=> KnownHostsBridge.search;
+                placeholder-text: "Search host or fingerprint";
+                edited => { KnownHostsBridge.refresh(); }
+                accepted => { KnownHostsBridge.refresh(); }
+            }
+            Text {
+                x: 394px;
+                width: parent.width - 394px;
+                height: parent.height;
+                vertical-alignment: center;
+                overflow: elide;
+                color: Theme.secondary;
+                font-size: 12px;
+                text: KnownHostsBridge.search == "" ? "" : "\{KnownHostsBridge.entries.length} of \{KnownHostsBridge.total} shown";
+            }
+        }
+        Rectangle { height: 10px; background: transparent; }
+        if KnownHostsBridge.entries.length > 0: Rectangle { height: 34px; background: transparent;
+            Text { x: 14px; width: parent.width * 0.24 - 24px; height: parent.height; text: "Host"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
+            Text { x: parent.width * 0.24; width: 64px; height: parent.height; text: "Port"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; }
+            Text { x: parent.width * 0.24 + 70px; width: parent.width * 0.42 - 84px; height: parent.height; text: "SHA-256 fingerprint"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
+            Text { x: parent.width * 0.66 + 14px; width: parent.width * 0.34 - 130px; height: parent.height; text: "Saved hosts"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
+        }
+        if KnownHostsBridge.entries.length == 0: Rectangle { vertical-stretch: 1; background: transparent;
+            Rectangle {
+                width: Math.min(500px, parent.width - 40px); height: 240px;
+                x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+                Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; border-width: 1px; border-color: #798c940d; background: #798c941a;
+                    Image { source: @image-url("../icons/known.svg"); x: 20px; y: 20px; width: 20px; height: 20px; }
+                }
+                Text { y: 90px; height: 28px; width: parent.width; text: KnownHostsBridge.total == 0 ? "No trusted hosts" : "No matching hosts"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
+                Text { y: 125px; height: 24px; width: parent.width; text: KnownHostsBridge.total == 0 ? "Fingerprints you confirm are stored on this computer." : "Try another host name or fingerprint."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+            }
+        }
+        if KnownHostsBridge.entries.length > 0: ListView {
+            vertical-stretch: 1;
+            for entry in KnownHostsBridge.entries: Rectangle { height: 56px; background: transparent;
+                Rectangle {
+                    x: 0px; y: 0px; width: parent.width; height: 52px;
+                    border-radius: 10px; border-width: 1px; border-color: Theme.border;
+                    background: card-touch.has-hover ? Theme.high : Theme.highest;
+                    card-touch := TouchArea { }
+                    Text { x: 14px; y: 0px; width: parent.width * 0.24 - 24px; height: parent.height; text: entry.host; color: Theme.text; font-size: 14px; font-weight: 500; vertical-alignment: center; overflow: elide; }
+                    Text { x: parent.width * 0.24; y: 0px; width: 64px; height: parent.height; text: "\{entry.port}"; color: Theme.secondary; font-size: 13px; vertical-alignment: center; }
+                    Text { x: parent.width * 0.24 + 70px; y: 0px; width: parent.width * 0.42 - 84px; height: parent.height; text: entry.fingerprint; color: Theme.secondary; font-family: "Consolas"; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                    Text { x: parent.width * 0.66 + 14px; y: 0px; width: parent.width * 0.34 - 130px; height: parent.height; text: entry.usage; color: Theme.secondary; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                    Action { x: parent.width - 94px; y: 11px; width: 80px; height: 30px; text: "Remove"; flat: true; secondary: true; clicked => { root.pending-host = entry.host; root.pending-port = entry.port; root.pending-fingerprint = entry.fingerprint; root.confirm-visible = true; } }
+                }
+            }
+        }
+        Rectangle { height: 8px; background: transparent; }
+        if KnownHostsBridge.status != "": Rectangle { height: 30px; background: Theme.high; border-radius: 6px;
+            Text { x: 10px; width: parent.width - 20px; height: parent.height; text: KnownHostsBridge.status; color: KnownHostsBridge.status-error ? #f25e61 : Theme.secondary; font-size: 12px; vertical-alignment: center; overflow: elide; }
+        }
+    }
+
+    if root.confirm-visible: Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        background: #14172940;
+        TouchArea { clicked => { root.confirm-visible = false; } }
+        Rectangle {
+            width: Math.min(440px, parent.width - 40px); height: 232px;
+            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+            background: Theme.highest; border-radius: 12px; border-width: 1px; border-color: Theme.border;
+            VerticalLayout { padding: 20px; spacing: 10px;
+                Text { text: "Remove trusted host?"; color: Theme.text; font-size: 16px; font-weight: 600; }
+                Text { text: "OpenTermius will ask you to confirm the fingerprint again the next time it connects to this host."; color: Theme.secondary; font-size: 13px; wrap: word-wrap; }
+                Rectangle { height: 48px; border-radius: 8px; border-width: 1px; border-color: Theme.border; background: Theme.base;
+                    Text { x: 10px; y: 5px; width: parent.width - 20px; height: 20px; text: "\{root.pending-host}:\{root.pending-port}"; color: Theme.text; font-size: 13px; vertical-alignment: center; overflow: elide; }
+                    Text { x: 10px; y: 25px; width: parent.width - 20px; height: 18px; text: root.pending-fingerprint; color: Theme.secondary; font-family: "Consolas"; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                }
+                Rectangle { vertical-stretch: 1; background: transparent; }
+                HorizontalLayout { alignment: end; spacing: 8px;
+                    Action { text: "Cancel"; clicked => { root.confirm-visible = false; } }
+                    Action { text: "Remove"; primary: true; clicked => { root.confirm-visible = false; KnownHostsBridge.remove-host(root.pending-host, root.pending-port); } }
+                }
+            }
+        }
+    }
 }

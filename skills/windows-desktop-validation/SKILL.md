@@ -10,7 +10,8 @@ description: 修改或打包本项目 Rust/Slint Windows 客户端时，验证�
 1. 在 `native/` 执行 `cargo test --locked`。传输测试启动临时回环 SSH/SFTP 服务；本地终端测试启动真实 PowerShell，并检查断开、退出和任务取消后的子进程回收。测试以退出码为准。
 2. 在交互式 Windows 桌面执行 `cargo test --test transport native_gui_live_selftest -- --ignored --nocapture`。测试通过真实原生窗口回调检查认证弹窗、服务器指纹、SSH 回显、SFTP、DPAPI、持久化与截图，使用独立临时配置。
 3. 执行 `cargo build --release --locked`。将 `OPENTERMIUS_TEST_EXECUTABLE` 设为最终 release 可执行文件的绝对路径，再运行上述 GUI 测试，验证实际发布产物。`OPENTERMIUS_SMOKE_OUTPUT` 可指定截图与 JSON 的输出目录。
-4. 仓库根目录运行 `./native/scripts/package.ps1 -SkipBuild` 打包已验证的版本，输出到 `native/releases/`，同时生成 SHA-256。可传入 `-DumpbinPath <dumpbin>` 检查最终 DLL 导入，不能仅凭构建配置断言不依赖 VC 运行库。
+4. 仓库根目录运行 `./native/scripts/package.ps1 -SkipBuild` 打包已验证的版本，生成 NSIS 安装程序 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 及 `checksums.json`；不再生成便携 exe。脚本按 `-MakensisPath`、`PATH`、标准安装目录、`%LOCALAPPDATA%\electron-builder\Cache\nsis` 的顺序查找 `makensis.exe`，找不到时按提示使用 `winget install -e --id NSIS.NSIS --accept-source-agreements --accept-package-agreements` 安装。可传入 `-DumpbinPath <dumpbin>` 检查最终程序的 DLL 导入，不能仅凭构建配置断言不依赖 VC 运行库。
+5. 运行 `./native/installer/verify-install.ps1` 验证安装程序：以 `/S /D=<独立临时目录>` 静默安装（`/D` 必须是最后一个参数且不加引号），检查程序文件、开始菜单及桌面快捷方式、HKCU 卸载项中的版本与路径，再静默卸载并确认安装目录、快捷方式和注册表项清理干净、`%APPDATA%\OpenTermius` 配置保留。测试结束后不得留下注册表项或快捷方式；测试脚本发现已有安装或 OpenTermius 正在运行时会拒绝运行，避免破坏真实环境。
 
 ## 界面对照
 

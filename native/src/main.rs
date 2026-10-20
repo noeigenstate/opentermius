@@ -72,6 +72,9 @@ struct State {
     local_request: u64,
     pending_sftp: Option<String>,
     render_model: Rc<VecModel<TerminalRun>>,
+    forwards: BTreeMap<String, opentermius::forwarding::RunningRule>,
+    forward_errors: BTreeMap<String, String>,
+    forwarding_timer: slint::Timer,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -123,6 +126,8 @@ impl State {
     }
     fn hosts(&self) {
         if let (Some(ui), Ok(store)) = (self.ui.upgrade(), self.store.lock()) {
+            ui.set_host_view_mode(store.data.hosts_view.view_mode().as_str().into());
+            ui.set_host_sort_mode(store.data.hosts_view.sort_mode().as_str().into());
             let mut groups = BTreeMap::<String, i32>::new();
             for p in &store.data.hosts {
                 if !p.group.is_empty() {
@@ -583,6 +588,7 @@ impl State {
         let Some(view) = self.sessions.get_mut(id) else {
             return;
         };
+        pages::logs::ssh_started(id, &view.profile);
         let known = self.store.lock().ok().and_then(|s| {
             s.data
                 .known_hosts
@@ -609,6 +615,7 @@ impl State {
             return;
         }
         let id = uuid::Uuid::new_v4().to_string();
+        pages::logs::local_started(&id);
         let transport =
             opentermius::local::spawn(self.runtime.handle(), id.clone(), self.events.clone());
         let profile = Profile {
@@ -663,6 +670,7 @@ impl State {
         }
     }
     fn close(&mut self, id: &str) {
+        pages::logs::closed(id);
         if let Some(view) = self.sessions.remove(id) {
             if let Some(transport) = view.transport {
                 let _ = transport.commands.try_send(Command::Disconnect);
@@ -861,6 +869,7 @@ impl State {
                 }
                 let mut connect_stamp_error = None;
                 if connected {
+                    pages::logs::connected(&id);
                     let profile_id = self
                         .sessions
                         .get(&id)
@@ -884,6 +893,8 @@ impl State {
                             }
                         }
                     }
+                } else if error {
+                    pages::logs::failed(&id, &message);
                 }
                 self.status(
                     if connected {
@@ -1021,6 +1032,7 @@ impl State {
                 }
             }
             Event::Closed { id } => {
+                pages::logs::closed(&id);
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = false;
                     if s.status == "已连接" || s.status == "连接中" {
@@ -1426,6 +1438,9 @@ fn run() -> anyhow::Result<()> {
             local_request: 0,
             pending_sftp: None,
             render_model: Rc::new(VecModel::from(Vec::new())),
+            forwards: BTreeMap::new(),
+            forward_errors: BTreeMap::new(),
+            forwarding_timer: slint::Timer::default(),
         })
     });
     ui.on_save_host(|draft| with_state(|s| s.save(draft)).unwrap_or(false));
@@ -1712,6 +1727,51 @@ fn run() -> anyhow::Result<()> {
             });
         }
     });
+    ui.on_import_xshell(|| {
+        let default = opentermius::import_xshell::default_sessions_dir();
+        let mut picker = rfd::FileDialog::new().set_title("Import from Xshell — Select Sessions folder");
+        if let Some(path) = &default {
+            picker = picker.set_directory(path);
+        }
+        let choice = default.as_ref().map(|path| {
+            rfd::MessageDialog::new()
+                .set_title("Import from Xshell")
+                .set_description(format!("Import sessions from {}?\nChoose No to select another folder.", path.display()))
+                .set_buttons(rfd::MessageButtons::YesNoCancel)
+                .show()
+        });
+        let path = match choice {
+            Some(rfd::MessageDialogResult::Yes) => default,
+            Some(rfd::MessageDialogResult::Cancel) => return,
+            _ => picker.pick_folder(),
+        };
+        if let Some(path) = path {
+            let scanned = opentermius::import_xshell::scan(&path);
+            let message = with_state(|s| {
+                let result = s.store.lock()
+                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .and_then(|mut store| opentermius::import_xshell::merge(&mut store, scanned));
+                match result {
+                    Ok(summary) => {
+                        s.hosts();
+                        let message = summary.message();
+                        s.status(&message, false);
+                        Some(message)
+                    }
+                    Err(error) => {
+                        s.status(error.to_string(), true);
+                        None
+                    }
+                }
+            }).flatten();
+            if let Some(message) = message {
+                rfd::MessageDialog::new()
+                    .set_title("Import from Xshell")
+                    .set_description(message)
+                    .show();
+            }
+        }
+    });
     ui.on_export_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
             .set_title("导出主机（不含凭据）")
@@ -1782,7 +1842,12 @@ fn run() -> anyhow::Result<()> {
         ui.invoke_new_host();
     }
     if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
-        ui.invoke_open_section(section.into());
+        if section == "xshell-import" {
+            ui.invoke_open_section("hosts".into());
+            ui.set_menu_open(true);
+        } else {
+            ui.invoke_open_section(section.into());
+        }
     }
     if smoke && scene == "sftp" {
         with_state(|s| {
@@ -1816,7 +1881,18 @@ fn run() -> anyhow::Result<()> {
                     anyhow::ensure!(started.elapsed()<Duration::from_secs(18),"原生界面连接自检超时：{}",ui.get_status_text());
                     if ui.get_prompt_visible(){if ui.get_prompt_is_key(){anyhow::ensure!(ui.get_prompt_message().contains("SHA256:"),"未显示主机指纹");fingerprint=true;ui.invoke_answer_prompt(true,"".into());}else{credentials=true;ui.invoke_answer_prompt(true,"test-password".into());}}
                     let (connected,echo)=with_state(|s|s.active.as_ref().and_then(|id|s.sessions.get(id)).map(|v|(v.connected,v.snapshot.lines.iter().any(|l|l.contains("native-ui-test")))).unwrap_or_default()).unwrap_or_default();
-                    if stage==0&&connected{ui.invoke_terminal_key("native-ui-test\r".into(),false,false,false);stage=1;}
+                    if stage==0&&connected{
+                        with_state(|s| -> anyhow::Result<()> {
+                            let store = s.store.lock().unwrap();
+                            let host = &store.data.hosts[0];
+                            let stamp = host.last_connected.as_deref().context("缺少最近连接时间")?;
+                            chrono::DateTime::parse_from_rfc3339(stamp)?;
+                            let book = opentermius::logs::LogBook::open(store.path.parent().context("配置目录无效")?)?;
+                            anyhow::ensure!(book.entries().iter().any(|entry| entry.host_id == host.id && entry.status == opentermius::logs::CONNECTED), "成功连接未写入连接历史");
+                            Ok(())
+                        }).unwrap()?;
+                        ui.invoke_terminal_key("native-ui-test\r".into(),false,false,false);stage=1;
+                    }
                     if stage==1&&echo{ui.invoke_list_files(".".into());stage=2;}
                     if stage==2&&ui.get_files().row_count()>0{paint_at=std::time::Instant::now();stage=3;}
                     if stage==3&&paint_at.elapsed()>Duration::from_millis(250){
@@ -1849,7 +1925,12 @@ fn run() -> anyhow::Result<()> {
     ui.run()?;
     STATE.with(|slot| {
         if let Some(mut state) = slot.borrow_mut().take() {
-            for (_, mut view) in std::mem::take(&mut state.sessions) {
+            for forward in state.forwards.values() { forward.request_stop(); }
+            for (_, mut forward) in std::mem::take(&mut state.forwards) {
+                state.runtime.block_on(forward.stop());
+            }
+            for (id, mut view) in std::mem::take(&mut state.sessions) {
+                pages::logs::closed(&id);
                 if let Some(transport) = view.transport.take() {
                     let _ = transport.commands.try_send(Command::Disconnect);
                     transport.task.abort();
