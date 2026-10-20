@@ -1,5 +1,4 @@
-#![cfg(windows)]
-//! Real ConPTY + PowerShell tests. No profile files or persisted settings.
+//! Real portable-pty shell tests, including child reaping after cancellation.
 use opentermius::{
     local,
     ssh::{Command, Event, Session},
@@ -8,12 +7,14 @@ use opentermius::{
 use std::time::Duration;
 use tokio::{sync::mpsc, time::timeout};
 
+#[cfg(windows)]
 #[link(name = "kernel32")]
 unsafe extern "system" {
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
     fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
     fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
 }
+#[cfg(windows)]
 fn alive(pid: u32) -> bool {
     // SYNCHRONIZE permits waiting without process-memory access.
     unsafe {
@@ -25,6 +26,11 @@ fn alive(pid: u32) -> bool {
         CloseHandle(handle);
         running
     }
+}
+#[cfg(unix)]
+fn alive(pid: u32) -> bool {
+    // kill(pid, 0) also sees zombies, so this verifies that wait() reaped them.
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
 }
 async fn stopped(pid: u32) {
     timeout(Duration::from_secs(5), async {
@@ -78,11 +84,13 @@ async fn start() -> (Session, mpsc::Receiver<Event>, u32) {
             _ => {}
         }
     }
+    #[cfg(windows)]
+    let pid_command = b"Write-Output ('LOCAL_PID:'+$PID)\r".to_vec();
+    #[cfg(unix)]
+    let pid_command = b"printf 'LOCAL_PID:%s\\n' \"$$\"\r".to_vec();
     session
         .commands
-        .send(Command::Input(
-            b"Write-Output ('LOCAL_PID:'+$PID)\r".to_vec(),
-        ))
+        .send(Command::Input(pid_command))
         .await
         .unwrap();
     let snapshot = screen(&mut rx, |s| {
@@ -108,17 +116,25 @@ async fn start() -> (Session, mpsc::Receiver<Event>, u32) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn local_powershell_unicode_resize_sftp_rejection_and_disconnect() {
+async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
     let (session, mut rx, pid) = start().await;
+    #[cfg(windows)]
+    let unicode_command = b"Write-Output ('UNICODE:'+[char]0x4f60+[char]0x597d)\r".to_vec();
+    #[cfg(unix)]
+    let unicode_command = "printf 'UNICODE:%s\\nLOCAL_TERM:%s\\n' '你好' \"$TERM\"\r"
+        .as_bytes()
+        .to_vec();
     session
         .commands
-        .send(Command::Input(
-            b"Write-Output ('UNICODE:'+[char]0x4f60+[char]0x597d)\r".to_vec(),
-        ))
+        .send(Command::Input(unicode_command))
         .await
         .unwrap();
     screen(&mut rx, |s| {
         s.lines.iter().any(|line| line.contains("UNICODE:你好"))
+            && (cfg!(windows)
+                || s.lines
+                    .iter()
+                    .any(|line| line.trim() == "LOCAL_TERM:xterm-256color"))
     })
     .await;
     session
@@ -127,9 +143,22 @@ async fn local_powershell_unicode_resize_sftp_rejection_and_disconnect() {
         .await
         .unwrap();
     screen(&mut rx, |s| s.cols == 80 && s.rows == 24).await;
-    session.commands.send(Command::Input(b"Write-Output ('LOCAL_SIZE:'+$Host.UI.RawUI.WindowSize.Width+','+$Host.UI.RawUI.WindowSize.Height)\r".to_vec())).await.unwrap();
+    #[cfg(windows)]
+    let size_command = b"Write-Output ('LOCAL_SIZE:'+$Host.UI.RawUI.WindowSize.Width+','+$Host.UI.RawUI.WindowSize.Height)\r".to_vec();
+    #[cfg(unix)]
+    let size_command = b"printf 'LOCAL_SIZE:'; stty size\r".to_vec();
+    session
+        .commands
+        .send(Command::Input(size_command))
+        .await
+        .unwrap();
     screen(&mut rx, |s| {
-        s.lines.iter().any(|line| line.trim() == "LOCAL_SIZE:80,24")
+        let expected = if cfg!(windows) {
+            "LOCAL_SIZE:80,24"
+        } else {
+            "LOCAL_SIZE:24 80"
+        };
+        s.lines.iter().any(|line| line.trim() == expected)
     })
     .await;
     session
@@ -155,6 +184,26 @@ async fn local_powershell_unicode_resize_sftp_rejection_and_disconnect() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn aborting_session_terminates_owned_local_shell() {
     let (session, _rx, pid) = start().await;
+    session.task.abort();
+    let _ = session.task.await;
+    stopped(pid).await;
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn aborting_session_reaps_a_shell_that_ignores_hangup() {
+    let (session, mut rx, pid) = start().await;
+    session
+        .commands
+        .send(Command::Input(
+            b"trap '' HUP; printf 'IGNORE_HUP_READY\\n'\r".to_vec(),
+        ))
+        .await
+        .unwrap();
+    screen(&mut rx, |s| {
+        s.lines.iter().any(|line| line.trim() == "IGNORE_HUP_READY")
+    })
+    .await;
     session.task.abort();
     let _ = session.task.await;
     stopped(pid).await;

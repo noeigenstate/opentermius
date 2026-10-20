@@ -41,6 +41,7 @@ export component AppWindow inherits Window {
     in property <[GroupRow]> groups;
     in property <[TabRow]> tabs;
     in property <[TerminalRun]> terminal-runs;
+    in property <string> terminal-font: "Consolas";
     in property <[SelectionRun]> selection-runs;
     in property <int> cursor-row;
     in property <int> cursor-col;
@@ -149,7 +150,7 @@ export component AppWindow inherits Window {
     }
     public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = true; root.section = name; } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
-    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
+    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: root.terminal-font; font-size: 14px; font-weight: 400; opacity: 0; }
     VerticalLayout { spacing: 0px;
         Rectangle { height: 51px; background: Theme.lowest;
             HorizontalLayout { padding-left: 9px; padding-right: 10px; spacing: 5px;
@@ -336,7 +337,7 @@ export component AppWindow inherits Window {
                         terminal-area := Rectangle { horizontal-stretch: 1; background: #141729; clip: true;
                             for run in root.terminal-runs: Rectangle {
                                 x: 10px + run.col * root.cell-advance; y: 8px + run.row * 18px; width: run.width * root.cell-advance; height: 18px; background: run.bg;
-                                Text { text: run.text; color: run.fg; font-family: "Consolas"; font-size: 14px; font-weight: run.bold ? 700 : 400; vertical-alignment: center; }
+                                Text { text: run.text; color: run.fg; font-family: root.terminal-font; font-size: 14px; font-weight: run.bold ? 700 : 400; vertical-alignment: center; }
                                 if run.underline: Rectangle { y: 16px; height: 1px; background: run.fg; }
                             }
                             for selection in root.selection-runs: Rectangle { x: 10px + selection.col * root.cell-advance; y: 8px + selection.row * 18px; width: selection.width * root.cell-advance; height: 18px; background: #2091f640; }

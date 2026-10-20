@@ -3,13 +3,13 @@ name: windows-desktop-validation
 description: 修改或打包本项目 Rust/Slint Windows 客户端时，验证原生 UI、SSH/SFTP、ConPTY、凭据及发布产物。
 ---
 
-源码位于 `native/`。在该目录执行 Cargo，使 `.cargo/config.toml` 的独立 MSVC 目标与静态 CRT 配置生效；仅在仓库根目录传入 manifest 路径不会加载该目录配置。
+源码位于 `native/`。在该目录执行 Cargo，使 `.cargo/config.toml` 的 Windows x64 MSVC 静态 CRT 配置生效；默认目标为宿主平台。仅在仓库根目录传入 manifest 路径不会加载该目录配置。
 
 ## 功能与产物验证
 
-1. 在 `native/` 执行 `cargo test --locked`。传输测试启动临时回环 SSH/SFTP 服务；本地终端测试启动真实 PowerShell，并检查断开、退出和任务取消后的子进程回收。测试以退出码为准。
+1. 在 `native/` 执行 `cargo test --locked`。传输测试启动临时回环 SSH/SFTP 服务；本地终端测试在 Windows 启动真实 PowerShell，在 Unix 启动用户登录 shell，并检查断开、退出和任务取消后的子进程回收。测试以退出码为准。macOS/Linux 另需对应宿主的构建与桌面证据。
 2. 在交互式 Windows 桌面执行 `cargo test --test transport native_gui_live_selftest -- --ignored --nocapture`。测试通过真实原生窗口回调检查认证弹窗、服务器指纹、SSH 回显、SFTP、DPAPI、持久化与截图，使用独立临时配置。
-3. 执行 `cargo build --release --locked`。将 `OPENTERMIUS_TEST_EXECUTABLE` 设为最终 release 可执行文件的绝对路径，再运行上述 GUI 测试，验证实际发布产物。`OPENTERMIUS_SMOKE_OUTPUT` 可指定截图与 JSON 的输出目录。
+3. 执行 `cargo build --release --locked`。默认产物为 `target/release/opentermius.exe`（Unix 为 `opentermius`）；显式 `--target <triple>` 时为 `target/<triple>/release/...`，也须考虑 `CARGO_TARGET_DIR`。将 `OPENTERMIUS_TEST_EXECUTABLE` 设为最终 release 可执行文件的绝对路径，再运行上述 GUI 测试，验证实际发布产物。测试默认使用 Cargo 提供的二进制路径，不应硬编码 Windows triple。`OPENTERMIUS_SMOKE_OUTPUT` 可指定截图与 JSON 的输出目录。
 4. 仓库根目录运行 `./native/scripts/package.ps1 -SkipBuild` 打包已验证的版本，输出到 `native/releases/`，同时生成 SHA-256。可传入 `-DumpbinPath <dumpbin>` 检查最终 DLL 导入，不能仅凭构建配置断言不依赖 VC 运行库。
 
 ## 界面对照

@@ -16,7 +16,7 @@ dirs = "6"
 image = { version = "0.25", default-features = false, features = ["png"] }
 portable-pty = "0.9"
 rfd = { version = "0.17", default-features = false }
-raw-window-handle = "0.6"
+ring = "0.17"
 shlex = "2"
 russh = { version = "0.64.1", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "3.0.1"
@@ -29,10 +29,23 @@ vt100 = "0.18.1"
 zeroize = "1"
 
 [target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Storage_FileSystem"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+slint = { version = "=1.18.1", default-features = false, features = ["unstable-winit-030"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
 
 [build-dependencies]
 slint-build = "=1.18.1"
+
+[target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
 
 [dev-dependencies]

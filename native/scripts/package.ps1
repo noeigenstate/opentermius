@@ -8,7 +8,17 @@ try {
         & cargo build --release --locked
         if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
     }
-    $source = Join-Path $nativeRoot 'target/x86_64-pc-windows-msvc/release/opentermius.exe'
+    $source = if ($env:OPENTERMIUS_TEST_EXECUTABLE) { [IO.Path]::GetFullPath($env:OPENTERMIUS_TEST_EXECUTABLE) } else {
+        $targetRoot = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $nativeRoot 'target' }
+        if (-not [IO.Path]::IsPathRooted($targetRoot)) { $targetRoot = Join-Path $nativeRoot $targetRoot }
+        $target = if ($env:CARGO_BUILD_TARGET) { $env:CARGO_BUILD_TARGET } else { $null }
+        $relative = if ($target) { "$target/release/opentermius.exe" } else { 'release/opentermius.exe' }
+        $candidate = Join-Path $targetRoot $relative
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf) -and -not $target) {
+            $candidate = Join-Path $targetRoot 'x86_64-pc-windows-msvc/release/opentermius.exe'
+        }
+        $candidate
+    }
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw 'Release executable is missing.' }
     $versionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($source)
     if ($versionInfo.ProductName -ne 'OpenTermius' -or $versionInfo.InternalName -ne 'opentermius') {

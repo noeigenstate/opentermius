@@ -1,4 +1,4 @@
-//! Native local PowerShell backed by ConPTY. Blocking pipe I/O never runs on
+//! Native local shell backed by portable-pty (ConPTY on Windows). Blocking I/O never runs on
 //! the UI thread; the reader parses all bytes independently of screen delivery.
 use crate::{
     ssh::{Command, Event, Session},
@@ -68,10 +68,65 @@ impl Drop for Owner {
 }
 // Keep the child guard before the master so termination precedes ConPTY close.
 struct ChildGuard(Box<dyn portable_pty::Child + Send + Sync>);
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
+impl ChildGuard {
+    fn terminate(&mut self) {
+        // portable-pty sends SIGHUP by PID on Unix, even after wait() reaped it.
+        // Do not signal a cached exit status: the PID may already be reused.
+        #[cfg(unix)]
+        if matches!(self.0.try_wait(), Ok(Some(_))) {
+            return;
+        }
         let _ = self.0.kill();
         let _ = self.0.wait();
+    }
+}
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        self.terminate();
+    }
+}
+
+#[cfg(unix)]
+fn select_shell(preferred: Option<std::ffi::OsString>) -> Result<std::path::PathBuf> {
+    use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+    let usable = |path: &PathBuf| {
+        path.is_absolute()
+            && path
+                .metadata()
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    };
+    if let Some(path) = preferred.map(PathBuf::from).filter(usable) {
+        return Ok(path);
+    }
+    #[cfg(target_os = "macos")]
+    let fallbacks = ["/bin/zsh", "/bin/sh"];
+    #[cfg(not(target_os = "macos"))]
+    let fallbacks = ["/bin/bash", "/bin/sh"];
+    fallbacks
+        .into_iter()
+        .map(PathBuf::from)
+        .find(usable)
+        .context("没有可用的本地 Shell")
+}
+
+#[cfg(all(test, unix))]
+mod shell_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn shell_selection_honors_executables_and_falls_back_for_invalid_shell() {
+        let temp = tempfile::tempdir().unwrap();
+        let shell = temp.path().join("custom-shell");
+        std::fs::write(&shell, b"#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(select_shell(Some(shell.clone().into())).unwrap(), shell);
+        let default = select_shell(None).unwrap();
+        for invalid in ["", "relative-shell", "/missing-opentermius-shell"] {
+            assert_eq!(select_shell(Some(invalid.into())).unwrap(), default);
+        }
+        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(select_shell(Some(shell.into())).unwrap(), default);
     }
 }
 
@@ -91,25 +146,35 @@ fn supervise(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .context("无法创建本地伪终端，请确认 Windows 版本支持 ConPTY")?;
+        .context(if cfg!(windows) {
+            "无法创建本地伪终端，请确认 Windows 版本支持 ConPTY"
+        } else {
+            "无法创建本地伪终端"
+        })?;
     #[cfg(windows)]
     let executable = std::path::PathBuf::from(
         std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()),
     )
     .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    #[cfg(not(windows))]
-    let executable = std::path::PathBuf::from("/bin/sh");
+    #[cfg(unix)]
+    let executable = select_shell(std::env::var_os("SHELL"))?;
     let mut command = CommandBuilder::new(executable);
     #[cfg(windows)]
     {
         command.arg("-NoLogo");
         command.arg("-NoProfile");
     }
+    #[cfg(unix)]
+    command.arg("-l");
     command.env("TERM", "xterm-256color");
     let mut child = ChildGuard(
         pair.slave
             .spawn_command(command)
-            .context("无法启动本地 PowerShell")?,
+            .context(if cfg!(windows) {
+                "无法启动本地 PowerShell"
+            } else {
+                "无法启动本地 Shell"
+            })?,
     );
     let mut reader = pair.master.try_clone_reader()?;
     let mut writer = pair.master.take_writer()?;
@@ -201,8 +266,7 @@ fn supervise(
     }
     // Closing the pseudoconsole can wait for its output pipe. Keep the reader
     // alive and draining until close completes, even when the owning task aborts.
-    let _ = child.0.kill();
-    let _ = child.0.wait();
+    child.terminate();
     drop(child);
     drop(master);
     let _ = reading.join();
@@ -256,7 +320,12 @@ async fn run(
         .send(Event::Status {
             id: id.into(),
             connected: true,
-            message: "本地 PowerShell 已连接".into(),
+            message: if cfg!(windows) {
+                "本地 PowerShell 已连接"
+            } else {
+                "本地 Shell 已连接"
+            }
+            .into(),
             error: false,
         })
         .await
