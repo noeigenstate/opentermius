@@ -1,6 +1,7 @@
 # Generated build files.
 /native/target/
 /native/releases/
+/native/installer/staging/
 /native/test-output/
 __pycache__/
 *.pyc
