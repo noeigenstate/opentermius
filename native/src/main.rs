@@ -923,7 +923,9 @@ impl State {
         let id = match &event {
             Event::Status { id, .. } | Event::Screen { id, .. } | Event::HostKey { id, .. }
             | Event::AuthPrompt { id, .. } | Event::Files { id, .. } | Event::Transfer { id, .. }
-            | Event::OverwriteRequired { id, .. } | Event::Closed { id } => id,
+            | Event::OverwriteRequired { id, .. } | Event::DeleteRequired { id, .. }
+            | Event::TransferProgress { id, .. } | Event::TransferFinished { id, .. }
+            | Event::Closed { id } => id,
         };
         if !self.sessions.contains_key(id) {
             return;
@@ -2387,6 +2389,8 @@ mod terminal_ux_tests {
             selecting: false, mouse_button: None,
             forwards: BTreeMap::new(), forward_errors: BTreeMap::new(),
             forwarding_timer: slint::Timer::default(),
+            remote_entries: Vec::new(), local_entries: Vec::new(),
+            transfers: BTreeMap::new(), next_transfer: 0,
         }
     }
 
