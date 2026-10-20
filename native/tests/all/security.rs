@@ -616,6 +616,7 @@ mod loopback {
         session
             .commands
             .send(ssh::Command::DownloadFile {
+                local_root: temp.path().to_path_buf(),
                 transfer: 1,
                 remote: "/file".into(),
                 local: temp.path().join("file"),
@@ -649,6 +650,7 @@ mod loopback {
         session
             .commands
             .send(ssh::Command::Download {
+                local_root: temp.path().to_path_buf(),
                 remote: "/file".into(),
                 local: temp.path().join("file:stream"),
             })
@@ -680,12 +682,14 @@ mod loopback {
         for transfer in [0, 1] {
             let command = if transfer == 0 {
                 ssh::Command::Upload {
+                    local_root: temp.path().to_path_buf(),
                     directory: "/".into(),
                     local: link.join("file"),
                     overwrite: true,
                 }
             } else {
                 ssh::Command::UploadFile {
+                    local_root: temp.path().to_path_buf(),
                     transfer,
                     directory: "/".into(),
                     local: link.join("file"),

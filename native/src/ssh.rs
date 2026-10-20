@@ -31,11 +31,14 @@ pub enum Command {
     Scroll(i32),
     List(String),
     Upload {
+        /// Explicitly selected folder; children must stay below its canonical path.
+        local_root: PathBuf,
         directory: String,
         local: PathBuf,
         overwrite: bool,
     },
     Download {
+        local_root: PathBuf,
         remote: String,
         local: PathBuf,
     },
@@ -55,23 +58,27 @@ pub enum Command {
         confirmed: bool,
     },
     UploadFile {
+        local_root: PathBuf,
         transfer: u64,
         directory: String,
         local: PathBuf,
         overwrite: bool,
     },
     DownloadFile {
+        local_root: PathBuf,
         transfer: u64,
         remote: String,
         local: PathBuf,
     },
     UploadTree {
+        local_root: PathBuf,
         transfer: u64,
         directory: String,
         local: PathBuf,
         overwrite: bool,
     },
     DownloadTree {
+        local_root: PathBuf,
         transfer: u64,
         remote: String,
         local_dir: PathBuf,
@@ -162,6 +169,7 @@ pub enum Event {
         error: bool,
     },
     OverwriteRequired {
+        local_root: PathBuf,
         id: String,
         directory: String,
         local: PathBuf,
@@ -838,8 +846,7 @@ pub fn sort_local_files(entries: &mut [LocalFile], column: SortColumn, ascending
     })
 }
 pub fn read_local_dir(path: &Path) -> Result<Vec<LocalFile>> {
-    let path = path.canonicalize()?;
-    ensure!(path.is_dir(), "请选择本地文件夹");
+    let path = canonical_local_root(path)?;
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(&path)?.take(20000) {
         let entry = entry?;
@@ -910,26 +917,65 @@ fn local_is_link(meta: &std::fs::Metadata) -> bool {
         meta.file_type().is_symlink()
     }
 }
-fn ensure_local_directory(path: &Path) -> Result<()> {
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()?.join(path)
-    };
-    for ancestor in absolute.ancestors() {
+/// Resolve the folder explicitly chosen by the user, including system aliases
+/// such as macOS /var and relocated Windows profiles. Keep this checked path
+/// separate from its display spelling; never canonicalize a child file.
+pub fn canonical_local_root(path: &Path) -> Result<PathBuf> {
+    let root = path.canonicalize()?;
+    ensure!(root.is_dir(), "请选择本地文件夹");
+    Ok(root)
+}
+
+pub fn display_local_path(path: &Path) -> String {
+    let display = path.to_string_lossy();
+    #[cfg(windows)]
+    {
+        if let Some(unc) = display.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{unc}");
+        }
+        if let Some(drive) = display
+            .strip_prefix(r"\\?\")
+            .filter(|p| p.as_bytes().get(1) == Some(&b':'))
+        {
+            return drive.to_string();
+        }
+    }
+    display.into_owned()
+}
+
+fn resolve_local_path(root: &Path, path: &Path) -> Result<(PathBuf, PathBuf)> {
+    let relative = path.strip_prefix(root).context("本地路径不在所选文件夹内")?;
+    ensure!(
+        relative.components().all(|part| matches!(part, std::path::Component::Normal(_))),
+        "本地路径不在所选文件夹内"
+    );
+    let root = canonical_local_root(root)?;
+    let path = root.join(relative);
+    Ok((root, path))
+}
+
+fn ensure_local_directory(root: &Path, path: &Path) -> Result<()> {
+    let relative = path.strip_prefix(root).context("本地路径不在所选文件夹内")?;
+    ensure!(
+        relative.components().all(|part| matches!(part, std::path::Component::Normal(_))),
+        "本地路径不在所选文件夹内"
+    );
+    for ancestor in path.ancestors() {
         let meta = std::fs::symlink_metadata(ancestor)?;
         ensure!(
             meta.is_dir() && !local_is_link(&meta),
             "本地目标不是常规文件夹，不能通过链接读写"
         );
+        if ancestor == root { break; }
     }
     Ok(())
 }
 
-async fn open_upload_file(local: &Path) -> Result<tokio::fs::File> {
+async fn open_upload_file(root: &Path, local: &Path) -> Result<tokio::fs::File> {
+    let root = root.to_path_buf();
     let local = local.to_path_buf();
     let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
-        ensure_local_directory(local.parent().context("本地文件路径无效")?)?;
+        ensure_local_directory(&root, local.parent().context("本地文件路径无效")?)?;
         let meta = std::fs::symlink_metadata(&local)?;
         ensure!(
             meta.is_file() && !local_is_link(&meta),
@@ -941,6 +987,11 @@ async fn open_upload_file(local: &Path) -> Result<tokio::fs::File> {
         {
             use std::os::windows::fs::OpenOptionsExt;
             options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
         }
         let file = options.open(local)?;
         let meta = file.metadata()?;
@@ -1256,8 +1307,8 @@ struct LocalTree {
     files: Vec<(String, u64)>,
     total: u64,
 }
-fn scan_local_tree(root: &Path) -> Result<LocalTree> {
-    ensure_local_directory(root)?;
+fn scan_local_tree(boundary: &Path, root: &Path) -> Result<LocalTree> {
+    ensure_local_directory(boundary, root)?;
     let mut tree = LocalTree {
         dirs: Vec::new(),
         files: Vec::new(),
@@ -1266,6 +1317,7 @@ fn scan_local_tree(root: &Path) -> Result<LocalTree> {
     let mut stack = vec![(root.to_path_buf(), String::new())];
     let mut seen = 0usize;
     while let Some((directory, relative)) = stack.pop() {
+        ensure_local_directory(boundary, &directory)?;
         for entry in std::fs::read_dir(&directory)? {
             seen += 1;
             ensure!(seen <= 100_000, "目录项目过多，请缩小上传范围");
@@ -1356,13 +1408,14 @@ async fn delete_remote_tree(sftp: &SftpSession, path: &str) -> Result<()> {
 }
 async fn upload_file_progress(
     sftp: &SftpSession,
+    root: &Path,
     local: &Path,
     remote: &str,
     overwrite: bool,
     progress: &mut Progress<'_>,
 ) -> Result<u64> {
     ensure_active(progress.cancelled, progress.transfer)?;
-    let mut input = open_upload_file(local).await?;
+    let mut input = open_upload_file(root, local).await?;
     if overwrite && sftp.try_exists(remote.to_string()).await? {
         let meta = sftp.symlink_metadata(remote.to_string()).await?;
         ensure!(meta.is_regular() && !meta.is_symlink(), "远程目标不是常规文件");
@@ -1388,6 +1441,7 @@ async fn upload_file_progress(
 }
 async fn download_file_progress(
     sftp: &SftpSession,
+    root: &Path,
     remote: &str,
     local: &Path,
     progress: &mut Progress<'_>,
@@ -1396,7 +1450,7 @@ async fn download_file_progress(
     ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "本地文件名无效");
     ensure!(!local.exists(), "本地文件已存在，请选择新的保存名称");
     let parent = local.parent().context("保存路径无效")?;
-    ensure_local_directory(parent)?;
+    ensure_local_directory(root, parent)?;
     let temp = parent.join(format!(".opentermius-{}.part", uuid::Uuid::new_v4()));
     let guard = PartialDownload(temp.clone());
     let mut output = tokio::fs::OpenOptions::new()
@@ -1412,7 +1466,11 @@ async fn download_file_progress(
     ensure_active(progress.cancelled, progress.transfer)?;
     let commit_temp = temp.clone();
     let commit_local = local.to_path_buf();
-    tokio::task::spawn_blocking(move || commit_download(&commit_temp, &commit_local))
+    let commit_root = root.to_path_buf();
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        ensure_local_directory(&commit_root, commit_local.parent().context("保存路径无效")?)?;
+        Ok(commit_download(&commit_temp, &commit_local)?)
+    })
         .await
         .context("下载保存任务失败")?
         .context("保存失败，目标可能已存在或不可写")?;
@@ -1432,10 +1490,12 @@ async fn execute_file_job(
             send_files(id, sftp, events, &path).await?;
         }
         Command::Upload {
+            local_root,
             directory,
             local,
             overwrite,
         } => {
+            let (local_root, local) = resolve_local_path(&local_root, &local)?;
             let name = local
                 .file_name()
                 .and_then(|s| s.to_str())
@@ -1444,6 +1504,7 @@ async fn execute_file_job(
             if !overwrite && sftp.try_exists(remote.clone()).await? {
                 events
                     .send(Event::OverwriteRequired {
+                        local_root,
                         id: id.into(),
                         directory,
                         local,
@@ -1454,7 +1515,7 @@ async fn execute_file_job(
                     .context("界面已关闭")?;
                 return Ok(());
             }
-            let mut input = open_upload_file(&local).await?;
+            let mut input = open_upload_file(&local_root, &local).await?;
             let flags = OpenFlags::WRITE
                 | OpenFlags::CREATE
                 | if overwrite {
@@ -1467,12 +1528,13 @@ async fn execute_file_job(
             output.shutdown().await?;
             send_message(id, events, format!("已上传 {name}，{size} 字节"), false).await?;
         }
-        Command::Download { remote, local } => {
+        Command::Download { local_root, remote, local } => {
+            let (local_root, local) = resolve_local_path(&local_root, &local)?;
             validate_remote(&remote)?;
             ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "本地文件名无效");
             ensure!(!local.exists(), "本地文件已存在，请选择新的保存名称");
             let parent = local.parent().context("保存路径无效")?;
-            ensure_local_directory(parent)?;
+            ensure_local_directory(&local_root, parent)?;
             let temp = parent.join(format!(".opentermius-{}.part", uuid::Uuid::new_v4()));
             let guard = PartialDownload(temp.clone());
             let mut output = tokio::fs::OpenOptions::new()
@@ -1487,7 +1549,10 @@ async fn execute_file_job(
             drop(output);
             let commit_temp = temp.clone();
             let commit_local = local.clone();
-            tokio::task::spawn_blocking(move || commit_download(&commit_temp, &commit_local))
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                ensure_local_directory(&local_root, commit_local.parent().context("保存路径无效")?)?;
+                Ok(commit_download(&commit_temp, &commit_local)?)
+            })
                 .await
                 .context("下载保存任务失败")?
                 .context("保存失败，目标可能已存在或不可写")?;
@@ -1555,12 +1620,14 @@ async fn execute_file_job(
             }
         }
         Command::UploadFile {
+            local_root,
             transfer,
             directory,
             local,
             overwrite,
         } => {
             let outcome: Result<Option<String>> = async {
+                let (local_root, local) = resolve_local_path(&local_root, &local)?;
                 let name = local
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -1570,6 +1637,7 @@ async fn execute_file_job(
                 if !overwrite && sftp.try_exists(remote.clone()).await? {
                     events
                         .send(Event::OverwriteRequired {
+                            local_root,
                             id: id.into(),
                             directory,
                             local,
@@ -1584,7 +1652,7 @@ async fn execute_file_job(
                 let mut progress =
                     Progress::new(id, transfer, &name, "Upload", events, cancelled, total);
                 let size =
-                    upload_file_progress(sftp, &local, &remote, overwrite, &mut progress).await?;
+                    upload_file_progress(sftp, &local_root, &local, &remote, overwrite, &mut progress).await?;
                 progress.finish_progress().await?;
                 Ok(Some(format!("已上传 {name}，{size} 字节")))
             }
@@ -1600,6 +1668,7 @@ async fn execute_file_job(
             }
         }
         Command::DownloadFile {
+            local_root,
             transfer,
             remote,
             local,
@@ -1610,10 +1679,11 @@ async fn execute_file_job(
                 .unwrap_or("download")
                 .to_string();
             let result = async {
+                let (local_root, local) = resolve_local_path(&local_root, &local)?;
                 let total = sftp.metadata(remote.clone()).await?.size.unwrap_or(0);
                 let mut progress =
                     Progress::new(id, transfer, &name, "Download", events, cancelled, total);
-                let size = download_file_progress(sftp, &remote, &local, &mut progress).await?;
+                let size = download_file_progress(sftp, &local_root, &remote, &local, &mut progress).await?;
                 progress.finish_progress().await?;
                 Ok(format!("已下载 {name}，{size} 字节"))
             }
@@ -1621,12 +1691,14 @@ async fn execute_file_job(
             complete_transfer(events, cancelled, id, transfer, result).await?;
         }
         Command::UploadTree {
+            local_root,
             transfer,
             directory,
             local,
             overwrite,
         } => {
             let outcome: Result<Option<String>> = async {
+                let (local_root, local) = resolve_local_path(&local_root, &local)?;
                 let name = local
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -1634,12 +1706,14 @@ async fn execute_file_job(
                     .to_string();
                 let target = remote_join(&directory, &name)?;
                 let scan_local = local.clone();
-                let tree = tokio::task::spawn_blocking(move || scan_local_tree(&scan_local))
+                let scan_root = local_root.clone();
+                let tree = tokio::task::spawn_blocking(move || scan_local_tree(&scan_root, &scan_local))
                     .await
                     .context("读取本地文件夹失败")??;
                 if !overwrite && sftp.try_exists(target.clone()).await? {
                     events
                         .send(Event::OverwriteRequired {
+                            local_root,
                             id: id.into(),
                             directory,
                             local,
@@ -1678,7 +1752,7 @@ async fn execute_file_job(
                 for (relative, _) in &tree.files {
                     let remote = remote_child(&target, relative)?;
                     let local = local_child(&local, relative)?;
-                    bytes += upload_file_progress(sftp, &local, &remote, overwrite, &mut progress)
+                    bytes += upload_file_progress(sftp, &local_root, &local, &remote, overwrite, &mut progress)
                         .await?;
                 }
                 progress.finish_progress().await?;
@@ -1699,11 +1773,13 @@ async fn execute_file_job(
             }
         }
         Command::DownloadTree {
+            local_root,
             transfer,
             remote,
             local_dir,
         } => {
             let result = async {
+                let (local_root, local_dir) = resolve_local_path(&local_root, &local_dir)?;
                 validate_remote(&remote)?;
                 let remote = sftp.canonicalize(remote).await?;
                 let name = remote
@@ -1713,9 +1789,9 @@ async fn execute_file_job(
                     .context("远程文件夹名无效")?;
                 ensure!(safe_local_component(name), "远程文件夹名包含不安全字符");
                 let root = local_dir.join(name);
-                ensure_local_directory(&local_dir)?;
+                ensure_local_directory(&local_root, &local_dir)?;
                 if root.try_exists()? {
-                    ensure_local_directory(&root)?;
+                    ensure_local_directory(&local_root, &root)?;
                 }
                 let tree = scan_remote_tree(sftp, &remote).await?;
                 // Validate every name before creating anything, including empty folders.
@@ -1736,7 +1812,7 @@ async fn execute_file_job(
                     ensure_active(cancelled, transfer)?;
                     let path = local_child(&root, directory)?;
                     if path.try_exists()? {
-                        ensure_local_directory(&path)?;
+                        ensure_local_directory(&local_root, &path)?;
                     } else {
                         tokio::fs::create_dir(&path).await?;
                     }
@@ -1748,7 +1824,7 @@ async fn execute_file_job(
                 for (relative, _) in &tree.files {
                     let remote = remote_child(&remote, relative)?;
                     let local = local_child(&root, relative)?;
-                    bytes += download_file_progress(sftp, &remote, &local, &mut progress).await?;
+                    bytes += download_file_progress(sftp, &local_root, &remote, &local, &mut progress).await?;
                 }
                 progress.finish_progress().await?;
                 Ok(format!(
@@ -1832,5 +1908,73 @@ mod download_tests {
         super::commit_download(&temp, &destination).unwrap();
         assert_eq!(std::fs::read(&destination).unwrap(), b"incoming");
         assert!(!temp.exists());
+    }
+}
+
+#[cfg(test)]
+mod local_path_tests {
+    use super::*;
+
+    #[test]
+    fn local_paths_cannot_escape_the_selected_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = canonical_local_root(temp.path()).unwrap();
+        for path in [root.join("../escape"), root.with_extension("sibling").join("file")] {
+            assert!(resolve_local_path(&root, &path).is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn upload_rechecks_directories_replaced_by_links_after_scanning() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = canonical_local_root(temp.path()).unwrap();
+        let nested = root.join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::write(nested.join("file"), b"original").unwrap();
+        std::fs::write(outside.path().join("file"), b"private").unwrap();
+        let tree = scan_local_tree(&root, &root).unwrap();
+        assert_eq!(tree.files.len(), 1);
+        std::fs::remove_file(nested.join("file")).unwrap();
+        std::fs::remove_dir(&nested).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(outside.path(), &nested).unwrap();
+        #[cfg(windows)]
+        {
+            let result = std::process::Command::new("cmd")
+                .args(["/d", "/c", "mklink", "/J"])
+                .arg(&nested).arg(outside.path()).output().unwrap();
+            assert!(result.status.success(), "failed to create test junction");
+        }
+        let rejected = open_upload_file(&root, &local_child(&root, &tree.files[0].0).unwrap()).await.is_err();
+        #[cfg(windows)]
+        std::fs::remove_dir(&nested).unwrap();
+        #[cfg(unix)]
+        std::fs::remove_file(&nested).unwrap();
+        assert!(rejected, "upload followed a directory replaced after scanning");
+        assert_eq!(std::fs::read(outside.path().join("file")).unwrap(), b"private");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn upload_rechecks_files_replaced_by_symlinks_after_scanning() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        let root = canonical_local_root(temp.path()).unwrap();
+        let local = root.join("file");
+        std::fs::write(&local, b"original").unwrap();
+        let tree = scan_local_tree(&root, &root).unwrap();
+        assert_eq!(tree.files.len(), 1);
+        std::fs::remove_file(&local).unwrap();
+        std::os::unix::fs::symlink(outside.path(), &local).unwrap();
+        assert!(open_upload_file(&root, &local).await.is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn display_paths_preserve_drive_and_unc_spelling() {
+        assert_eq!(display_local_path(Path::new(r"\\?\C:\Users\test")), r"C:\Users\test");
+        assert_eq!(display_local_path(Path::new(r"\\?\UNC\server\share\folder")), r"\\server\share\folder");
+        assert_eq!(display_local_path(Path::new(r"C:\Users\test")), r"C:\Users\test");
     }
 }
