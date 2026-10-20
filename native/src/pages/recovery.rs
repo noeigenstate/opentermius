@@ -9,8 +9,8 @@ fn message(ui: &AppWindow, result: anyhow::Result<String>) {
     bridge.set_error(result.is_err());
     bridge.set_message(
         match result {
-            Ok(text) => text,
-            Err(e) => e.to_string(),
+            Ok(text) => crate::i18n::translate(&text),
+            Err(e) => crate::i18n::translate(&e.to_string()),
         }
         .into(),
     );
@@ -38,7 +38,7 @@ pub fn install(ui: &AppWindow) {
                 let result = (|| {
                     let data = store
                         .lock()
-                        .map_err(|_| anyhow::anyhow!("配置锁不可用"))?
+                        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?
                         .data
                         .clone();
                     recovery::generate(&data, Some(&passphrase), include_secrets)
@@ -46,7 +46,7 @@ pub fn install(ui: &AppWindow) {
                 let _ = weak.upgrade_in_event_loop(move |ui| match result {
                     Ok(code) => {
                         ui.global::<RecoveryBridge>().set_code(code.into());
-                        message(&ui, Ok("恢复码已生成，请复制或保存到安全位置。".into()));
+                        message(&ui, Ok(crate::i18n::t("Recovery code generated. Copy it or save it to a safe location.").into()));
                     }
                     Err(e) => message(&ui, Err(e)),
                 });
@@ -77,7 +77,7 @@ pub fn install(ui: &AppWindow) {
             s.runtime.spawn_blocking(move || {
                 let result = store
                     .lock()
-                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                     .and_then(|mut store| {
                         recovery::restore(&mut store, &code, Some(&passphrase), mode)
                     });
@@ -103,7 +103,7 @@ pub fn install(ui: &AppWindow) {
                         .set_text(ui.global::<RecoveryBridge>().get_code().to_string())
                         .map_err(Into::into)
                 })
-                .map(|_| "已复制恢复码；剪贴板包含敏感凭据，请及时清除。".into());
+                .map(|_| crate::i18n::t("Recovery code copied. The clipboard contains sensitive credentials; clear it soon.").into());
             message(&ui, result);
         }
     });
@@ -111,15 +111,15 @@ pub fn install(ui: &AppWindow) {
     ui.global::<RecoveryBridge>().on_save_file(move || {
         if let Some(ui) = weak.upgrade() {
             if let Some(path) = rfd::FileDialog::new()
-                .set_title("保存恢复码（包含敏感凭据）")
-                .add_filter("Recovery code", &["txt"])
+                .set_title(crate::i18n::t("Save recovery code (contains sensitive credentials)"))
+                .add_filter(crate::i18n::t("Recovery code"), &["txt"])
                 .set_file_name("opentermius-recovery.txt")
                 .save_file()
             {
                 message(
                     &ui,
                     std::fs::write(path, ui.global::<RecoveryBridge>().get_code().as_bytes())
-                        .map(|_| "已保存恢复码，请妥善保管。".into())
+                        .map(|_| crate::i18n::t("Recovery code saved. Keep it safe.").into())
                         .map_err(Into::into),
                 );
             }

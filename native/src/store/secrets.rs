@@ -15,23 +15,23 @@ fn random_key() -> Result<Zeroizing<[u8; 32]>> {
     let mut key = Zeroizing::new([0; 32]);
     SystemRandom::new()
         .fill(key.as_mut())
-        .map_err(|_| anyhow::anyhow!("系统随机数不可用"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("System random number generator is unavailable")))?;
     Ok(key)
 }
 
 fn cipher(key: &[u8; 32]) -> Result<aead::LessSafeKey> {
     Ok(aead::LessSafeKey::new(
         aead::UnboundKey::new(&aead::AES_256_GCM, key)
-            .map_err(|_| anyhow::anyhow!("凭据密钥无效"))?,
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid credential key")))?,
     ))
 }
 
 fn encrypt(key: &[u8; 32], secret: &str) -> Result<String> {
-    ensure!(secret.len() <= 16384, "凭据过长");
+    ensure!(secret.len() <= 16384, "{}", crate::i18n::t("Credentials are too long"));
     let mut nonce = [0; NONCE_LEN];
     SystemRandom::new()
         .fill(&mut nonce)
-        .map_err(|_| anyhow::anyhow!("系统随机数不可用"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("System random number generator is unavailable")))?;
     let mut payload = Zeroizing::new(secret.as_bytes().to_vec());
     cipher(key)?
         .seal_in_place_append_tag(
@@ -39,22 +39,19 @@ fn encrypt(key: &[u8; 32], secret: &str) -> Result<String> {
             aead::Aad::from(AAD),
             &mut *payload,
         )
-        .map_err(|_| anyhow::anyhow!("凭据加密失败"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Credential encryption failed")))?;
     let mut encoded = nonce.to_vec();
     encoded.extend_from_slice(&payload);
     Ok(format!("{PREFIX}{}", STANDARD.encode(encoded)))
 }
 
 fn decrypt(key: &[u8; 32], secret: &str) -> Result<String> {
-    ensure!(secret.len() <= 22000, "凭据过长");
+    ensure!(secret.len() <= 22000, "{}", crate::i18n::t("Credentials are too long"));
     let encoded = secret
         .strip_prefix(PREFIX)
-        .context("凭据加密格式不受支持（Windows DPAPI 凭据不能跨平台解密）")?;
-    let mut payload = Zeroizing::new(STANDARD.decode(encoded).context("凭据编码无效")?);
-    ensure!(
-        payload.len() >= NONCE_LEN + aead::AES_256_GCM.tag_len(),
-        "凭据已损坏"
-    );
+        .context(crate::i18n::t("Unsupported credential encryption format (Windows DPAPI credentials cannot be decrypted on another platform)"))?;
+    let mut payload = Zeroizing::new(STANDARD.decode(encoded).context(crate::i18n::t("Invalid credential encoding"))?);
+    ensure!(payload.len() >= NONCE_LEN + aead::AES_256_GCM.tag_len(), "{}", crate::i18n::t("Credentials are corrupted"));
     let nonce: [u8; NONCE_LEN] = payload[..NONCE_LEN].try_into()?;
     let plain = cipher(key)?
         .open_in_place(
@@ -62,9 +59,9 @@ fn decrypt(key: &[u8; 32], secret: &str) -> Result<String> {
             aead::Aad::from(AAD),
             &mut payload[NONCE_LEN..],
         )
-        .map_err(|_| anyhow::anyhow!("凭据解密失败或已被修改"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Credential decryption failed or data was modified")))?;
     Ok(std::str::from_utf8(plain)
-        .context("凭据不是有效 UTF-8")?
+        .context(crate::i18n::t("Credentials are not valid UTF-8"))?
         .to_owned())
 }
 
@@ -76,7 +73,7 @@ static DIRECTORY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock:
 pub fn configure_directory(path: std::path::PathBuf) -> Result<()> {
     DIRECTORY
         .set(path)
-        .map_err(|_| anyhow::anyhow!("凭据目录已设置"))
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Credential directory is already configured")))
 }
 
 #[cfg(unix)]
@@ -96,7 +93,7 @@ pub(super) fn protect(secret: &str) -> Result<String> {
 #[cfg(not(windows))]
 pub(super) fn unprotect(secret: &str) -> Result<String> {
     // Reject foreign/unknown formats before accessing the platform key store.
-    ensure!(secret.starts_with(PREFIX), "凭据加密格式不受支持");
+    ensure!(secret.starts_with(PREFIX), "{}", crate::i18n::t("Unsupported credential encryption format"));
     let key = master_key(false)?;
     decrypt(&key, secret)
 }
@@ -110,20 +107,20 @@ fn master_key(create: bool) -> Result<Zeroizing<[u8; 32]>> {
 fn master_key(create: bool) -> Result<Zeroizing<[u8; 32]>> {
     use security_framework::os::macos::keychain::SecKeychain;
     const SERVICE: &str = "OpenTermius AES master key v1";
-    let keychain = SecKeychain::default().context("无法打开 macOS 钥匙串")?;
+    let keychain = SecKeychain::default().context(crate::i18n::t("Cannot open macOS Keychain"))?;
     // Separate isolated configurations without storing their path in Keychain.
     let path = directory();
     if create {
         std::fs::create_dir_all(&path)?;
     }
-    let path = path.canonicalize().context("凭据目录不存在")?;
+    let path = path.canonicalize().context(crate::i18n::t("Credential directory does not exist"))?;
     let account = STANDARD.encode(ring::digest::digest(
         &ring::digest::SHA256,
         path.as_os_str().as_encoded_bytes(),
     ));
     match keychain.find_generic_password(SERVICE, &account) {
         Ok((password, _)) => {
-            ensure!(password.len() == 32, "钥匙串主密钥已损坏");
+            ensure!(password.len() == 32, "{}", crate::i18n::t("Keychain master key is corrupted"));
             let mut key = Zeroizing::new([0; 32]);
             key.copy_from_slice(&password);
             Ok(key)
@@ -134,10 +131,10 @@ fn master_key(create: bool) -> Result<Zeroizing<[u8; 32]>> {
             match keychain.add_generic_password(SERVICE, &account, key.as_ref()) {
                 Ok(()) => Ok(key),
                 Err(error) if error.code() == -25299 => master_key(false),
-                Err(error) => Err(error).context("无法保存钥匙串主密钥"),
+                Err(error) => Err(error).context(crate::i18n::t("Cannot save Keychain master key")),
             }
         }
-        Err(error) => Err(error).context("无法读取钥匙串主密钥"),
+        Err(error) => Err(error).context(crate::i18n::t("Cannot read Keychain master key")),
     }
 }
 

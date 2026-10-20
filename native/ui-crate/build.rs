@@ -9,7 +9,10 @@ fn main() {
 
     slint_build::compile_with_config(
         "../ui/main.slint",
-        slint_build::CompilerConfiguration::new().with_style("fluent-light".into()),
+        slint_build::CompilerConfiguration::new()
+            .with_style("fluent-light".into())
+            .with_default_translation_context(slint_build::DefaultTranslationContext::None)
+            .with_bundled_translations("../translations"),
     )
     .expect("Cannot compile the OpenTermius UI");
 }

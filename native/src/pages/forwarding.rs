@@ -13,7 +13,7 @@ fn busy(s: &State, id: &str) -> bool {
         .get(id)
         .is_some_and(|r| matches!(r.status().phase, Phase::Starting | Phase::Running))
 }
-fn refresh(s: &State) {
+pub(super) fn refresh(s: &State) {
     let Some(ui) = s.ui.upgrade() else { return };
     let Ok(store) = s.store.lock() else { return };
     let bridge = ui.global::<ForwardingBridge>();
@@ -39,23 +39,23 @@ fn refresh(s: &State) {
                     .iter()
                     .find(|h| h.id == f.host_id)
                     .map(|h| h.name.as_str())
-                    .unwrap_or("主机已删除");
+                    .unwrap_or(crate::i18n::t("Host deleted"));
                 let route = if f.kind == Kind::Dynamic {
                     format!("SOCKS5 · [{}]:{} → {host}", f.bind_address, f.bind_port)
                 } else {
                     format!(
-                        "{:?} · [{}]:{} → {}:{} · {host}",
-                        f.kind, f.bind_address, f.bind_port, f.destination_host, f.destination_port
+                        "{} · [{}]:{} → {}:{} · {host}",
+                        match f.kind { Kind::Local => crate::i18n::t("Local"), Kind::Remote => crate::i18n::t("Remote"), Kind::Dynamic => crate::i18n::t("Dynamic") }, f.bind_address, f.bind_port, f.destination_host, f.destination_port
                     )
                 };
                 ForwardRow {
                     id: f.id.clone().into(),
                     label: f.label.clone().into(),
                     route: route.into(),
-                    status: error
+                    status: crate::i18n::translate(&error
                         .cloned()
                         .or_else(|| status.as_ref().map(|s| s.message.clone()))
-                        .unwrap_or_else(|| "已停止".into())
+                        .unwrap_or_else(|| crate::i18n::t("Stopped").into()))
                         .into(),
                     busy: busy(s, &f.id),
                     error: error.is_some()
@@ -67,36 +67,33 @@ fn refresh(s: &State) {
     ));
 }
 fn start(s: &mut State, id: &str) -> Result<()> {
-    ensure!(!busy(s, id), "规则正在运行");
-    ensure!(
-        s.forwards
+    ensure!(!busy(s, id), "{}", crate::i18n::t("Rule is running"));
+    ensure!(s.forwards
             .values()
             .filter(|rule| matches!(rule.status().phase, Phase::Starting | Phase::Running))
             .count()
-            < opentermius::forwarding::MAX_RULES,
-        "同时运行的转发规则过多"
-    );
+            < opentermius::forwarding::MAX_RULES, "{}", crate::i18n::t("Too many forwarding rules are running"));
     let (rule, host, secret, key_material, known) = {
-        let store = s.store.lock().map_err(|_| anyhow::anyhow!("配置不可用"))?;
+        let store = s.store.lock().map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration is unavailable")))?;
         let rule = store
             .data
             .forwards
             .iter()
             .find(|f| f.id == id)
-            .context("规则不存在")?
+            .context(crate::i18n::t("Rule not found"))?
             .clone();
         let host = store
             .data
             .hosts
             .iter()
             .find(|h| h.id == rule.host_id)
-            .context("SSH 主机已删除，请重新选择主机")?
+            .context(crate::i18n::t("SSH host was deleted; select another host"))?
             .clone();
         let known = store
             .data
             .known_hosts
             .get(&store::key(&host.host, host.port))
-            .context("请先连接此主机一次并信任主机指纹")?
+            .context(crate::i18n::t("Connect to this host once and trust its fingerprint first"))?
             .clone();
         let key_material = if host.auth_type == "key" && !host.key_id.is_empty() {
             Some(store.key_material(&host.key_id)?)
@@ -107,10 +104,10 @@ fn start(s: &mut State, id: &str) -> Result<()> {
             _ if key_material.is_some() => Zeroizing::new(String::new()),
             Some(encrypted) => Zeroizing::new(
                 store::unprotect(encrypted)
-                    .context("无法解密凭据，请先连接此主机并重新保存凭据")?,
+                    .context(crate::i18n::t("Cannot decrypt credentials; connect to this host and save them again"))?,
             ),
             None if host.auth_type == "key" => Zeroizing::new(String::new()),
-            None => anyhow::bail!("未保存密码，请先连接此主机一次并保存密码"),
+            None => anyhow::bail!("{}", crate::i18n::t("Password is not saved; connect to this host once and save the password")),
         };
         (rule, host, secret, key_material, known)
     };
@@ -150,18 +147,18 @@ fn draft(f: &Forward, hosts: &[store::Profile]) -> ForwardDraft {
     }
 }
 fn save(s: &mut State, d: ForwardDraft) -> Result<()> {
-    ensure!(!busy(s, d.id.as_str()), "请先停止规则再编辑");
-    let mut store = s.store.lock().map_err(|_| anyhow::anyhow!("配置不可用"))?;
+    ensure!(!busy(s, d.id.as_str()), "{}", crate::i18n::t("Stop the rule before editing it"));
+    let mut store = s.store.lock().map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration is unavailable")))?;
     let host = store
         .data
         .hosts
         .get(usize::try_from(d.host_index).unwrap_or(usize::MAX))
-        .context("请选择已保存的 SSH 主机")?;
+        .context(crate::i18n::t("Select a saved SSH host"))?;
     let kind = match d.kind_index {
         0 => Kind::Local,
         1 => Kind::Remote,
         2 => Kind::Dynamic,
-        _ => anyhow::bail!("转发类型无效"),
+        _ => anyhow::bail!("{}", crate::i18n::t("Invalid forwarding type")),
     };
     let mut rule = Forward {
         id: d.id.to_string(),
@@ -173,7 +170,7 @@ fn save(s: &mut State, d: ForwardDraft) -> Result<()> {
             .bind_port
             .trim()
             .parse()
-            .context("绑定端口必须在 1–65535 之间")?,
+            .context(crate::i18n::t("Bind port must be between 1 and 65535"))?,
         destination_host: d.destination_host.to_string(),
         destination_port: if kind == Kind::Dynamic {
             0
@@ -181,7 +178,7 @@ fn save(s: &mut State, d: ForwardDraft) -> Result<()> {
             d.destination_port
                 .trim()
                 .parse()
-                .context("目标端口必须在 1–65535 之间")?
+                .context(crate::i18n::t("Destination port must be between 1 and 65535"))?
         },
         auto_start: d.auto_start,
     };
@@ -259,8 +256,8 @@ pub fn install(ui: &AppWindow) {
     ui.global::<ForwardingBridge>().on_delete_rule(|id| {
         with_state(|s| {
             let result = (|| -> Result<()> {
-                ensure!(!busy(s, &id), "请先停止规则再删除");
-                let mut store = s.store.lock().map_err(|_| anyhow::anyhow!("配置不可用"))?;
+                ensure!(!busy(s, &id), "{}", crate::i18n::t("Stop the rule before deleting it"));
+                let mut store = s.store.lock().map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration is unavailable")))?;
                 let old = store.data.forwards.clone();
                 store.data.forwards.retain(|f| f.id != id.as_str());
                 if let Err(e) = store.persist() {

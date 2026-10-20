@@ -15,13 +15,10 @@ pub(super) fn load(directory: &Path, create: bool) -> Result<Zeroizing<[u8; 32]>
             .mode(0o700)
             .create(directory)?;
     }
-    let metadata = fs::metadata(directory).context("凭据目录不存在")?;
-    ensure!(
-        metadata.is_dir()
+    let metadata = fs::metadata(directory).context(crate::i18n::t("Credential directory does not exist"))?;
+    ensure!(metadata.is_dir()
             && metadata.uid() == unsafe { libc::geteuid() }
-            && metadata.mode() & 0o022 == 0,
-        "凭据目录必须属于当前用户且不可由其他用户写入"
-    );
+            && metadata.mode() & 0o022 == 0, "{}", crate::i18n::t("Credential directory must belong to the current user and must not be writable by others"));
     let path = directory.join("master-key-v1");
     match read(&path) {
         Ok(key) => return Ok(key),
@@ -30,7 +27,7 @@ pub(super) fn load(directory: &Path, create: bool) -> Result<Zeroizing<[u8; 32]>
                 && error
                     .downcast_ref::<std::io::Error>()
                     .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) => {}
-        Err(error) => return Err(error).context("无法读取本地主密钥"),
+        Err(error) => return Err(error).context(crate::i18n::t("Cannot read local master key")),
     }
     let key = random_key()?;
     let temporary = directory.join(format!(".master-key-{}", uuid::Uuid::new_v4()));
@@ -51,7 +48,7 @@ pub(super) fn load(directory: &Path, create: bool) -> Result<Zeroizing<[u8; 32]>
         Ok(())
     })();
     let _ = fs::remove_file(temporary);
-    result.context("无法保存本地主密钥")?;
+    result.context(crate::i18n::t("Cannot save local master key"))?;
     read(&path)
 }
 
@@ -61,13 +58,10 @@ fn read(path: &Path) -> Result<Zeroizing<[u8; 32]>> {
         .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)?;
     let metadata = file.metadata()?;
-    ensure!(
-        metadata.is_file()
+    ensure!(metadata.is_file()
             && metadata.uid() == unsafe { libc::geteuid() }
             && metadata.mode() & 0o777 == 0o600
-            && metadata.len() == 32,
-        "本地主密钥必须是当前用户拥有的 0600 文件（32 字节）"
-    );
+            && metadata.len() == 32, "{}", crate::i18n::t("Local master key must be a 32-byte file owned by the current user with mode 0600"));
     let mut key = Zeroizing::new([0; 32]);
     file.read_exact(key.as_mut())?;
     Ok(key)

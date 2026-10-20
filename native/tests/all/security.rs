@@ -121,7 +121,7 @@ fn xshell_import_is_read_only_and_caps_recursion() {
     assert!(
         scan.skipped
             .iter()
-            .any(|(_, reason)| reason.contains("过深"))
+            .any(|(_, reason)| reason.contains("too deep"))
     );
     assert!(!format!("{scan:?}").contains("vendor-secret"));
     assert_eq!(
@@ -145,7 +145,7 @@ fn xshell_import_caps_total_entries() {
     assert!(
         scan.skipped
             .iter()
-            .any(|(_, reason)| reason.contains("过多"))
+            .any(|(_, reason)| reason.contains("Too many"))
     );
 }
 

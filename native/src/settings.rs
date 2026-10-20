@@ -116,12 +116,12 @@ impl ColorScheme {
         Self::ALL[index.clamp(0, Self::ALL.len() as i32 - 1) as usize]
     }
 
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Self::Default => "Default",
-            Self::SolarizedDark => "Solarized Dark",
-            Self::Monokai => "Monokai",
-            Self::Light => "Light",
+            Self::Default => crate::i18n::t("Default"),
+            Self::SolarizedDark => crate::i18n::t("Solarized Dark"),
+            Self::Monokai => crate::i18n::t("Monokai"),
+            Self::Light => crate::i18n::t("Light"),
         }
     }
 
@@ -229,10 +229,10 @@ impl BellMode {
         if index <= 0 { Self::None } else { Self::Visual }
     }
 
-    pub const fn label(self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Self::None => "None",
-            Self::Visual => "Visual",
+            Self::None => crate::i18n::t("None"),
+            Self::Visual => crate::i18n::t("Visual"),
         }
     }
 }
@@ -250,6 +250,7 @@ impl<'de> Deserialize<'de> for BellMode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
+    pub language: crate::i18n::Language,
     pub font_size: u16,
     pub scrollback_lines: usize,
     pub cursor_blink: bool,
@@ -268,6 +269,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: crate::i18n::Language::default(),
             font_size: DEFAULT_FONT_SIZE,
             scrollback_lines: crate::terminal::DEFAULT_SCROLLBACK,
             cursor_blink: true,

@@ -54,47 +54,32 @@ impl Default for Forward {
 }
 impl Forward {
     pub fn validate(&mut self, existing: &[Forward]) -> Result<()> {
-        ensure!(
-            existing
+        ensure!(existing
                 .iter()
                 .any(|rule| !self.id.is_empty() && rule.id == self.id)
-                || existing.len() < MAX_RULES,
-            "转发规则最多 {MAX_RULES} 条"
-        );
+                || existing.len() < MAX_RULES, "{}", crate::tf!("At most {MAX_RULES} forwarding rules are allowed", "MAX_RULES" => format!("{}", MAX_RULES)));
         self.label = self.label.trim().into();
         self.bind_address = self.bind_address.trim().into();
         self.destination_host = self.destination_host.trim().into();
-        ensure!(
-            !self.label.is_empty()
+        ensure!(!self.label.is_empty()
                 && self.label.chars().count() <= 128
-                && !self.label.chars().any(char::is_control),
-            "请输入有效的规则名称（最多 128 个字符）"
-        );
-        ensure!(!self.host_id.is_empty(), "请选择已保存的 SSH 主机");
-        ensure!(
-            self.bind_address.parse::<IpAddr>().is_ok(),
-            "绑定地址必须是 IPv4 或 IPv6 地址"
-        );
-        ensure!(self.bind_port > 0, "绑定端口必须在 1–65535 之间");
+                && !self.label.chars().any(char::is_control), "{}", crate::i18n::t("Enter a valid rule name (up to 128 characters)"));
+        ensure!(!self.host_id.is_empty(), "{}", crate::i18n::t("Select a saved SSH host"));
+        ensure!(self.bind_address.parse::<IpAddr>().is_ok(), "{}", crate::i18n::t("Bind address must be an IPv4 or IPv6 address"));
+        ensure!(self.bind_port > 0, "{}", crate::i18n::t("Bind port must be between 1 and 65535"));
         if self.kind != Kind::Dynamic {
-            ensure!(
-                !self.destination_host.is_empty()
+            ensure!(!self.destination_host.is_empty()
                     && self.destination_host.len() <= 253
                     && !self
                         .destination_host
                         .chars()
-                        .any(|c| c.is_whitespace() || c.is_control()),
-                "请输入有效的目标主机"
-            );
-            ensure!(self.destination_port > 0, "目标端口必须在 1–65535 之间");
+                        .any(|c| c.is_whitespace() || c.is_control()), "{}", crate::i18n::t("Enter a valid destination host"));
+            ensure!(self.destination_port > 0, "{}", crate::i18n::t("Destination port must be between 1 and 65535"));
         }
-        ensure!(
-            !existing
+        ensure!(!existing
                 .iter()
                 .any(|f| (self.id.is_empty() || f.id != self.id)
-                    && f.label.to_lowercase() == self.label.to_lowercase()),
-            "规则名称已存在"
-        );
+                    && f.label.to_lowercase() == self.label.to_lowercase()), "{}", crate::i18n::t("A rule with this name already exists"));
         if self.id.is_empty() {
             self.id = uuid::Uuid::new_v4().to_string();
         }
@@ -139,12 +124,12 @@ impl RunningRule {
         known: String,
     ) -> Result<Self> {
         rule.validate(&[])?;
-        ensure!(rule.host_id == profile.id, "转发主机与已保存的主机不匹配");
-        ensure!(!known.is_empty(), "请先连接此主机一次并信任主机指纹");
+        ensure!(rule.host_id == profile.id, "{}", crate::i18n::t("Forwarding host does not match the saved host"));
+        ensure!(!known.is_empty(), "{}", crate::i18n::t("Connect to this host once and trust its fingerprint first"));
         let (cancel, rx) = watch::channel(false);
         let (status_tx, status) = watch::channel(Status {
             phase: Phase::Starting,
-            message: "正在建立 SSH 隧道…".into(),
+            message: crate::i18n::t("Establishing SSH tunnel…").into(),
             active_connections: 0,
         });
         let task = rt.spawn(async move {
@@ -159,11 +144,11 @@ impl RunningRule {
             )
             .await;
             if *rx.borrow() {
-                publish(&status_tx, Phase::Stopped, "已停止", 0);
+                publish(&status_tx, Phase::Stopped, crate::i18n::t("Stopped"), 0);
                 return;
             }
             match result {
-                Ok(()) => publish(&status_tx, Phase::Stopped, "已停止", 0),
+                Ok(()) => publish(&status_tx, Phase::Stopped, crate::i18n::t("Stopped"), 0),
                 Err(error) => publish(&status_tx, Phase::Error, format!("{error:#}"), 0),
             }
         });
@@ -215,7 +200,7 @@ async fn run(
     let ssh_cancel = cancel.clone();
     let ssh = tokio::select! {
         _ = cancelled(&mut cancel) => return Ok(()),
-        result = timeout(CONNECT_TIMEOUT, ssh::connect_forwarding(&profile, &secret, key_material, known, ssh_cancel, target)) => Arc::new(result.context("SSH 隧道连接超时")?.context("转发连接失败，请先连接此主机一次并保存可用凭据")?),
+        result = timeout(CONNECT_TIMEOUT, ssh::connect_forwarding(&profile, &secret, key_material, known, ssh_cancel, target)) => Arc::new(result.context(crate::i18n::t("SSH tunnel connection timed out"))?.context(crate::i18n::t("Forwarding connection failed; connect to this host once and save working credentials"))?),
     };
     drop(secret);
     let mut jobs = JoinSet::new();
@@ -223,41 +208,41 @@ async fn run(
         let listener = if rule.kind == Kind::Remote {
             tokio::select! {
                 _ = cancelled(&mut cancel) => return Ok(()),
-                result = timeout(CONNECT_TIMEOUT, ssh.tcpip_forward(&rule.bind_address, rule.bind_port.into())) => { result.context("远程转发请求超时")?.context("服务器拒绝远程转发")?; }
+                result = timeout(CONNECT_TIMEOUT, ssh.tcpip_forward(&rule.bind_address, rule.bind_port.into())) => { result.context(crate::i18n::t("Remote forwarding request timed out"))?.context(crate::i18n::t("Server rejected remote forwarding"))?; }
             }
             None
         } else {
-            Some(TcpListener::bind((rule.bind_address.as_str(), rule.bind_port)).await.context("无法监听绑定地址和端口")?)
+            Some(TcpListener::bind((rule.bind_address.as_str(), rule.bind_port)).await.context(crate::i18n::t("Cannot listen on the bind address and port"))?)
         };
-        publish(status, Phase::Running, "隧道已启动", 0);
+        publish(status, Phase::Running, crate::i18n::t("Tunnel started"), 0);
         let mut tick = interval(Duration::from_millis(250));
         loop {
             tokio::select! {
                 _ = cancelled(&mut cancel) => break,
-                _ = tick.tick() => ensure!(!ssh.is_closed(), "SSH 隧道已断开"),
+                _ = tick.tick() => ensure!(!ssh.is_closed(), "{}", crate::i18n::t("SSH tunnel disconnected")),
                 completed = jobs.join_next(), if !jobs.is_empty() => {
-                    let message = match completed { Some(Ok(Err(e))) => format!("连接失败：{e:#}"), _ => "隧道已启动".into() };
+                    let message = match completed { Some(Ok(Err(e))) => crate::tf!("Connection failed: {e:#}", "e:#" => format!("{:#}", e)), _ => crate::i18n::t("Tunnel started").into() };
                     publish(status, Phase::Running, message, jobs.len());
                 }
                 accepted = async { listener.as_ref().unwrap().accept().await }, if listener.is_some() => {
-                    let (stream, origin) = accepted.context("监听器接收失败")?;
+                    let (stream, origin) = accepted.context(crate::i18n::t("Listener accept failed"))?;
                     if jobs.len() >= MAX_CONNECTIONS { drop(stream); continue; }
                     let ssh = ssh.clone(); let rule = rule.clone();
                     jobs.spawn(async move { direct(stream, origin, ssh, rule).await });
-                    publish(status, Phase::Running, "隧道已启动", jobs.len());
+                    publish(status, Phase::Running, crate::i18n::t("Tunnel started"), jobs.len());
                 }
                 item = forwarded.recv(), if rule.kind == Kind::Remote => {
                     if let Some(item) = item {
                         if jobs.len() >= MAX_CONNECTIONS { drop(item); continue; }
                         let host = rule.destination_host.clone(); let port = rule.destination_port;
                         jobs.spawn(async move {
-                            let mut stream = timeout(CONNECT_TIMEOUT, TcpStream::connect((host.as_str(), port))).await.context("目标连接超时")??;
+                            let mut stream = timeout(CONNECT_TIMEOUT, TcpStream::connect((host.as_str(), port))).await.context(crate::i18n::t("Destination connection timed out"))??;
                             item.reply.accept().await;
                             let mut tunnel = item.channel.into_stream();
                             copy_bidirectional(&mut stream, &mut tunnel).await?;
                             Ok::<(), anyhow::Error>(())
                         });
-                        publish(status, Phase::Running, "隧道已启动", jobs.len());
+                        publish(status, Phase::Running, crate::i18n::t("Tunnel started"), jobs.len());
                     }
                 }
             }
@@ -278,7 +263,7 @@ async fn run(
     }
     let _ = timeout(
         Duration::from_secs(3),
-        ssh.disconnect(russh::Disconnect::ByApplication, "Forwarding stopped", "en"),
+        ssh.disconnect(russh::Disconnect::ByApplication, crate::i18n::t("Forwarding stopped"), "en"),
     )
     .await;
     result
@@ -294,7 +279,7 @@ async fn direct(
     let (host, port) = if dynamic {
         timeout(CONNECT_TIMEOUT, socks5_connect(&mut stream))
             .await
-            .context("SOCKS5 握手超时")??
+            .context(crate::i18n::t("SOCKS5 handshake timed out"))??
     } else {
         (rule.destination_host, rule.destination_port)
     };
@@ -314,7 +299,7 @@ async fn direct(
             if dynamic {
                 let _ = socks_reply(&mut stream, 5).await;
             }
-            bail!("无法打开 SSH 转发通道：{error:?}");
+            bail!("{}", crate::tf!("Cannot open SSH forwarding channel: {error:?}", "error:?" => format!("{:?}", error)));
         }
     };
     if dynamic {
@@ -334,24 +319,24 @@ pub async fn socks5_connect<S: AsyncRead + AsyncWrite + Unpin>(
     stream: &mut S,
 ) -> Result<(String, u16)> {
     let version = stream.read_u8().await?;
-    ensure!(version == 5, "不支持的 SOCKS 版本");
+    ensure!(version == 5, "{}", crate::i18n::t("Unsupported SOCKS version"));
     let count = stream.read_u8().await? as usize;
     let mut methods = vec![0; count];
     stream.read_exact(&mut methods).await?;
     if !methods.contains(&0) {
         stream.write_all(&[5, 255]).await?;
-        bail!("SOCKS5 客户端不支持免认证");
+        bail!("{}", crate::i18n::t("SOCKS5 client does not support authentication-free access"));
     }
     stream.write_all(&[5, 0]).await?;
     let mut header = [0; 4];
     stream.read_exact(&mut header).await?;
     if header[0] != 5 || header[2] != 0 {
         socks_reply(stream, 1).await?;
-        bail!("SOCKS5 请求格式无效");
+        bail!("{}", crate::i18n::t("Invalid SOCKS5 request"));
     }
     if header[1] != 1 {
         socks_reply(stream, 7).await?;
-        bail!("SOCKS5 仅支持 CONNECT");
+        bail!("{}", crate::i18n::t("SOCKS5 supports CONNECT only"));
     }
     let host = match header[3] {
         1 => {
@@ -377,19 +362,19 @@ pub async fn socks5_connect<S: AsyncRead + AsyncWrite + Unpin>(
                 }
                 _ => {
                     socks_reply(stream, 4).await?;
-                    bail!("SOCKS5 域名无效");
+                    bail!("{}", crate::i18n::t("Invalid SOCKS5 domain name"));
                 }
             }
         }
         _ => {
             socks_reply(stream, 8).await?;
-            bail!("SOCKS5 地址类型不支持");
+            bail!("{}", crate::i18n::t("Unsupported SOCKS5 address type"));
         }
     };
     let port = stream.read_u16().await?;
     if port == 0 {
         socks_reply(stream, 1).await?;
-        bail!("SOCKS5 目标端口无效");
+        bail!("{}", crate::i18n::t("Invalid SOCKS5 destination port"));
     }
     Ok((host, port))
 }

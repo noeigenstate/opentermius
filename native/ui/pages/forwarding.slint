@@ -22,21 +22,21 @@ export component ForwardingPage inherits Rectangle {
     property <int> kind-filter: 0;
     // ForwardRow exposes a formatted route; keep its complete mapping and host.
     pure function rule-kind(rule: ForwardRow) -> string {
-        rule.route.starts-with("Local") ? "Local" : rule.route.starts-with("Remote") ? "Remote" : "Dynamic"
+        rule.route.starts-with(@tr("Local")) ? @tr("Local") : rule.route.starts-with(@tr("Remote")) ? @tr("Remote") : @tr("Dynamic")
     }
     pure function matches(rule: ForwardRow) -> bool {
-        (kind-filter == 0 || root.rule-kind(rule) == ["All", "Local", "Remote", "Dynamic"][kind-filter])
+        (kind-filter == 0 || root.rule-kind(rule) == [@tr("All"), @tr("Local"), @tr("Remote"), @tr("Dynamic")][kind-filter])
         && (search == "" || (rule.label + " " + rule.route + " " + rule.status).to-lowercase().replace-all(search.to-lowercase(), "") != (rule.label + " " + rule.route + " " + rule.status).to-lowercase())
     }
     HorizontalLayout { spacing: 0px;
         VerticalLayout { spacing: 0px; horizontal-stretch: 1; min-width: 0px;
             PageHeader {
-                search <=> root.search; placeholder: "Search forwarding rules";
-                primary-text: "New rule"; primary-has-icon: true; primary-icon: @image-url("../icons/plus.svg");
+                search <=> root.search; placeholder: @tr("Search forwarding rules");
+                primary-text: @tr("New rule"); primary-has-icon: true; primary-icon: @image-url("../icons/plus.svg");
                 primary-clicked => { ForwardingBridge.new-rule(); }
             }
             PageToolbar {
-                Segmented { options: ["All", "Local", "Remote", "Dynamic"]; segment-min-width: 64px; current-index <=> root.kind-filter; }
+                Segmented { options: [@tr("All"), @tr("Local"), @tr("Remote"), @tr("Dynamic")]; segment-min-width: 64px; current-index <=> root.kind-filter; }
                 Rectangle { horizontal-stretch: 1; }
             }
             // Save errors remain visible even when the editor body is scrolled.
@@ -45,9 +45,9 @@ export component ForwardingPage inherits Rectangle {
                 Text { x: Theme.gutter; width: parent.width - 2 * Theme.gutter; height: parent.height; text: ForwardingBridge.message; color: Theme.danger; font-size: Theme.font-caption; overflow: elide; vertical-alignment: center; }
             }
             if ForwardingBridge.rules.length == 0: EmptyState {
-                vertical-stretch: 1; icon: @image-url("../icons/forward.svg"); title: "No forwarding rules";
-                description: "Create local, remote or SOCKS5 tunnels through your saved SSH hosts.";
-                action-text: "New rule"; action-clicked => { ForwardingBridge.new-rule(); }
+                vertical-stretch: 1; icon: @image-url("../icons/forward.svg"); title: @tr("No forwarding rules");
+                description: @tr("Create local, remote or SOCKS5 tunnels through your saved SSH hosts.");
+                action-text: @tr("New rule"); action-clicked => { ForwardingBridge.new-rule(); }
             }
             if ForwardingBridge.rules.length > 0: Rectangle {
                 vertical-stretch: 1; min-height: 0px;
@@ -62,11 +62,11 @@ export component ForwardingPage inherits Rectangle {
                         Rectangle { height: Theme.table-header-height; background: Theme.high;
                             HorizontalLayout { spacing: 0px;
                                 Rectangle { width: table.name-width;
-                                    Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: "Name"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
+                                    Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: @tr("Name"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
                                 }
-                                if table.wide: Text { width: table.type-width; text: "Type"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
-                                if table.wide: Text { horizontal-stretch: 1; text: "Mapping / Via host"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
-                                Text { width: table.action-width; text: "Status / Actions"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
+                                if table.wide: Text { width: table.type-width; text: @tr("Type"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
+                                if table.wide: Text { horizontal-stretch: 1; text: @tr("Mapping / Via host"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
+                                Text { width: table.action-width; text: @tr("Status / Actions"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; vertical-alignment: center; }
                             }
                         }
                         Rectangle {
@@ -86,7 +86,7 @@ export component ForwardingPage inherits Rectangle {
                                                     VerticalLayout { padding-left: Theme.space-16; padding-right: Theme.space-12; alignment: center; spacing: Theme.space-4;
                                                         Text { text: rule.label; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
                                                         if !table.wide: Text { text: rule.route; color: Theme.secondary; font-size: Theme.font-mono; font-family: Theme.mono-font; overflow: elide; }
-                                                        Caption { text: rule.status + " / " + rule.connections + " connections"; color: rule.error ? Theme.danger : Theme.secondary; overflow: elide; }
+                                                        Caption { text: rule.status + " / " + rule.connections + @tr(" connections"); color: rule.error ? Theme.danger : Theme.secondary; overflow: elide; }
                                                     }
                                                 }
                                                 if table.wide: Rectangle { width: table.type-width;
@@ -99,7 +99,7 @@ export component ForwardingPage inherits Rectangle {
                                                     VerticalLayout { alignment: center; spacing: Theme.space-8; padding-right: Theme.space-12;
                                                         HorizontalLayout { spacing: Theme.space-4; cross-axis-alignment: center;
                                                             StatusDot { kind: rule.error ? "error" : rule.busy ? "ok" : "idle"; }
-                                                            Caption { text: rule.error ? "Error" : rule.busy ? "Active" : "Stopped"; color: rule.error ? Theme.danger : Theme.secondary; }
+                                                            Caption { text: rule.error ? @tr("Error") : rule.busy ? @tr("Active") : @tr("Stopped"); color: rule.error ? Theme.danger : Theme.secondary; }
                                                         }
                                                         HorizontalLayout { spacing: Theme.space-4;
                                                             IconButton { size: Theme.button-s; icon: rule.busy ? @image-url("../icons/stop.svg") : @image-url("../icons/play.svg"); clicked => { ForwardingBridge.toggle-rule(rule.id); } }
@@ -115,8 +115,8 @@ export component ForwardingPage inherits Rectangle {
                                 }
                             }
                             if row-list.preferred-height == 0px: EmptyState {
-                                icon: @image-url("../icons/search.svg"); title: "No matching rules";
-                                description: "Try another search or forwarding type."; action-text: "Clear filters";
+                                icon: @image-url("../icons/search.svg"); title: @tr("No matching rules");
+                                description: @tr("Try another search or forwarding type."); action-text: @tr("Clear filters");
                                 action-clicked => { root.search = ""; root.kind-filter = 0; }
                             }
                         }
@@ -125,33 +125,33 @@ export component ForwardingPage inherits Rectangle {
             }
         }
         if ForwardingBridge.editor-open: DetailPanel {
-            title: ForwardingBridge.draft.id == "" ? "New forwarding rule" : "Edit forwarding rule";
+            title: ForwardingBridge.draft.id == "" ? @tr("New forwarding rule") : @tr("Edit forwarding rule");
             init => { self.focus(); }
-            more-visible: false; primary-text: "Save";
+            more-visible: false; primary-text: @tr("Save");
             close => { ForwardingBridge.editor-open = false; ForwardingBridge.message = ""; }
             primary-clicked => { ForwardingBridge.save-rule(); }
-            Card { title: "Type";
-                Segmented { options: ["Local", "Remote", "Dynamic"]; segment-min-width: 64px; current-index <=> ForwardingBridge.draft.kind-index; }
-                Text { text: ForwardingBridge.draft.kind-index == 0 ? "Local port to a destination through your SSH host." : ForwardingBridge.draft.kind-index == 1 ? "SSH host port to a destination through this computer." : "Local SOCKS5 proxy through your SSH host."; font-size: Theme.font-caption; color: Theme.secondary; wrap: word-wrap; }
+            Card { title: @tr("Type");
+                Segmented { options: [@tr("Local"), @tr("Remote"), @tr("Dynamic")]; segment-min-width: 64px; current-index <=> ForwardingBridge.draft.kind-index; }
+                Text { text: ForwardingBridge.draft.kind-index == 0 ? @tr("Local port to a destination through your SSH host.") : ForwardingBridge.draft.kind-index == 1 ? @tr("SSH host port to a destination through this computer.") : @tr("Local SOCKS5 proxy through your SSH host."); font-size: Theme.font-caption; color: Theme.secondary; wrap: word-wrap; }
             }
-            Card { title: "Rule";
-                Field { label: "Label"; placeholder: "Development database"; text <=> ForwardingBridge.draft.label; }
-                Field { label: "Bind address"; placeholder: "127.0.0.1"; text <=> ForwardingBridge.draft.bind-address; }
+            Card { title: @tr("Rule");
+                Field { label: @tr("Label"); placeholder: @tr("Development database"); text <=> ForwardingBridge.draft.label; }
+                Field { label: @tr("Bind address"); placeholder: @tr("127.0.0.1"); text <=> ForwardingBridge.draft.bind-address; }
                 HorizontalLayout { spacing: Theme.space-8; cross-axis-alignment: center;
-                    Text { text: ForwardingBridge.draft.kind-index == 1 ? "Remote port" : "Local port"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; horizontal-stretch: 1; }
-                    Input { width: 100px; compact: true; text <=> ForwardingBridge.draft.bind-port; placeholder-text: "8080"; }
+                    Text { text: ForwardingBridge.draft.kind-index == 1 ? @tr("Remote port") : @tr("Local port"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; horizontal-stretch: 1; }
+                    Input { width: 100px; compact: true; text <=> ForwardingBridge.draft.bind-port; placeholder-text: @tr("8080"); }
                 }
-                if ForwardingBridge.draft.kind-index != 2: Field { label: "Destination host"; placeholder: "127.0.0.1"; text <=> ForwardingBridge.draft.destination-host; }
+                if ForwardingBridge.draft.kind-index != 2: Field { label: @tr("Destination host"); placeholder: @tr("127.0.0.1"); text <=> ForwardingBridge.draft.destination-host; }
                 if ForwardingBridge.draft.kind-index != 2: HorizontalLayout { spacing: Theme.space-8; cross-axis-alignment: center;
-                    Text { text: "Destination port"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; horizontal-stretch: 1; }
-                    Input { width: 100px; compact: true; text <=> ForwardingBridge.draft.destination-port; placeholder-text: "5432"; }
+                    Text { text: @tr("Destination port"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; horizontal-stretch: 1; }
+                    Input { width: 100px; compact: true; text <=> ForwardingBridge.draft.destination-port; placeholder-text: @tr("5432"); }
                 }
             }
-            Card { title: "Via";
-                Text { text: "SSH host"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
-                Select { options: ForwardingBridge.hosts; current-index <=> ForwardingBridge.draft.host-index; placeholder: "Select host"; enabled: ForwardingBridge.hosts.length > 0; }
-                if ForwardingBridge.hosts.length == 0: Text { text: "请先在 Hosts 中保存 SSH 主机并连接一次。"; color: Theme.secondary; font-size: Theme.font-caption; wrap: word-wrap; }
-                Checkbox { text: "Start automatically at launch"; checked <=> ForwardingBridge.draft.auto-start; }
+            Card { title: @tr("Via");
+                Text { text: @tr("SSH host"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+                Select { options: ForwardingBridge.hosts; current-index <=> ForwardingBridge.draft.host-index; placeholder: @tr("Select host"); enabled: ForwardingBridge.hosts.length > 0; }
+                if ForwardingBridge.hosts.length == 0: Text { text: @tr("Save an SSH host in Hosts and connect to it once first."); color: Theme.secondary; font-size: Theme.font-caption; wrap: word-wrap; }
+                Checkbox { text: @tr("Start automatically at launch"); checked <=> ForwardingBridge.draft.auto-start; }
             }
         }
     }

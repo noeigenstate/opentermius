@@ -1,5 +1,6 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 use anyhow::Context;
+use opentermius::i18n;
 use opentermius::{
     settings::{BellMode, Settings},
     hosts,
@@ -168,7 +169,7 @@ fn keypad_key(key: slint::winit_030::winit::keyboard::PhysicalKey) -> Option<cha
 impl State {
     fn status(&self, message: impl AsRef<str>, error: bool) {
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_status_text(message.as_ref().into());
+            ui.set_status_text(i18n::translate(message.as_ref()).into());
             ui.set_status_error(error)
         }
     }
@@ -214,9 +215,9 @@ impl State {
                 address: format!("{}@{}:{}", p.username, p.host, p.port).into(),
                 group: p.group.clone().into(),
                 auth: if p.auth_type == "key" {
-                    "SSH 私钥".into()
+                    crate::i18n::t("SSH private key").into()
                 } else {
-                    "密码".into()
+                    crate::i18n::t("Password").into()
                 },
                 has_secret: p.encrypted_secret.is_some(),
                 tags: p
@@ -246,7 +247,7 @@ impl State {
                     .filter_map(|id| {
                         self.sessions.get(id).map(|s| TabRow {
                             id: id.clone().into(),
-                            title: s.profile.name.clone().into(),
+                            title: if s.local { i18n::t("Local Terminal").into() } else { s.profile.name.clone().into() },
                             status: if s.connected {
                                 "connected".into()
                             } else {
@@ -268,7 +269,7 @@ impl State {
             if let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get(id)) {
                 ui.set_remote_connected(view.connected && !view.local);
                 ui.set_local_session(view.local);
-                ui.set_active_host(view.profile.name.clone().into());
+                ui.set_active_host(if view.local { i18n::t("Local Terminal").into() } else { view.profile.name.clone().into() });
                 let scheme = self.settings.color_scheme;
                 let rows: Vec<TerminalRun> = view
                     .snapshot
@@ -341,7 +342,7 @@ impl State {
         } {
             Ok(p) if p > 0 => p,
             _ => {
-                self.status("端口必须在 1–65535 之间", true);
+                self.status(crate::i18n::t("Port must be between 1 and 65535"), true);
                 return false;
             }
         };
@@ -368,13 +369,13 @@ impl State {
         let result = self
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
             .and_then(|mut s| s.save(p, Some(&secret), d.remember));
         secret.zeroize();
         match result {
             Ok(()) => {
                 self.hosts();
-                self.status("主机已保存", false);
+                self.status(crate::i18n::t("Host saved"), false);
                 true
             }
             Err(e) => {
@@ -422,7 +423,7 @@ impl State {
         let result = self
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
             .and_then(|mut store| {
                 let previous = store.data.hosts_view.clone();
                 store.data.hosts_view.set_mode(mode);
@@ -436,7 +437,7 @@ impl State {
             if let (Ok(store), Some(ui)) = (self.store.lock(), self.ui.upgrade()) {
                 ui.set_host_view_mode(store.data.hosts_view.view_mode().as_str().into());
             }
-            self.status(format!("无法保存视图设置：{error}"), true);
+            self.status(opentermius::tf!("Cannot save view settings: {error}", "error" => format!("{}", error)), true);
         }
     }
     fn set_host_sort(&mut self, value: &str) {
@@ -447,7 +448,7 @@ impl State {
         let result = self
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
             .and_then(|mut store| {
                 let previous = store.data.hosts_view.clone();
                 store.data.hosts_view.set_sort(sort);
@@ -462,7 +463,7 @@ impl State {
             if let (Ok(store), Some(ui)) = (self.store.lock(), self.ui.upgrade()) {
                 ui.set_host_sort_mode(store.data.hosts_view.sort_mode().as_str().into());
             }
-            self.status(format!("无法保存排序设置：{error}"), true);
+            self.status(opentermius::tf!("Cannot save sort settings: {error}", "error" => format!("{}", error)), true);
         }
     }
     fn set_tag_filter(&mut self, value: &str) {
@@ -504,12 +505,12 @@ impl State {
         let result = self
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
             .and_then(|mut store| hosts::duplicate_profile(&mut store, id));
         match result {
             Ok(_) => {
                 self.hosts();
-                self.status("主机已复制", false);
+                self.status(crate::i18n::t("Host duplicated"), false);
             }
             Err(error) => self.status(error.to_string(), true),
         }
@@ -527,11 +528,11 @@ impl State {
             Some(address) => {
                 match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(address))
                 {
-                    Ok(()) => self.status("地址已复制到剪贴板", false),
+                    Ok(()) => self.status(crate::i18n::t("Address copied to clipboard"), false),
                     Err(error) => self.status(error.to_string(), true),
                 }
             }
-            None => self.status("主机不存在", true),
+            None => self.status(crate::i18n::t("Host not found"), true),
         }
     }
     fn open_host_sftp(&mut self, id: &str) {
@@ -552,7 +553,7 @@ impl State {
         let result = self
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
             .and_then(|mut store| hosts::rename_group(&mut store, old, &new_name));
         match result {
             Ok(count) => {
@@ -570,7 +571,7 @@ impl State {
                     }
                 }
                 self.hosts();
-                self.status(format!("已重命名分组（{count} 台主机）"), false);
+                self.status(opentermius::tf!("Group renamed ({count} hosts)", "count" => format!("{}", count)), false);
             }
             Err(error) => self.status(error.to_string(), true),
         }
@@ -582,7 +583,7 @@ impl State {
             .ok()
             .and_then(|s| s.data.hosts.iter().find(|p| p.id == host_id).cloned());
         let Some(profile) = profile else {
-            self.status("主机不存在", true);
+            self.status(crate::i18n::t("Host not found"), true);
             return;
         };
         self.connect_profile(profile);
@@ -590,7 +591,7 @@ impl State {
     fn connect_profile(&mut self, profile: Profile) {
         if self.sessions.len() >= 32 {
             self.status(
-                "Close an unused session before opening more than 32 tabs",
+                crate::i18n::t("Close an unused session before opening more than 32 tabs"),
                 true,
             );
             return;
@@ -608,7 +609,7 @@ impl State {
                     self.settings.scrollback_lines,
                 )
                 .snapshot(),
-                status: "等待认证".into(),
+                status: crate::i18n::t("Waiting for authentication").into(),
                 connected: false,
                 ended: false,
                 selection: None,
@@ -643,7 +644,7 @@ impl State {
             match store::unprotect(&value) {
                 Ok(secret) => self.start(&id, secret),
                 Err(e) => {
-                    self.status(format!("无法读取已保存的凭据，请重新输入：{e}"), true);
+                    self.status(opentermius::tf!("Cannot read saved credentials; enter them again: {e}", "e" => format!("{}", e)), true);
                     self.queue.push_back(Prompt::Credential { id });
                     self.next_prompt()
                 }
@@ -662,7 +663,7 @@ impl State {
             match self
                 .store
                 .lock()
-                .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                 .and_then(|store| store.key_material(&profile.key_id))
             {
                 Ok(material) => Some(material),
@@ -688,7 +689,7 @@ impl State {
         let runtime = self.runtime.handle().clone();
         let events = self.events.clone();
         if let Some(view) = self.sessions.get_mut(id) {
-            view.status = "连接中".into();
+            view.status = crate::i18n::t("Connecting").into();
             view.transport = Some(ssh::spawn_with_key_material_and_options(
                 &runtime,
                 id.to_string(),
@@ -709,7 +710,7 @@ impl State {
     fn open_terminal(&mut self) {
         if self.sessions.len() >= 32 || self.sessions.values().filter(|s| s.local).count() >= 8 {
             self.status(
-                "Close an unused terminal before opening another local session",
+                crate::i18n::t("Close an unused terminal before opening another local session"),
                 true,
             );
             return;
@@ -720,7 +721,7 @@ impl State {
             opentermius::local::spawn(self.runtime.handle(), id.clone(), self.events.clone());
         let profile = Profile {
             id: id.clone(),
-            name: "Local Terminal".into(),
+            name: crate::i18n::t("Local Terminal").into(),
             host: "localhost".into(),
             port: 22,
             username: "local".into(),
@@ -745,7 +746,7 @@ impl State {
                     self.settings.scrollback_lines,
                 )
                 .snapshot(),
-                status: "Starting".into(),
+                status: crate::i18n::t("Starting").into(),
                 connected: false,
                 ended: false,
                 selection: None,
@@ -774,7 +775,7 @@ impl State {
             .map(|s| &s.commands)
         {
             if let Err(e) = sender.try_send(command) {
-                self.status(format!("会话暂不可用：{e}"), true)
+                self.status(opentermius::tf!("Session is temporarily unavailable: {e}", "e" => format!("{}", e)), true)
             }
         }
     }
@@ -1040,18 +1041,18 @@ impl State {
                 ui.set_prompt_password(true);
                 match &prompt {
                     Prompt::Username { .. } => {
-                        ui.set_prompt_title("SSH authentication".into());
-                        ui.set_prompt_message("Username".into());
+                        ui.set_prompt_title(crate::i18n::t("SSH authentication").into());
+                        ui.set_prompt_message(crate::i18n::t("Username").into());
                         ui.set_prompt_password(false);
                     }
                     Prompt::Credential { id } => {
                         let p = &self.sessions[id].profile;
                         let key = p.auth_type == "key";
-                        ui.set_prompt_title(format!("连接 {}", p.name).into());
+                        ui.set_prompt_title(opentermius::tf!("Connect to {}", "0" => format!("{}", p.name)).into());
                         ui.set_prompt_message(if key {
-                            "私钥口令（未加密的私钥可留空）".into()
+                            crate::i18n::t("Private key passphrase (leave empty for an unencrypted key)").into()
                         } else {
-                            format!("{}@{}:{} 的 SSH 密码", p.username, p.host, p.port).into()
+                            opentermius::tf!("SSH password for {}@{}:{}", "0" => format!("{}", p.username), "1" => format!("{}", p.host), "2" => format!("{}", p.port)).into()
                         });
                     }
                     Prompt::Host {
@@ -1060,11 +1061,9 @@ impl State {
                         fingerprint,
                         ..
                     } => {
-                        ui.set_prompt_title("首次连接 · 核对主机密钥".into());
+                        ui.set_prompt_title(crate::i18n::t("First connection · Verify host key").into());
                         ui.set_prompt_message(
-                            format!(
-                                "{host}:{port}\n\n{fingerprint}\n\n请通过可信渠道核对指纹后再信任。"
-                            )
+                            opentermius::tf!("{host}:{port}\n\n{fingerprint}\n\nVerify this fingerprint through a trusted channel before trusting it.", "host" => format!("{}", host), "port" => format!("{}", port), "fingerprint" => format!("{}", fingerprint))
                             .into(),
                         );
                         ui.set_prompt_is_key(true);
@@ -1077,7 +1076,7 @@ impl State {
                             continue;
                         }
                         ui.set_prompt_title(
-                            format!("服务器身份验证 {}/{}", index + 1, prompts.len()).into(),
+                            opentermius::tf!("Server authentication {}/{}", "0" => format!("{}", index + 1), "1" => format!("{}", prompts.len())).into(),
                         );
                         ui.set_prompt_message(prompts[*index].0.clone().into());
                         ui.set_prompt_password(!prompts[*index].1);
@@ -1106,7 +1105,7 @@ impl State {
                     }
                     self.credentials(id);
                 } else if let Some(view) = self.sessions.get_mut(&id) {
-                    view.status = "已取消".into();
+                    view.status = crate::i18n::t("Cancelled").into();
                     view.ended = true;
                     self.tabs();
                     self.display();
@@ -1116,7 +1115,7 @@ impl State {
                 if accepted {
                     self.start(&id, std::mem::take(&mut answer))
                 } else if let Some(s) = self.sessions.get_mut(&id) {
-                    s.status = "已取消".into();
+                    s.status = crate::i18n::t("Cancelled").into();
                     s.ended = true;
                     self.tabs();
                     self.display();
@@ -1133,7 +1132,7 @@ impl State {
                     let result = self
                         .store
                         .lock()
-                        .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                         .and_then(|mut s| s.trust(&host, port, &fingerprint));
                     if let Err(e) = &result {
                         self.status(e.to_string(), true)
@@ -1198,7 +1197,7 @@ impl State {
                         s.ended = false;
                     }
                     s.status = if connected {
-                        "已连接".into()
+                        crate::i18n::t("Connected").into()
                     } else {
                         message.clone()
                     };
@@ -1232,7 +1231,7 @@ impl State {
                         let result = self
                             .store
                             .lock()
-                            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                             .and_then(|mut store| {
                                 hosts::mark_connected(&mut store, &profile_id, &now)
                             });
@@ -1241,7 +1240,7 @@ impl State {
                             Ok(false) => {}
                             Err(error) => {
                                 connect_stamp_error =
-                                    Some(format!("已连接，但无法保存最近连接时间：{error}"))
+                                    Some(opentermius::tf!("Connected, but cannot save last connection time: {error}", "error" => format!("{}", error)))
                             }
                         }
                     }
@@ -1250,7 +1249,7 @@ impl State {
                 }
                 self.status(
                     if connected {
-                        "Connected".to_string()
+                        crate::i18n::t("Connected").to_string()
                     } else {
                         message
                     },
@@ -1343,11 +1342,11 @@ impl State {
                 folder,
             } => {
                 let confirmed = rfd::MessageDialog::new()
-                    .set_title("覆盖远程文件")
+                    .set_title(crate::i18n::t("Overwrite remote file"))
                     .set_description(if folder {
-                        "同名文件夹已存在，是否合并并覆盖其中的同名文件？"
+                        crate::i18n::t("A folder with this name already exists. Merge and overwrite matching files?")
                     } else {
-                        "同名文件已存在，是否覆盖？"
+                        crate::i18n::t("A file with this name already exists. Overwrite it?")
                     })
                     .set_buttons(rfd::MessageButtons::YesNo)
                     .show()
@@ -1376,11 +1375,11 @@ impl State {
                             }
                         };
                         if transport.commands.try_send(command).is_err() {
-                            self.finish_transfer(transfer, "传输队列繁忙".into(), true, false);
+                            self.finish_transfer(transfer, crate::i18n::t("Transfer queue is busy").into(), true, false);
                         }
                     }
                 } else {
-                    self.finish_transfer(transfer, "传输已取消".into(), false, true);
+                    self.finish_transfer(transfer, crate::i18n::t("Transfer cancelled").into(), false, true);
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_busy(false)
                     }
@@ -1402,11 +1401,8 @@ impl State {
                 bytes,
             } => {
                 let confirmed = rfd::MessageDialog::new()
-                    .set_title("确认删除")
-                    .set_description(format!(
-                        "删除 {name}？\n{files} 个文件，{dirs} 个子文件夹，{}。此操作无法撤销。",
-                        format_size(bytes)
-                    ))
+                    .set_title(crate::i18n::t("Confirm deletion"))
+                    .set_description(opentermius::tf!("Delete {name}?\n{files} files, {dirs} subfolders, {}. This cannot be undone.", "name" => format!("{}", name), "files" => format!("{}", files), "dirs" => format!("{}", dirs), "0" => format!("{}", format_size(bytes))))
                     .set_buttons(rfd::MessageButtons::YesNo)
                     .show()
                     == rfd::MessageDialogResult::Yes;
@@ -1421,7 +1417,7 @@ impl State {
                             })
                             .is_err()
                         {
-                            self.status("文件任务队列繁忙", true);
+                            self.status(crate::i18n::t("File task queue is busy"), true);
                         }
                     }
                 }
@@ -1440,7 +1436,7 @@ impl State {
                     .get_mut(&transfer)
                     .filter(|(session, _)| session == &id)
                 {
-                    row.name = format!("{direction} · {name}").into();
+                    row.name = format!("{} · {name}", i18n::translate(&direction)).into();
                     row.percent = if total == 0 {
                         0
                     } else {
@@ -1481,15 +1477,15 @@ impl State {
                 for (session, row) in self.transfers.values_mut() {
                     if session == &id && row.pending {
                         row.pending = false;
-                        row.detail = "连接已关闭，传输已取消".into();
+                        row.detail = crate::i18n::t("Connection closed; transfer cancelled").into();
                     }
                 }
                 self.render_transfers();
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = false;
                     s.ended = true;
-                    if s.status == "已连接" || s.status == "连接中" {
-                        s.status = "已断开".into();
+                    if s.status == crate::i18n::t("Connected") || s.status == crate::i18n::t("Connecting") {
+                        s.status = crate::i18n::t("Disconnected").into();
                     }
                 }
                 if self.active.as_deref() == Some(&id) {
@@ -1605,19 +1601,19 @@ impl State {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if let Ok(text) = clipboard.get_text() {
                 if text.len() > 1024 * 1024 {
-                    self.status("粘贴内容不能超过 1 MB", true);
+                    self.status(crate::i18n::t("Pasted text must not exceed 1 MB"), true);
                     return;
                 }
                 let lines = opentermius::settings::paste_line_count(&text);
                 if self.settings.confirm_multiline_paste && lines > 1 {
                     let confirmed = rfd::MessageDialog::new()
-                        .set_title("粘贴多行内容")
-                        .set_description(format!("剪贴板包含 {lines} 行内容，是否粘贴到终端？"))
+                        .set_title(crate::i18n::t("Paste multiple lines"))
+                        .set_description(opentermius::tf!("The clipboard contains {lines} lines. Paste them into the terminal?", "lines" => format!("{}", lines)))
                         .set_buttons(rfd::MessageButtons::YesNo)
                         .show()
                         == rfd::MessageDialogResult::Yes;
                     if !confirmed {
-                        self.status("已取消粘贴", false);
+                        self.status(crate::i18n::t("Paste cancelled"), false);
                         return;
                     }
                 }
@@ -1637,7 +1633,7 @@ impl State {
     }
     fn list_files(&self, path: String) {
         if !self.remote_ready() {
-            self.status("请先选择已连接的远程主机", true);
+            self.status(crate::i18n::t("Select a connected remote host first"), true);
             return;
         }
         if let Some(ui) = self.ui.upgrade() {
@@ -1768,7 +1764,7 @@ impl State {
     }
     fn queue_transfer(&mut self, name: &str, direction: &str, job: impl FnOnce(u64) -> Command) {
         if !self.remote_ready() {
-            self.status("请先选择已连接的远程主机", true);
+            self.status(crate::i18n::t("Select a connected remote host first"), true);
             return;
         }
         if self
@@ -1778,7 +1774,7 @@ impl State {
             .count()
             >= 8
         {
-            self.status("传输队列已满（最多 8 项），请等待或取消任务", true);
+            self.status(crate::i18n::t("Transfer queue is full (up to 8 tasks). Wait or cancel a task"), true);
             return;
         }
         while self.transfers.len() >= 32 {
@@ -1799,7 +1795,7 @@ impl State {
         let row = TransferRow {
             id: transfer.to_string().into(),
             name: format!("{direction} · {name}").into(),
-            detail: "排队中".into(),
+            detail: crate::i18n::t("Queued").into(),
             percent: 0,
             pending: true,
         };
@@ -1811,7 +1807,7 @@ impl State {
             .commands
             .try_send(job(transfer));
         if result.is_err() {
-            self.finish_transfer(transfer, "传输队列繁忙".into(), true, false);
+            self.finish_transfer(transfer, crate::i18n::t("Transfer queue is busy").into(), true, false);
         }
         self.render_transfers();
     }
@@ -1824,7 +1820,7 @@ impl State {
         let directory = self.file_path.clone();
         let folder = local.is_dir();
         let overwrite = !self.settings.confirm_overwrite;
-        self.queue_transfer(&name, "Upload", |transfer| {
+        self.queue_transfer(&name, crate::i18n::t("Upload"), |transfer| {
             if folder {
                 Command::UploadTree {
                     transfer,
@@ -1844,7 +1840,7 @@ impl State {
     }
     fn download_entry(&mut self, name: &str, destination: Option<PathBuf>) {
         if !ssh::safe_local_component(name) {
-            self.status("远程文件名无法用于本地路径", true);
+            self.status(crate::i18n::t("Remote file name cannot be used in a local path"), true);
             return;
         }
         let Some(entry) = self.remote_entries.iter().find(|e| e.name == name) else {
@@ -1859,7 +1855,7 @@ impl State {
                 self.local_path.join(name)
             }
         });
-        self.queue_transfer(name, "Download", |transfer| {
+        self.queue_transfer(name, crate::i18n::t("Download"), |transfer| {
             if folder {
                 Command::DownloadTree {
                     transfer,
@@ -1890,12 +1886,12 @@ impl State {
                     ssh::safe_remote_component(value)
                 }))
         {
-            self.status("文件名无效", true);
+            self.status(crate::i18n::t("Invalid file name"), true);
             return;
         }
         if !local {
             if !self.remote_ready() {
-                self.status("请先连接远程主机", true);
+                self.status(crate::i18n::t("Connect to a remote host first"), true);
                 return;
             }
             let directory = self.file_path.clone();
@@ -1935,14 +1931,8 @@ impl State {
                         }
                     };
                     let confirmed = rfd::MessageDialog::new()
-                        .set_title("确认删除")
-                        .set_description(format!(
-                            "删除 {}？\n{} 个文件，{} 个子文件夹，{}。此操作无法撤销。",
-                            path.display(),
-                            summary.files,
-                            summary.dirs,
-                            format_size(summary.bytes)
-                        ))
+                        .set_title(crate::i18n::t("Confirm deletion"))
+                        .set_description(opentermius::tf!("Delete {}?\n{} files, {} subfolders, {}. This cannot be undone.", "0" => format!("{}", path.display()), "1" => format!("{}", summary.files), "2" => format!("{}", summary.dirs), "3" => format!("{}", format_size(summary.bytes))))
                         .set_buttons(rfd::MessageButtons::YesNo)
                         .show()
                         == rfd::MessageDialogResult::Yes;
@@ -1954,7 +1944,7 @@ impl State {
                                 let _ = weak.upgrade_in_event_loop(move |_| {
                                     with_state(|s| {
                                         match result {
-                                            Ok(()) => s.status("已删除", false),
+                                            Ok(()) => s.status(crate::i18n::t("Deleted"), false),
                                             Err(e) => s.status(e.to_string(), true),
                                         };
                                         s.list_local(String::new());
@@ -1966,18 +1956,18 @@ impl State {
                 });
             } else {
                 let result = (|| -> anyhow::Result<()> {
-                    anyhow::ensure!(!destination.try_exists()?, "目标名称已存在");
+                    anyhow::ensure!(!destination.try_exists()?, "{}", crate::i18n::t("Destination name already exists"));
                     match operation.as_str() {
                         "mkdir" => std::fs::create_dir(destination)?,
                         "rename" => std::fs::rename(path, destination)?,
-                        _ => anyhow::bail!("不支持的文件操作"),
+                        _ => anyhow::bail!("{}", crate::i18n::t("Unsupported file operation")),
                     }
                     Ok(())
                 })();
                 let _ = weak.upgrade_in_event_loop(move |_| {
                     with_state(|s| {
                         match result {
-                            Ok(()) => s.status("文件操作已完成", false),
+                            Ok(()) => s.status(crate::i18n::t("File operation completed"), false),
                             Err(e) => s.status(e.to_string(), true),
                         };
                         s.list_local(String::new());
@@ -2043,12 +2033,12 @@ fn file_row(
             .unwrap_or_default()
             .into(),
         kind: if is_dir {
-            "Folder".into()
+            crate::i18n::t("Folder").into()
         } else {
             std::path::Path::new(name)
                 .extension()
                 .and_then(|e| e.to_str())
-                .unwrap_or("File")
+                .unwrap_or(crate::i18n::t("File"))
                 .into()
         },
         permissions: permissions
@@ -2077,7 +2067,7 @@ fn startup_store(args: &[String]) -> anyhow::Result<Store> {
         .map(|p| PathBuf::from(p).join("opentermius-native.json"));
     #[cfg(unix)]
     if let Some(path) = &isolated_path {
-        store::configure_secret_directory(path.parent().context("无效的数据目录")?.to_owned())?;
+        store::configure_secret_directory(path.parent().context(crate::i18n::t("Invalid data directory"))?.to_owned())?;
     }
     match isolated_path {
         Some(path) => Store::open(path),
@@ -2086,6 +2076,7 @@ fn startup_store(args: &[String]) -> anyhow::Result<Store> {
 }
 
 fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant, first_frame: Rc<std::cell::Cell<Option<f64>>>) -> anyhow::Result<()> {
+    i18n::set_language(store.data.settings.language);
     let args: Vec<String> = std::env::args().collect();
     let output = args.iter().any(|a| a == "--smoke-test" || a == "--benchmark").then(|| {
         args.iter().find_map(|a| a.strip_prefix("--output=")).map(PathBuf::from)
@@ -2121,12 +2112,9 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         .find_map(|a| a.strip_prefix("--smoke-port="))
         .and_then(|p| p.parse::<u16>().ok())
         .filter(|p| *p > 0);
-    anyhow::ensure!(
-        !smoke
+    anyhow::ensure!(!smoke
             || (scene == "empty" && smoke_port.is_none())
-            || args.iter().any(|a| a.starts_with("--data-dir=")),
-        "写入自检资料时必须指定独立 --data-dir"
-    );
+            || args.iter().any(|a| a.starts_with("--data-dir=")), "{}", crate::i18n::t("An isolated --data-dir is required when writing smoke test data"));
     let store = Arc::new(Mutex::new(store));
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -2323,7 +2311,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             let result = s
                 .store
                 .lock()
-                .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                 .and_then(|mut store| store.delete(&id));
             match result {
                 Ok(()) => s.hosts(),
@@ -2430,7 +2418,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_pick_key(|| {
         rfd::FileDialog::new()
-            .set_title("选择 SSH 私钥")
+            .set_title(crate::i18n::t("Select SSH private key"))
             .pick_file()
             .map(|p| p.to_string_lossy().into_owned().into())
             .unwrap_or_default()
@@ -2461,11 +2449,11 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     ui.on_upload_local(|name| {
         with_state(|s| {
             if !safe_filename(&name) {
-                s.status("本地文件名无效", true);
+                s.status(crate::i18n::t("Invalid local file name"), true);
                 return;
             }
             if !s.remote_ready() {
-                s.status("请先选择远程主机", true);
+                s.status(crate::i18n::t("Select a remote host first"), true);
                 return;
             }
             s.upload_path(s.local_path.join(name.as_str()));
@@ -2477,7 +2465,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         });
     });
     ui.on_upload_file(|| {
-        if let Some(local) = rfd::FileDialog::new().set_title("上传文件").pick_file() {
+        if let Some(local) = rfd::FileDialog::new().set_title(crate::i18n::t("Upload file")).pick_file() {
             with_state(|s| {
                 s.upload_path(local);
             });
@@ -2485,7 +2473,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_download_file(|name| {
         if let Some(local) = rfd::FileDialog::new()
-            .set_title("保存下载文件")
+            .set_title(crate::i18n::t("Save downloaded file"))
             .set_file_name(name.as_str())
             .save_file()
         {
@@ -2495,7 +2483,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         }
     });
     ui.on_upload_folder(|| {
-        if let Some(local) = rfd::FileDialog::new().set_title("上传文件夹").pick_folder() {
+        if let Some(local) = rfd::FileDialog::new().set_title(crate::i18n::t("Upload folder")).pick_folder() {
             with_state(|s| s.upload_path(local));
         }
     });
@@ -2525,9 +2513,9 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
                         .try_send(Command::CancelTransfer { transfer })
                         .is_ok()
                     {
-                        row.detail = "正在取消…".into();
+                        row.detail = crate::i18n::t("Cancelling…").into();
                     } else {
-                        s.status("取消请求未发送，请重试", true);
+                        s.status(crate::i18n::t("Cancellation request was not sent; try again"), true);
                     }
                 }
             }
@@ -2536,7 +2524,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_import_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
-            .set_title("导入主机")
+            .set_title(crate::i18n::t("Import hosts"))
             .add_filter("JSON", &["json"])
             .pick_file()
         {
@@ -2544,12 +2532,12 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
                 let result = s
                     .store
                     .lock()
-                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                     .and_then(|mut store| store.import(&path));
                 match result {
                     Ok(n) => {
                         s.hosts();
-                        s.status(format!("已导入 {n} 台主机"), false)
+                        s.status(opentermius::tf!("Imported {n} hosts", "n" => format!("{}", n)), false)
                     }
                     Err(e) => s.status(e.to_string(), true),
                 }
@@ -2558,14 +2546,14 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_import_xshell(|| {
         let default = opentermius::import_xshell::default_sessions_dir();
-        let mut picker = rfd::FileDialog::new().set_title("Import from Xshell — Select Sessions folder");
+        let mut picker = rfd::FileDialog::new().set_title(crate::i18n::t("Import from Xshell — Select Sessions folder"));
         if let Some(path) = &default {
             picker = picker.set_directory(path);
         }
         let choice = default.as_ref().map(|path| {
             rfd::MessageDialog::new()
-                .set_title("Import from Xshell")
-                .set_description(format!("Import sessions from {}?\nChoose No to select another folder.", path.display()))
+                .set_title(crate::i18n::t("Import from Xshell"))
+                .set_description(opentermius::tf!("Import sessions from {}?\nChoose No to select another folder.", "0" => format!("{}", path.display())))
                 .set_buttons(rfd::MessageButtons::YesNoCancel)
                 .show()
         });
@@ -2578,7 +2566,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             let scanned = opentermius::import_xshell::scan(&path);
             let message = with_state(|s| {
                 let result = s.store.lock()
-                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                     .and_then(|mut store| opentermius::import_xshell::merge(&mut store, scanned));
                 match result {
                     Ok(summary) => {
@@ -2595,7 +2583,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             }).flatten();
             if let Some(message) = message {
                 rfd::MessageDialog::new()
-                    .set_title("Import from Xshell")
+                    .set_title(crate::i18n::t("Import from Xshell"))
                     .set_description(message)
                     .show();
             }
@@ -2603,7 +2591,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_export_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
-            .set_title("导出主机（不含凭据）")
+            .set_title(crate::i18n::t("Export hosts (without credentials)"))
             .add_filter("JSON", &["json"])
             .set_file_name("opentermius-hosts.json")
             .save_file()
@@ -2612,11 +2600,11 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
                 let result = s
                     .store
                     .lock()
-                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                     .and_then(|store| store.export(&path));
                 s.status(
                     result
-                        .map(|_| "已导出主机配置（不含凭据）".to_string())
+                        .map(|_| crate::i18n::t("Host configuration exported (without credentials)").to_string())
                         .unwrap_or_else(|e| e.to_string()),
                     false,
                 )
@@ -2640,19 +2628,16 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         s.display()
     });
     if smoke && (scene == "hosts" || smoke_port.is_some()) {
-        anyhow::ensure!(
-            ui.invoke_save_host(HostDraft {
+        anyhow::ensure!(ui.invoke_save_host(HostDraft {
                 id: "smoke-profile".into(),
-                name: "本机验证服务器".into(),
+                name: crate::i18n::t("Local test server").into(),
                 host: "127.0.0.1".into(),
                 port: smoke_port.unwrap_or(22).to_string().into(),
                 username: "tester".into(),
-                group: "开发环境".into(),
+                group: crate::i18n::t("Development").into(),
                 ..HostDraft::default()
-            }),
-            "界面创建主机失败"
-        );
-        anyhow::ensure!(ui.get_hosts().row_count() == 1, "主机列表未更新");
+            }), "{}", crate::i18n::t("Failed to create host through the UI"));
+        anyhow::ensure!(ui.get_hosts().row_count() == 1, "{}", crate::i18n::t("Host list was not updated"));
         if smoke_port.is_some() {
             let id = ui.get_hosts().row_data(0).unwrap().id;
             ui.invoke_connect_host(id)
@@ -2670,12 +2655,12 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             s.sessions.insert(id.clone(), SessionView {
                 local: false,
                 profile: Profile {
-                    id: "smoke-profile".into(), name: "Development".into(), host: "localhost".into(),
+                    id: "smoke-profile".into(), name: crate::i18n::t("Development").into(), host: "localhost".into(),
                     port: 22, username: "dev".into(), auth_type: "password".into(),
                     private_key_path: String::new(), key_id: String::new(), group: String::new(), encrypted_secret: None,
                     tags: Vec::new(), last_connected: None, created_at: None,
                 },
-                transport: None, snapshot: terminal.snapshot(), status: "已断开".into(),
+                transport: None, snapshot: terminal.snapshot(), status: crate::i18n::t("Disconnected").into(),
                 connected: false, ended: true, selection: None,
             });
             s.order.push(id.clone());
@@ -2695,7 +2680,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             let bridge = ui.global::<ForwardingBridge>();
             bridge.invoke_new_rule();
             let mut draft = bridge.get_draft();
-            draft.label = "Development database".into();
+            draft.label = crate::i18n::t("Development database").into();
             draft.bind_port = "8080".into();
             draft.destination_host = "127.0.0.1".into();
             draft.destination_port = "5432".into();
@@ -2744,17 +2729,17 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             timer.start(slint::TimerMode::Repeated,Duration::from_millis(50),move||{
                 let result=(||->anyhow::Result<bool>{
                     let Some(ui)=weak.upgrade()else{return Ok(true)};
-                    anyhow::ensure!(started.elapsed()<Duration::from_secs(18),"原生界面连接自检超时：{}",ui.get_status_text());
-                    if ui.get_prompt_visible(){if ui.get_prompt_is_key(){anyhow::ensure!(ui.get_prompt_message().contains("SHA256:"),"未显示主机指纹");fingerprint=true;ui.invoke_answer_prompt(true,"".into());}else{credentials=true;ui.invoke_answer_prompt(true,"test-password".into());}}
+                    anyhow::ensure!(started.elapsed()<Duration::from_secs(18), "{}", opentermius::tf!("Native UI connection self-test timed out: {}", "0" => format!("{}", ui.get_status_text())));
+                    if ui.get_prompt_visible(){if ui.get_prompt_is_key(){anyhow::ensure!(ui.get_prompt_message().contains("SHA256:"), "{}", crate::i18n::t("Host fingerprint was not displayed"));fingerprint=true;ui.invoke_answer_prompt(true,"".into());}else{credentials=true;ui.invoke_answer_prompt(true,"test-password".into());}}
                     let (connected,echo)=with_state(|s|s.active.as_ref().and_then(|id|s.sessions.get(id)).map(|v|(v.connected,v.snapshot.lines.iter().any(|l|l.contains("中文native-ui-test")))).unwrap_or_default()).unwrap_or_default();
                     if stage==0&&connected{
                         with_state(|s| -> anyhow::Result<()> {
                             let store = s.store.lock().unwrap();
                             let host = &store.data.hosts[0];
-                            let stamp = host.last_connected.as_deref().context("缺少最近连接时间")?;
+                            let stamp = host.last_connected.as_deref().context(crate::i18n::t("Last connection time is missing"))?;
                             chrono::DateTime::parse_from_rfc3339(stamp)?;
-                            let book = opentermius::logs::LogBook::open(store.path.parent().context("配置目录无效")?)?;
-                            anyhow::ensure!(book.entries().iter().any(|entry| entry.host_id == host.id && entry.status == opentermius::logs::CONNECTED), "成功连接未写入连接历史");
+                            let book = opentermius::logs::LogBook::open(store.path.parent().context(crate::i18n::t("Invalid configuration directory"))?)?;
+                            anyhow::ensure!(book.entries().iter().any(|entry| entry.host_id == host.id && entry.status == opentermius::logs::CONNECTED), "{}", crate::i18n::t("Successful connection was not recorded in history"));
                             Ok(())
                         }).unwrap()?;
                         ui.invoke_focus_terminal();ui.window().dispatch_event(slint::platform::WindowEvent::KeyPressed{text:"中文native-ui-test\r".into()});stage=1;
@@ -2763,13 +2748,13 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
                     if stage==2&&ui.get_files().row_count()>0{paint_at=std::time::Instant::now();stage=3;}
                     if stage==3&&paint_at.elapsed()>Duration::from_millis(250){
                         capture(&ui,&output)?;
-                        let host=ui.get_hosts().row_data(0).context("界面主机丢失")?;
+                        let host=ui.get_hosts().row_data(0).context(crate::i18n::t("Host is missing from UI"))?;
                         let session=ui.get_active_session();ui.invoke_close_session(session);
-                        anyhow::ensure!(ui.get_tabs().row_count()==0,"关闭会话后标签未清理");
-                        let mut draft=ui.invoke_edit_host(host.id.clone());draft.secret="test-password".into();draft.remember=true;anyhow::ensure!(ui.invoke_save_host(draft),"系统加密凭据保存失败");
-                        with_state(|s|->anyhow::Result<()>{let store=s.store.lock().unwrap();let p=&store.data.hosts[0];anyhow::ensure!(store::unprotect(p.encrypted_secret.as_deref().context("缺少加密凭据")?)?=="test-password","系统凭据未正确解密");anyhow::ensure!(!std::fs::read_to_string(&store.path)?.contains("test-password"),"凭据被明文保存");anyhow::ensure!(Store::open(store.path.clone())?.data.hosts.len()==1,"重开配置失败");Ok(())}).unwrap()?;
-                        ui.invoke_search_hosts("absent-search".into());anyhow::ensure!(ui.get_hosts().row_count()==0,"主机搜索失败");ui.invoke_search_hosts("".into());
-                        anyhow::ensure!(credentials&&fingerprint,"未覆盖凭据和主机密钥弹窗");
+                        anyhow::ensure!(ui.get_tabs().row_count()==0, "{}", crate::i18n::t("Tab was not removed after closing session"));
+                        let mut draft=ui.invoke_edit_host(host.id.clone());draft.secret="test-password".into();draft.remember=true;anyhow::ensure!(ui.invoke_save_host(draft), "{}", crate::i18n::t("Failed to save system-encrypted credentials"));
+                        with_state(|s|->anyhow::Result<()>{let store=s.store.lock().unwrap();let p=&store.data.hosts[0];anyhow::ensure!(store::unprotect(p.encrypted_secret.as_deref().context(crate::i18n::t("Encrypted credentials are missing"))?)?=="test-password", "{}", crate::i18n::t("System credentials did not decrypt correctly"));anyhow::ensure!(!std::fs::read_to_string(&store.path)?.contains("test-password"), "{}", crate::i18n::t("Credentials were stored in plaintext"));anyhow::ensure!(Store::open(store.path.clone())?.data.hosts.len()==1, "{}", crate::i18n::t("Failed to reopen configuration"));Ok(())}).unwrap()?;
+                        ui.invoke_search_hosts("absent-search".into());anyhow::ensure!(ui.get_hosts().row_count()==0, "{}", crate::i18n::t("Host search failed"));ui.invoke_search_hosts("".into());
+                        anyhow::ensure!(credentials&&fingerprint, "{}", crate::i18n::t("Credential and host key dialogs were not exercised"));
                         anyhow::ensure!(ui.get_cell_width().is_finite() && ui.get_cell_width() > 0.0 && ui.get_cell_height().is_finite() && ui.get_cell_height() > 0.0,"Terminal cell metric must be measured from the selected font");
                         std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup",if cfg!(windows){"Windows DPAPI"}else{"AES-256-GCM"},"no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;
                         return Ok(true)
@@ -2814,14 +2799,14 @@ fn main() {
         let store = startup_store(&args)?;
         let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref(), store.data.settings.gpu_rendering)?;
         let renderer = if requested.available() { requested } else {
-            eprintln!("当前构建未包含 {} 渲染器，回退软件渲染", requested.name());
+            eprintln!("{}", opentermius::tf!("This build does not include the {} renderer; falling back to software rendering", "0" => format!("{}", requested.name())));
             rendering::Renderer::Software
         };
         let first_frame = Rc::new(std::cell::Cell::new(None));
         match run(store, renderer, started, first_frame.clone()) {
             Ok(()) => Ok(0),
             Err(error) if rendering::should_retry(renderer, first_frame.get(), &error) => {
-                eprintln!("GPU 窗口初始化失败，回退软件渲染：{error:#}");
+                eprintln!("{}", opentermius::tf!("GPU window initialization failed; falling back to software rendering: {error:#}", "error:#" => format!("{:#}", error)));
                 rendering::retry_software()
             }
             Err(error) => Err(error),
@@ -2834,10 +2819,10 @@ fn main() {
                 let output = args.iter().find_map(|a| a.strip_prefix("--output=")).unwrap_or("test-output");
                 let _ = std::fs::create_dir_all(output);
                 let _ = std::fs::write(PathBuf::from(output).join("error.txt"), format!("{error:#}"));
-                eprintln!("OpenTermius 启动失败：{error:#}");
+                eprintln!("{}", opentermius::tf!("OpenTermius failed to start: {error:#}", "error:#" => format!("{:#}", error)));
             } else {
                 rfd::MessageDialog::new()
-                    .set_title("OpenTermius 启动失败")
+                    .set_title(crate::i18n::t("OpenTermius failed to start"))
                     .set_description(format!("{error:#}"))
                     .set_level(rfd::MessageLevel::Error)
                     .show();

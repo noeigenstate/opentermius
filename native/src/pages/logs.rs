@@ -79,7 +79,7 @@ fn storage_result<T>(state: &mut LogsState, result: anyhow::Result<T>) -> Option
             Some(value)
         }
         Err(error) => {
-            state.error = format!("无法读写连接历史：{error}");
+            state.error = opentermius::tf!("Cannot read or write connection history: {error}", "error" => format!("{}", error));
             None
         }
     }
@@ -103,7 +103,7 @@ pub(crate) fn ssh_started(session_id: &str, profile: &opentermius::store::Profil
 
 /// Records the opening of a local terminal.
 pub(crate) fn local_started(session_id: &str) {
-    begin(session_id, "", "Local Terminal", "Local", "local");
+    begin(session_id, "", crate::i18n::t("Local Terminal"), crate::i18n::t("Local"), "local");
 }
 
 fn begin(session_id: &str, host_id: &str, label: &str, address: &str, kind: &str) {
@@ -136,17 +136,17 @@ pub(crate) fn failed(session_id: &str, message: &str) {
 }
 
 fn failure_summary(message: &str) -> &'static str {
-    if message.contains("主机密钥") {
-        "SSH 主机密钥验证失败"
-    } else if message.contains("私钥") || message.contains("口令") || message.contains("认证")
+    if crate::i18n::contains(message, "host key") {
+        "SSH host key verification failed"
+    } else if crate::i18n::contains(message, "private key") || crate::i18n::contains(message, "passphrase") || crate::i18n::contains(message, "authentication")
     {
-        "SSH 身份验证失败"
-    } else if message.contains("超时") || message.to_lowercase().contains("timed out") {
-        "连接超时"
-    } else if message.contains("取消") {
-        "连接已取消"
+        "SSH authentication failed"
+    } else if crate::i18n::contains(message, "timed out") {
+        "Connection timed out"
+    } else if crate::i18n::contains(message, "cancel") {
+        "Connection cancelled"
     } else {
-        "连接失败，请查看会话中的错误提示"
+        "Connection failed; see the error in the session"
     }
 }
 
@@ -178,7 +178,7 @@ pub(crate) fn closed(session_id: &str) {
     refresh();
 }
 
-fn refresh() {
+pub(super) fn refresh() {
     // The page can be refreshed from inside `with_state` while a session event
     // is being handled; keep the previous host snapshot in that case.
     let hosts = crate::with_state(|state| {
@@ -234,7 +234,7 @@ fn refresh() {
     let bridge = ui.global::<LogsBridge>();
     bridge.set_rows(model.into());
     bridge.set_total(total as i32);
-    bridge.set_storage_error(error.into());
+    bridge.set_storage_error(crate::i18n::translate(&error).into());
 }
 
 fn matches_query(entry: &LogEntry, query: &str) -> bool {
@@ -252,15 +252,15 @@ fn row(entry: &LogEntry, hosts: &HashSet<String>, now: DateTime<Local>) -> LogRo
     LogRow {
         id: entry.id.clone().into(),
         host_id: entry.host_id.clone().into(),
-        label: entry.label.clone().into(),
-        address: entry.address.clone().into(),
+        label: if entry.kind == "local" { crate::i18n::t("Local Terminal").into() } else { entry.label.clone().into() },
+        address: if entry.kind == "local" { crate::i18n::t("Local").into() } else { entry.address.clone().into() },
         started: started_text(&entry.started_at).into(),
         duration: logs::elapsed_seconds(&entry.started_at, entry.ended_at.as_deref(), now)
             .map(logs::format_duration)
             .unwrap_or_else(|| "—".into())
             .into(),
         status: status_text(&entry.status).into(),
-        error: entry.error.clone().unwrap_or_default().into(),
+        error: crate::i18n::translate(entry.error.as_deref().unwrap_or_default()).into(),
         can_connect: entry.kind == "ssh"
             && !entry.host_id.is_empty()
             && hosts.contains(&entry.host_id),
@@ -275,10 +275,10 @@ fn started_text(value: &str) -> String {
 
 fn status_text(status: &str) -> &'static str {
     match status {
-        logs::CONNECTED => "Connected",
-        logs::CLOSED => "Closed",
-        logs::FAILED => "Failed",
-        _ => "Connecting",
+        logs::CONNECTED => crate::i18n::t("Connected"),
+        logs::CLOSED => crate::i18n::t("Closed"),
+        logs::FAILED => crate::i18n::t("Failed"),
+        _ => crate::i18n::t("Connecting"),
     }
 }
 

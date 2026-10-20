@@ -360,10 +360,7 @@ impl client::Handler for Client {
             .fingerprint(russh::keys::HashAlg::Sha256)
             .to_string();
         if let Some(known) = &self.known {
-            ensure!(
-                known == &fingerprint,
-                "SSH 主机密钥已变化，连接已拒绝。请先核实服务器身份。"
-            );
+            ensure!(known == &fingerprint, "{}", crate::i18n::t("SSH host key changed; connection refused. Verify the server identity first."));
             return Ok(true);
         }
         let (tx, rx) = oneshot::channel();
@@ -376,12 +373,12 @@ impl client::Handler for Client {
                 reply: tx,
             })
             .await
-            .context("界面已关闭")?;
+            .context(crate::i18n::t("Window closed"))?;
         let trusted = tokio::select! {
-            result=timeout(Duration::from_secs(120), rx)=>result.context("主机密钥确认超时")?.unwrap_or(false),
-            _=self.cancelled.changed()=>bail!("SSH 连接已取消"),
+            result=timeout(Duration::from_secs(120), rx)=>result.context(crate::i18n::t("Host key confirmation timed out"))?.unwrap_or(false),
+            _=self.cancelled.changed()=>bail!("{}", crate::i18n::t("SSH connection cancelled")),
         };
-        ensure!(trusted, "未信任 SSH 主机密钥");
+        ensure!(trusted, "{}", crate::i18n::t("SSH host key was not trusted"));
         Ok(true)
     }
 }
@@ -399,10 +396,7 @@ async fn connect(
 ) -> Result<client::Handle<Client>> {
     let keepalive_interval = (options.keepalive_seconds > 0)
         .then(|| Duration::from_secs(u64::from(options.keepalive_seconds)));
-    ensure!(
-        p.auth_type != "key" || p.key_id.is_empty() || key_material.is_some(),
-        "Keychain 密钥材料缺失"
-    );
+    ensure!(p.auth_type != "key" || p.key_id.is_empty() || key_material.is_some(), "{}", crate::i18n::t("Keychain key material is missing"));
     let config = Arc::new(client::Config {
         keepalive_interval,
         keepalive_max: 3,
@@ -425,21 +419,18 @@ async fn connect(
         client::connect(config, (p.host.as_str(), p.port), handler),
     )
     .await
-    .context("SSH 连接超时")??;
+    .context(crate::i18n::t("SSH connection timed out"))??;
     let authenticated = if p.auth_type == "key" {
         let key = if let Some(material) = key_material {
             tokio::task::spawn_blocking(move || material.into_private_key())
                 .await
-                .context("私钥解密任务失败")??
+                .context(crate::i18n::t("Private key decryption task failed"))??
         } else {
             let path = p.private_key_path.clone();
             let passphrase = Zeroizing::new(secret.to_owned());
             tokio::task::spawn_blocking(move || -> Result<_> {
-                ensure!(
-                    std::fs::metadata(&path)?.len() <= 1024 * 1024,
-                    "私钥不能超过 1 MB"
-                );
-                let text = Zeroizing::new(std::fs::read_to_string(&path).context("读取私钥失败")?);
+                ensure!(std::fs::metadata(&path)?.len() <= 1024 * 1024, "{}", crate::i18n::t("Private key must not exceed 1 MB"));
+                let text = Zeroizing::new(std::fs::read_to_string(&path).context(crate::i18n::t("Cannot read private key"))?);
                 Ok(crate::keychain::decode_private_key(
                     &text,
                     if passphrase.is_empty() {
@@ -453,7 +444,7 @@ async fn connect(
         };
         let hash = timeout(Duration::from_secs(30), ssh.best_supported_rsa_hash())
             .await
-            .context("密钥协商超时")??
+            .context(crate::i18n::t("Key exchange timed out"))??
             .flatten();
         timeout(
             Duration::from_secs(30),
@@ -463,7 +454,7 @@ async fn connect(
             ),
         )
         .await
-        .context("私钥认证超时")??
+        .context(crate::i18n::t("Private key authentication timed out"))??
         .success()
     } else {
         timeout(
@@ -471,7 +462,7 @@ async fn connect(
             ssh.authenticate_password(p.username.clone(), secret),
         )
         .await
-        .context("密码认证超时")??
+        .context(crate::i18n::t("Password authentication timed out"))??
         .success()
     };
     if !authenticated {
@@ -480,17 +471,17 @@ async fn connect(
             ssh.authenticate_keyboard_interactive_start(p.username.clone(), None::<String>),
         )
         .await
-        .context("交互认证超时")??;
+        .context(crate::i18n::t("Interactive authentication timed out"))??;
         let mut rounds = 0;
         loop {
             match response {
                 client::KeyboardInteractiveAuthResponse::Success => break,
                 client::KeyboardInteractiveAuthResponse::Failure { .. } => {
-                    bail!("SSH 认证失败，请检查用户名和凭据")
+                    bail!("{}", crate::i18n::t("SSH authentication failed; check username and credentials"))
                 }
                 client::KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
                     rounds += 1;
-                    ensure!(rounds <= 8, "交互认证轮次过多");
+                    ensure!(rounds <= 8, "{}", crate::i18n::t("Too many interactive authentication rounds"));
                     let (tx, rx) = oneshot::channel();
                     events
                         .send(Event::AuthPrompt {
@@ -499,17 +490,17 @@ async fn connect(
                             reply: tx,
                         })
                         .await
-                        .context("界面已关闭")?;
+                        .context(crate::i18n::t("Window closed"))?;
                     let answers = timeout(Duration::from_secs(120), rx)
                         .await
-                        .context("交互认证确认超时")??
-                        .context("认证已取消")?;
+                        .context(crate::i18n::t("Interactive authentication confirmation timed out"))??
+                        .context(crate::i18n::t("Authentication cancelled"))?;
                     response = timeout(
                         Duration::from_secs(30),
                         ssh.authenticate_keyboard_interactive_respond(answers),
                     )
                     .await
-                    .context("交互认证超时")??;
+                    .context(crate::i18n::t("Interactive authentication timed out"))??;
                 }
             }
         }
@@ -535,7 +526,7 @@ pub(crate) async fn connect_forwarding(
     cancelled: watch::Receiver<bool>,
     target: Option<ForwardTarget>,
 ) -> Result<client::Handle<Client>> {
-    ensure!(!known.is_empty(), "请先连接此主机一次并信任主机指纹");
+    ensure!(!known.is_empty(), "{}", crate::i18n::t("Connect to this host once and trust its fingerprint first"));
     let (events, mut rx) = mpsc::channel(8);
     let connecting = connect(
         &p.id, p, secret, key_material, Some(known), &events, cancelled,
@@ -547,7 +538,7 @@ pub(crate) async fn connect_forwarding(
             result = &mut connecting => return result,
             event = rx.recv() => match event {
                 Some(Event::AuthPrompt { .. } | Event::HostKey { .. }) => {
-                    bail!("转发需要交互认证，请先连接此主机一次并保存可用凭据")
+                    bail!("{}", crate::i18n::t("Forwarding requires interactive authentication; connect to this host once and save working credentials"))
                 }
                 _ => {}
             }
@@ -603,7 +594,7 @@ async fn run(
     tokio::pin!(opening);
     let channel = loop {
         tokio::select! {
-            result=&mut opening=>break result.context("终端通道超时")??,
+            result=&mut opening=>break result.context(crate::i18n::t("Terminal channel timed out"))??,
             command=commands.recv()=>if matches!(command,None|Some(Command::Disconnect)){return Ok(())}
         }
     };
@@ -649,12 +640,12 @@ async fn run(
     loop {
         tokio::select! {
             result=&mut writing=>return result,
-            _=&mut setup_timeout,if !connected=>bail!("终端请求超时"),
+            _=&mut setup_timeout,if !connected=>bail!("{}", crate::i18n::t("Terminal request timed out")),
             permit=write_tx.reserve(),if pending_write.is_some()||pending_control.is_some()||!protocol.is_empty()=>{
                 let next=if let Some(control)=pending_control.take(){control}
                     else if !protocol.is_empty(){Write::Input(std::mem::take(&mut protocol))}
-                    else{pending_write.take().context("缺少终端输入")?};
-                permit.context("终端输入通道已关闭")?.send(next);
+                    else{pending_write.take().context(crate::i18n::t("Terminal input is missing"))?};
+                permit.context(crate::i18n::t("Terminal input channel closed"))?.send(next);
             },
             command=commands.recv(),if pending_write.is_none()=>match command {
                 None|Some(Command::Disconnect)=>break,
@@ -668,11 +659,11 @@ async fn run(
                     }
                 },
                 Some(job)=>if let Err(error)=job_tx.try_send(job){
-                    let message = "文件任务队列繁忙，请稍后重试".to_string();
+                    let message = crate::i18n::t("File task queue is busy; try again later").to_string();
                     if let Some(transfer) = transfer_id(error.into_inner()) {
                         complete_transfer(&events, &cancelled, id, transfer, Err(anyhow::anyhow!(message))).await?;
                     } else {
-                        events.send(Event::Transfer{id:id.into(),message,error:true}).await.context("界面已关闭")?;
+                        events.send(Event::Transfer{id:id.into(),message,error:true}).await.context(crate::i18n::t("Window closed"))?;
                     }
                 }
             },
@@ -683,15 +674,15 @@ async fn run(
                         let _ = events.try_send(Event::Bell{id:id.into()});
                     }
                     let responses=terminal.take_responses();
-                    ensure!(protocol.len()+responses.len()<=65536,"服务器终端查询过于频繁");
+                    ensure!(protocol.len()+responses.len()<=65536, "{}", crate::i18n::t("Server terminal queries are too frequent"));
                     protocol.extend(responses);dirty=true;
                 },
                 Some(ChannelMsg::Success) if !connected=>{
                     if stage==0 {stage=1;pending_control=Some(Write::Shell);setup_timeout.as_mut().reset(tokio::time::Instant::now()+Duration::from_secs(30));}
-                    else {connected=true;events.send(Event::Status{id:id.into(),connected:true,message:"已连接".into(),error:false}).await.context("界面已关闭")?;}
+                    else {connected=true;events.send(Event::Status{id:id.into(),connected:true,message:crate::i18n::t("Connected").into(),error:false}).await.context(crate::i18n::t("Window closed"))?;}
                 },
                 None|Some(ChannelMsg::Close)=>break,
-                Some(ChannelMsg::Failure)=>bail!("服务器拒绝终端请求"),
+                Some(ChannelMsg::Failure)=>bail!("{}", crate::i18n::t("Server rejected terminal request")),
                 _=>{}
             },
             _=frame.tick(),if dirty&&connected=>{
@@ -711,17 +702,14 @@ async fn run(
     }
     let _ = timeout(
         Duration::from_secs(2),
-        ssh.disconnect(Disconnect::ByApplication, "Disconnected", "en"),
+        ssh.disconnect(Disconnect::ByApplication, crate::i18n::t("Disconnected"), "en"),
     )
     .await;
     Ok(())
 }
 
 fn validate_remote(path: &str) -> Result<()> {
-    ensure!(
-        !path.is_empty() && path.len() <= 32768 && !path.chars().any(char::is_control),
-        "远程路径无效"
-    );
+    ensure!(!path.is_empty() && path.len() <= 32768 && !path.chars().any(char::is_control), "{}", crate::i18n::t("Invalid remote path"));
     Ok(())
 }
 /// One SFTP path component: no separators, no relative traversal, no control bytes.
@@ -751,13 +739,13 @@ pub fn safe_local_component(name: &str) -> bool {
 }
 fn remote_join(directory: &str, name: &str) -> Result<String> {
     validate_remote(directory)?;
-    ensure!(safe_remote_component(name), "文件名无效");
+    ensure!(safe_remote_component(name), "{}", crate::i18n::t("Invalid file name"));
     Ok(format!("{}/{}", directory.trim_end_matches('/'), name))
 }
 fn remote_child(root: &str, relative: &str) -> Result<String> {
     let mut path = root.trim_end_matches('/').to_string();
     for component in relative.split('/') {
-        ensure!(safe_remote_component(component), "远程文件名无效");
+        ensure!(safe_remote_component(component), "{}", crate::i18n::t("Invalid remote file name"));
         path.push('/');
         path.push_str(component);
     }
@@ -766,7 +754,7 @@ fn remote_child(root: &str, relative: &str) -> Result<String> {
 fn local_child(root: &Path, relative: &str) -> Result<PathBuf> {
     let mut path = root.to_path_buf();
     for component in relative.split('/') {
-        ensure!(safe_local_component(component), "本地文件名无效");
+        ensure!(safe_local_component(component), "{}", crate::i18n::t("Invalid local file name"));
         path.push(component);
     }
     Ok(path)
@@ -839,7 +827,7 @@ pub fn sort_local_files(entries: &mut [LocalFile], column: SortColumn, ascending
 }
 pub fn read_local_dir(path: &Path) -> Result<Vec<LocalFile>> {
     let path = path.canonicalize()?;
-    ensure!(path.is_dir(), "请选择本地文件夹");
+    ensure!(path.is_dir(), "{}", crate::i18n::t("Select a local folder"));
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(&path)?.take(20000) {
         let entry = entry?;
@@ -874,7 +862,7 @@ pub fn local_tree_summary(root: &Path) -> Result<TreeSummary> {
             }
             for entry in std::fs::read_dir(&path)? {
                 seen += 1;
-                ensure!(seen <= 100_000, "目录项目过多，请缩小操作范围");
+                ensure!(seen <= 100_000, "{}", crate::i18n::t("Too many directory entries; narrow the operation scope"));
                 stack.push(entry?.path());
             }
         } else {
@@ -918,10 +906,7 @@ fn ensure_local_directory(path: &Path) -> Result<()> {
     };
     for ancestor in absolute.ancestors() {
         let meta = std::fs::symlink_metadata(ancestor)?;
-        ensure!(
-            meta.is_dir() && !local_is_link(&meta),
-            "本地目标不是常规文件夹，不能通过链接读写"
-        );
+        ensure!(meta.is_dir() && !local_is_link(&meta), "{}", crate::i18n::t("Local destination is not a regular folder; links cannot be followed"));
     }
     Ok(())
 }
@@ -929,12 +914,9 @@ fn ensure_local_directory(path: &Path) -> Result<()> {
 async fn open_upload_file(local: &Path) -> Result<tokio::fs::File> {
     let local = local.to_path_buf();
     let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
-        ensure_local_directory(local.parent().context("本地文件路径无效")?)?;
+        ensure_local_directory(local.parent().context(crate::i18n::t("Invalid local file path"))?)?;
         let meta = std::fs::symlink_metadata(&local)?;
-        ensure!(
-            meta.is_file() && !local_is_link(&meta),
-            "只能上传常规文件，不能通过链接读取"
-        );
+        ensure!(meta.is_file() && !local_is_link(&meta), "{}", crate::i18n::t("Only regular files can be uploaded; links cannot be followed"));
         let mut options = std::fs::OpenOptions::new();
         options.read(true);
         #[cfg(windows)]
@@ -944,14 +926,11 @@ async fn open_upload_file(local: &Path) -> Result<tokio::fs::File> {
         }
         let file = options.open(local)?;
         let meta = file.metadata()?;
-        ensure!(
-            meta.is_file() && !local_is_link(&meta),
-            "只能上传常规文件，不能通过链接读取"
-        );
+        ensure!(meta.is_file() && !local_is_link(&meta), "{}", crate::i18n::t("Only regular files can be uploaded; links cannot be followed"));
         Ok(file)
     })
     .await
-    .context("读取本地文件任务失败")??;
+    .context(crate::i18n::t("Local file reader task failed"))??;
     Ok(tokio::fs::File::from_std(file))
 }
 
@@ -961,7 +940,7 @@ fn transfer_error_message(error: &anyhow::Error) -> String {
     if error.downcast_ref::<russh_sftp::client::error::Error>().is_some()
         || error.downcast_ref::<std::io::Error>().is_some_and(|e| e.get_ref().is_some())
     {
-        "SFTP 操作失败，服务器返回错误或连接已中断".into()
+        crate::i18n::t("SFTP operation failed; the server returned an error or the connection was interrupted").into()
     } else {
         format!("{error:#}")
     }
@@ -981,7 +960,7 @@ type CancelledSet = Arc<StdMutex<HashSet<u64>>>;
 struct TransferCancelled;
 impl std::fmt::Display for TransferCancelled {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("传输已取消")
+        f.write_str(crate::i18n::t("Transfer cancelled"))
     }
 }
 impl std::error::Error for TransferCancelled {}
@@ -1064,7 +1043,7 @@ impl<'a> Progress<'a> {
                 speed,
             })
             .await
-            .context("界面已关闭")
+            .context(crate::i18n::t("Window closed"))
     }
     async fn finish_progress(&mut self) -> Result<()> {
         self.emit(true).await
@@ -1104,7 +1083,7 @@ async fn complete_transfer(
     let (message, error, was_cancelled) = match result {
         Ok(message) => (message, false, false),
         Err(error) if error.downcast_ref::<TransferCancelled>().is_some() => {
-            ("传输已取消".to_string(), false, true)
+            (crate::i18n::t("Transfer cancelled").to_string(), false, true)
         }
         Err(error) => (transfer_error_message(&error), true, false),
     };
@@ -1117,7 +1096,7 @@ async fn complete_transfer(
             cancelled: was_cancelled,
         })
         .await
-        .context("界面已关闭")
+        .context(crate::i18n::t("Window closed"))
 }
 async fn sftp_worker(
     id: String,
@@ -1138,18 +1117,18 @@ async fn sftp_worker(
             if sftp.is_none() {
                 let channel = timeout(Duration::from_secs(30), ssh.channel_open_session())
                     .await
-                    .context("SFTP 通道超时")??;
+                    .context(crate::i18n::t("SFTP channel timed out"))??;
                 channel.request_subsystem(true, "sftp").await?;
                 let client = timeout(
                     Duration::from_secs(30),
                     SftpSession::new(channel.into_stream()),
                 )
                 .await
-                .context("SFTP 握手超时")??;
+                .context(crate::i18n::t("SFTP handshake timed out"))??;
                 client.set_timeout(30);
                 sftp = Some(client);
             }
-            let client = sftp.as_ref().context("SFTP 未初始化")?;
+            let client = sftp.as_ref().context(crate::i18n::t("SFTP is not initialized"))?;
             execute_file_job(&id, client, &events, &cancelled, job).await
         }
         .await;
@@ -1186,11 +1165,11 @@ async fn read_remote_entries(
     validate_remote(path)?;
     let mut entries = Vec::new();
     for entry in sftp.read_dir(path.to_string()).await? {
-        ensure!(entries.len() < 100_000, "目录项目过多，请缩小浏览范围");
+        ensure!(entries.len() < 100_000, "{}", crate::i18n::t("Too many directory entries; narrow the browsing scope"));
         let name = entry.file_name();
         if name == "." || name == ".." { continue; }
         if !safe_remote_component(&name) {
-            ensure!(!strict, "远程文件名包含不安全字符：{name:?}");
+            ensure!(!strict, "{}", crate::tf!("Remote file name contains unsafe characters: {name:?}", "name:?" => format!("{:?}", name)));
             continue;
         }
         let meta = entry.metadata();
@@ -1234,7 +1213,7 @@ async fn send_files(
             entries,
         })
         .await
-        .context("界面已关闭")
+        .context(crate::i18n::t("Window closed"))
 }
 async fn send_message(
     id: &str,
@@ -1249,7 +1228,7 @@ async fn send_message(
             error,
         })
         .await
-        .context("界面已关闭")
+        .context(crate::i18n::t("Window closed"))
 }
 struct LocalTree {
     dirs: Vec<String>,
@@ -1268,10 +1247,10 @@ fn scan_local_tree(root: &Path) -> Result<LocalTree> {
     while let Some((directory, relative)) = stack.pop() {
         for entry in std::fs::read_dir(&directory)? {
             seen += 1;
-            ensure!(seen <= 100_000, "目录项目过多，请缩小上传范围");
+            ensure!(seen <= 100_000, "{}", crate::i18n::t("Too many directory entries; narrow the upload scope"));
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();
-            ensure!(safe_remote_component(&name), "本地文件名无法用于远程路径");
+            ensure!(safe_remote_component(&name), "{}", crate::i18n::t("Local file name cannot be used in a remote path"));
             let relative = if relative.is_empty() {
                 name
             } else {
@@ -1313,7 +1292,7 @@ async fn scan_remote_tree(sftp: &SftpSession, root: &str) -> Result<RemoteTree> 
     while let Some((directory, relative)) = stack.pop() {
         for entry in read_remote_entries(sftp, &directory, true).await? {
             seen += 1;
-            ensure!(seen <= 100_000, "目录项目过多，请缩小下载范围");
+            ensure!(seen <= 100_000, "{}", crate::i18n::t("Too many directory entries; narrow the download scope"));
             let child = if relative.is_empty() {
                 entry.name.clone()
             } else {
@@ -1342,7 +1321,7 @@ async fn delete_remote_tree(sftp: &SftpSession, path: &str) -> Result<()> {
     while let Some((path, visited)) = stack.pop() {
         if visited { sftp.remove_dir(path).await?; continue; }
         seen += 1;
-        ensure!(seen <= 100_000, "目录项目过多，请缩小删除范围");
+        ensure!(seen <= 100_000, "{}", crate::i18n::t("Too many directory entries; narrow the deletion scope"));
         let meta = sftp.symlink_metadata(path.clone()).await?;
         if meta.is_dir() && !meta.is_symlink() {
             let entries = read_remote_entries(sftp, &path, true).await?;
@@ -1365,7 +1344,7 @@ async fn upload_file_progress(
     let mut input = open_upload_file(local).await?;
     if overwrite && sftp.try_exists(remote.to_string()).await? {
         let meta = sftp.symlink_metadata(remote.to_string()).await?;
-        ensure!(meta.is_regular() && !meta.is_symlink(), "远程目标不是常规文件");
+        ensure!(meta.is_regular() && !meta.is_symlink(), "{}", crate::i18n::t("Remote destination is not a regular file"));
     }
     let flags = OpenFlags::WRITE
         | OpenFlags::CREATE
@@ -1393,9 +1372,9 @@ async fn download_file_progress(
     progress: &mut Progress<'_>,
 ) -> Result<u64> {
     validate_remote(remote)?;
-    ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "本地文件名无效");
-    ensure!(!local.exists(), "本地文件已存在，请选择新的保存名称");
-    let parent = local.parent().context("保存路径无效")?;
+    ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "{}", crate::i18n::t("Invalid local file name"));
+    ensure!(!local.exists(), "{}", crate::i18n::t("Local file already exists; choose a new save name"));
+    let parent = local.parent().context(crate::i18n::t("Invalid save path"))?;
     ensure_local_directory(parent)?;
     let temp = parent.join(format!(".opentermius-{}.part", uuid::Uuid::new_v4()));
     let guard = PartialDownload(temp.clone());
@@ -1414,8 +1393,8 @@ async fn download_file_progress(
     let commit_local = local.to_path_buf();
     tokio::task::spawn_blocking(move || commit_download(&commit_temp, &commit_local))
         .await
-        .context("下载保存任务失败")?
-        .context("保存失败，目标可能已存在或不可写")?;
+        .context(crate::i18n::t("Download save task failed"))?
+        .context(crate::i18n::t("Cannot save; destination may already exist or may not be writable"))?;
     drop(guard);
     Ok(size)
 }
@@ -1439,7 +1418,7 @@ async fn execute_file_job(
             let name = local
                 .file_name()
                 .and_then(|s| s.to_str())
-                .context("本地文件名无效")?;
+                .context(crate::i18n::t("Invalid local file name"))?;
             let remote = remote_join(&directory, name)?;
             if !overwrite && sftp.try_exists(remote.clone()).await? {
                 events
@@ -1451,7 +1430,7 @@ async fn execute_file_job(
                         folder: false,
                     })
                     .await
-                    .context("界面已关闭")?;
+                    .context(crate::i18n::t("Window closed"))?;
                 return Ok(());
             }
             let mut input = open_upload_file(&local).await?;
@@ -1465,13 +1444,13 @@ async fn execute_file_job(
             let mut output = sftp.open_with_flags(remote, flags).await?;
             let size = tokio::io::copy(&mut input, &mut output).await?;
             output.shutdown().await?;
-            send_message(id, events, format!("已上传 {name}，{size} 字节"), false).await?;
+            send_message(id, events, crate::tf!("Uploaded {name}, {size} bytes", "name" => format!("{}", name), "size" => format!("{}", size)), false).await?;
         }
         Command::Download { remote, local } => {
             validate_remote(&remote)?;
-            ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "本地文件名无效");
-            ensure!(!local.exists(), "本地文件已存在，请选择新的保存名称");
-            let parent = local.parent().context("保存路径无效")?;
+            ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "{}", crate::i18n::t("Invalid local file name"));
+            ensure!(!local.exists(), "{}", crate::i18n::t("Local file already exists; choose a new save name"));
+            let parent = local.parent().context(crate::i18n::t("Invalid save path"))?;
             ensure_local_directory(parent)?;
             let temp = parent.join(format!(".opentermius-{}.part", uuid::Uuid::new_v4()));
             let guard = PartialDownload(temp.clone());
@@ -1489,22 +1468,22 @@ async fn execute_file_job(
             let commit_local = local.clone();
             tokio::task::spawn_blocking(move || commit_download(&commit_temp, &commit_local))
                 .await
-                .context("下载保存任务失败")?
-                .context("保存失败，目标可能已存在或不可写")?;
+                .context(crate::i18n::t("Download save task failed"))?
+                .context(crate::i18n::t("Cannot save; destination may already exist or may not be writable"))?;
             drop(guard);
             send_message(
                 id,
                 events,
-                format!("已下载 {}，{size} 字节", local.display()),
+                crate::tf!("Downloaded {}, {size} bytes", "0" => format!("{}", local.display()), "size" => format!("{}", size)),
                 false,
             )
             .await?;
         }
         Command::CreateDir { directory, name } => {
             let path = remote_join(&directory, &name)?;
-            ensure!(!sftp.try_exists(path.clone()).await?, "同名文件夹已存在");
+            ensure!(!sftp.try_exists(path.clone()).await?, "{}", crate::i18n::t("A folder with this name already exists"));
             sftp.create_dir(path).await?;
-            send_message(id, events, format!("已新建文件夹 {name}"), false).await?;
+            send_message(id, events, crate::tf!("Created folder {name}", "name" => format!("{}", name)), false).await?;
             send_files(id, sftp, events, &directory).await?;
         }
         Command::Rename {
@@ -1514,9 +1493,9 @@ async fn execute_file_job(
         } => {
             let source = remote_join(&directory, &from)?;
             let target = remote_join(&directory, &to)?;
-            ensure!(!sftp.try_exists(target.clone()).await?, "目标名称已存在");
+            ensure!(!sftp.try_exists(target.clone()).await?, "{}", crate::i18n::t("Destination name already exists"));
             sftp.rename(source, target).await?;
-            send_message(id, events, format!("已将 {from} 重命名为 {to}"), false).await?;
+            send_message(id, events, crate::tf!("Renamed {from} to {to}", "from" => format!("{}", from), "to" => format!("{}", to)), false).await?;
             send_files(id, sftp, events, &directory).await?;
         }
         Command::Delete {
@@ -1547,10 +1526,10 @@ async fn execute_file_job(
                         bytes,
                     })
                     .await
-                    .context("界面已关闭")?;
+                    .context(crate::i18n::t("Window closed"))?;
             } else {
                 delete_remote_tree(sftp, &path).await?;
-                send_message(id, events, format!("已删除 {name}"), false).await?;
+                send_message(id, events, crate::tf!("Deleted {name}", "name" => format!("{}", name)), false).await?;
                 send_files(id, sftp, events, &directory).await?;
             }
         }
@@ -1564,7 +1543,7 @@ async fn execute_file_job(
                 let name = local
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .context("本地文件名无效")?
+                    .context(crate::i18n::t("Invalid local file name"))?
                     .to_string();
                 let remote = remote_join(&directory, &name)?;
                 if !overwrite && sftp.try_exists(remote.clone()).await? {
@@ -1577,16 +1556,16 @@ async fn execute_file_job(
                             folder: false,
                         })
                         .await
-                        .context("界面已关闭")?;
+                        .context(crate::i18n::t("Window closed"))?;
                     return Ok(None);
                 }
                 let total = tokio::fs::metadata(&local).await?.len();
                 let mut progress =
-                    Progress::new(id, transfer, &name, "Upload", events, cancelled, total);
+                    Progress::new(id, transfer, &name, crate::i18n::t("Upload"), events, cancelled, total);
                 let size =
                     upload_file_progress(sftp, &local, &remote, overwrite, &mut progress).await?;
                 progress.finish_progress().await?;
-                Ok(Some(format!("已上传 {name}，{size} 字节")))
+                Ok(Some(crate::tf!("Uploaded {name}, {size} bytes", "name" => format!("{}", name), "size" => format!("{}", size))))
             }
             .await;
             match outcome {
@@ -1612,10 +1591,10 @@ async fn execute_file_job(
             let result = async {
                 let total = sftp.metadata(remote.clone()).await?.size.unwrap_or(0);
                 let mut progress =
-                    Progress::new(id, transfer, &name, "Download", events, cancelled, total);
+                    Progress::new(id, transfer, &name, crate::i18n::t("Download"), events, cancelled, total);
                 let size = download_file_progress(sftp, &remote, &local, &mut progress).await?;
                 progress.finish_progress().await?;
-                Ok(format!("已下载 {name}，{size} 字节"))
+                Ok(crate::tf!("Downloaded {name}, {size} bytes", "name" => format!("{}", name), "size" => format!("{}", size)))
             }
             .await;
             complete_transfer(events, cancelled, id, transfer, result).await?;
@@ -1630,13 +1609,13 @@ async fn execute_file_job(
                 let name = local
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .context("本地文件夹名无效")?
+                    .context(crate::i18n::t("Invalid local folder name"))?
                     .to_string();
                 let target = remote_join(&directory, &name)?;
                 let scan_local = local.clone();
                 let tree = tokio::task::spawn_blocking(move || scan_local_tree(&scan_local))
                     .await
-                    .context("读取本地文件夹失败")??;
+                    .context(crate::i18n::t("Cannot read local folder"))??;
                 if !overwrite && sftp.try_exists(target.clone()).await? {
                     events
                         .send(Event::OverwriteRequired {
@@ -1647,15 +1626,12 @@ async fn execute_file_job(
                             folder: true,
                         })
                         .await
-                        .context("界面已关闭")?;
+                        .context(crate::i18n::t("Window closed"))?;
                     return Ok(None);
                 }
                 if sftp.try_exists(target.clone()).await? {
                     let meta = sftp.symlink_metadata(target.clone()).await?;
-                    ensure!(
-                        meta.is_dir() && !meta.is_symlink(),
-                        "远程目标不是常规文件夹"
-                    );
+                    ensure!(meta.is_dir() && !meta.is_symlink(), "{}", crate::i18n::t("Remote destination is not a regular folder"));
                 } else {
                     sftp.create_dir(target.clone()).await?;
                 }
@@ -1666,14 +1642,11 @@ async fn execute_file_job(
                         sftp.create_dir(path).await?;
                     } else {
                         let meta = sftp.symlink_metadata(path).await?;
-                        ensure!(
-                            meta.is_dir() && !meta.is_symlink(),
-                            "远程目标不是常规文件夹"
-                        );
+                        ensure!(meta.is_dir() && !meta.is_symlink(), "{}", crate::i18n::t("Remote destination is not a regular folder"));
                     }
                 }
                 let mut progress =
-                    Progress::new(id, transfer, &name, "Upload", events, cancelled, tree.total);
+                    Progress::new(id, transfer, &name, crate::i18n::t("Upload"), events, cancelled, tree.total);
                 let mut bytes = 0u64;
                 for (relative, _) in &tree.files {
                     let remote = remote_child(&target, relative)?;
@@ -1682,10 +1655,7 @@ async fn execute_file_job(
                         .await?;
                 }
                 progress.finish_progress().await?;
-                Ok(Some(format!(
-                    "已上传文件夹 {name}，{} 个文件，{bytes} 字节",
-                    tree.files.len()
-                )))
+                Ok(Some(crate::tf!("Uploaded folder {name}, {} files, {bytes} bytes", "name" => format!("{}", name), "0" => format!("{}", tree.files.len()), "bytes" => format!("{}", bytes))))
             }
             .await;
             match outcome {
@@ -1710,8 +1680,8 @@ async fn execute_file_job(
                     .trim_end_matches('/')
                     .rsplit('/')
                     .next()
-                    .context("远程文件夹名无效")?;
-                ensure!(safe_local_component(name), "远程文件夹名包含不安全字符");
+                    .context(crate::i18n::t("Invalid remote folder name"))?;
+                ensure!(safe_local_component(name), "{}", crate::i18n::t("Remote folder name contains unsafe characters"));
                 let root = local_dir.join(name);
                 ensure_local_directory(&local_dir)?;
                 if root.try_exists()? {
@@ -1723,10 +1693,7 @@ async fn execute_file_job(
                     local_child(&root, directory)?;
                 }
                 for (relative, _) in &tree.files {
-                    ensure!(
-                        !local_child(&root, relative)?.exists(),
-                        "本地文件已存在，请选择新的保存位置"
-                    );
+                    ensure!(!local_child(&root, relative)?.exists(), "{}", crate::i18n::t("Local file already exists; choose a new save location"));
                 }
                 ensure_active(cancelled, transfer)?;
                 if !root.try_exists()? {
@@ -1742,7 +1709,7 @@ async fn execute_file_job(
                     }
                 }
                 let mut progress = Progress::new(
-                    id, transfer, name, "Download", events, cancelled, tree.total,
+                    id, transfer, name, crate::i18n::t("Download"), events, cancelled, tree.total,
                 );
                 let mut bytes = 0u64;
                 for (relative, _) in &tree.files {
@@ -1751,10 +1718,7 @@ async fn execute_file_job(
                     bytes += download_file_progress(sftp, &remote, &local, &mut progress).await?;
                 }
                 progress.finish_progress().await?;
-                Ok(format!(
-                    "已下载文件夹 {name}，{} 个文件，{bytes} 字节",
-                    tree.files.len()
-                ))
+                Ok(crate::tf!("Downloaded folder {name}, {} files, {bytes} bytes", "name" => format!("{}", name), "0" => format!("{}", tree.files.len()), "bytes" => format!("{}", bytes)))
             }
             .await;
             complete_transfer(events, cancelled, id, transfer, result).await?;
@@ -1780,13 +1744,13 @@ fn commit_download(temp: &std::path::Path, local: &std::path::Path) -> std::io::
     let name = local.file_name().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "invalid download filename",
+            crate::i18n::t("Invalid local file name"),
         )
     })?;
     let parent = local.parent().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "invalid download directory",
+            crate::i18n::t("Invalid save path"),
         )
     })?;
     let local = std::fs::canonicalize(parent)?.join(name);
@@ -1795,7 +1759,7 @@ fn commit_download(temp: &std::path::Path, local: &std::path::Path) -> std::io::
     if source.contains(&0) || destination.contains(&0) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "download path contains NUL",
+            crate::i18n::t("Invalid save path"),
         ));
     }
     source.push(0);

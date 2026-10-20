@@ -198,7 +198,7 @@ fn future_version_is_rejected_explicitly() {
     let temp = tempfile::tempdir().unwrap();
     let mut destination = Store::open(temp.path().join("config.json")).unwrap();
     let error = recovery::restore(&mut destination, &future, None, RestoreMode::Merge).unwrap_err();
-    assert!(error.to_string().contains("版本"));
+    assert!(error.to_string().contains("version"));
     let mut source = data();
     source.version = 3;
     assert!(recovery::generate(&source, None, true).is_err());
@@ -468,6 +468,6 @@ fn aggregate_key_file_size_is_bounded_before_collecting_the_entire_backup() {
         recovery::generate(&source, None, true)
             .unwrap_err()
             .to_string()
-            .contains("总量")
+            .contains("Total private key file size")
     );
 }

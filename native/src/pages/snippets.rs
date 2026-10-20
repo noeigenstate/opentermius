@@ -15,7 +15,7 @@ fn row(snippet: &Snippet) -> SnippetRow {
     }
 }
 
-fn refresh(ui: &AppWindow, query: &str) {
+pub(super) fn refresh(ui: &AppWindow, query: &str) {
     let rows = with_state(|s| {
         s.store.lock().ok().map(|store| {
             snippets::search(&store.data.snippets, query)
@@ -52,7 +52,7 @@ fn persist(mutate: impl FnOnce(&mut Vec<Snippet>) -> anyhow::Result<()>) -> anyh
         let mut store = s
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))?;
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?;
         let previous = store.data.snippets.clone();
         if let Err(error) = mutate(&mut store.data.snippets) {
             store.data.snippets = previous;
@@ -64,7 +64,7 @@ fn persist(mutate: impl FnOnce(&mut Vec<Snippet>) -> anyhow::Result<()>) -> anyh
         }
         Ok(())
     })
-    .unwrap_or_else(|| Err(anyhow::anyhow!("界面状态不可用")))
+    .unwrap_or_else(|| Err(anyhow::anyhow!("{}", crate::i18n::t("UI state is unavailable"))))
 }
 
 pub fn install(ui: &AppWindow) {
@@ -114,7 +114,7 @@ pub fn install(ui: &AppWindow) {
         })
         .flatten();
         let Some(snippet) = snippet else {
-            with_state(|s| s.status("片段不存在", true));
+            with_state(|s| s.status(crate::i18n::t("Snippet not found"), true));
             return;
         };
         let bridge = ui.global::<SnippetsBridge>();
@@ -153,7 +153,7 @@ pub fn install(ui: &AppWindow) {
                 Ok(()) => {
                     close_editor(&ui);
                     refresh(&ui, &query);
-                    with_state(|s| s.status("已保存片段", false));
+                    with_state(|s| s.status(crate::i18n::t("Snippet saved"), false));
                 }
                 Err(error) => show_error(&ui, &error.to_string()),
             }
@@ -169,13 +169,13 @@ pub fn install(ui: &AppWindow) {
             if snippets::delete(list, &id) {
                 Ok(())
             } else {
-                Err(anyhow::anyhow!("片段不存在"))
+                Err(anyhow::anyhow!("{}", crate::i18n::t("Snippet not found")))
             }
         }) {
             Ok(()) => {
                 close_editor(&ui);
                 refresh(&ui, &query);
-                with_state(|s| s.status("已删除片段", false));
+                with_state(|s| s.status(crate::i18n::t("Snippet deleted"), false));
             }
             Err(error) => show_error(&ui, &error.to_string()),
         }
@@ -191,16 +191,16 @@ pub fn install(ui: &AppWindow) {
                 let snippet = match s.store.lock() {
                     Ok(store) => snippets::find(&store.data.snippets, &id).cloned(),
                     Err(_) => {
-                        s.status("配置锁不可用", true);
+                        s.status(crate::i18n::t("Configuration lock is unavailable"), true);
                         return None;
                     }
                 };
                 let Some(snippet) = snippet else {
-                    s.status("片段不存在", true);
+                    s.status(crate::i18n::t("Snippet not found"), true);
                     return None;
                 };
                 let Some(session_id) = s.active.clone() else {
-                    s.status("请先打开终端会话", true);
+                    s.status(crate::i18n::t("Open a terminal session first"), true);
                     return None;
                 };
                 let Some(bracketed) = s
@@ -208,7 +208,7 @@ pub fn install(ui: &AppWindow) {
                     .get(&session_id)
                     .map(|view| view.snapshot.bracketed_paste)
                 else {
-                    s.status("请先打开终端会话", true);
+                    s.status(crate::i18n::t("Open a terminal session first"), true);
                     return None;
                 };
                 s.send(Command::Input(snippets::to_terminal_input(
