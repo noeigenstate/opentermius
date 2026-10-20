@@ -69,6 +69,10 @@ struct State {
     local_path: PathBuf,
     local_request: u64,
     pending_sftp: Option<String>,
+    remote_entries: Vec<ssh::RemoteFile>,
+    local_entries: Vec<ssh::LocalFile>,
+    transfers: BTreeMap<u64, (String, TransferRow)>,
+    next_transfer: u64,
     render_model: Rc<VecModel<TerminalRun>>,
 }
 #[derive(Default)]
@@ -728,39 +732,11 @@ impl State {
             Event::Files { id, path, entries } => {
                 if self.active.as_deref() == Some(&id) {
                     self.file_path = path.clone();
+                    self.remote_entries = entries;
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_path(path.into());
-                        ui.set_files(model(
-                            entries
-                                .into_iter()
-                                .map(|e| FileRow {
-                                    name: e.name.into(),
-                                    is_directory: e.is_dir,
-                                    size: if e.is_dir {
-                                        "".into()
-                                    } else {
-                                        format_size(e.size).into()
-                                    },
-                                    modified: e
-                                        .modified
-                                        .parse::<i64>()
-                                        .ok()
-                                        .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
-                                        .map(|dt| {
-                                            dt.with_timezone(&chrono::Local)
-                                                .format("%Y-%m-%d %H:%M")
-                                                .to_string()
-                                        })
-                                        .unwrap_or(e.modified)
-                                        .into(),
-                                    kind: if e.is_dir {
-                                        "Folder".into()
-                                    } else {
-                                        "File".into()
-                                    },
-                                })
-                                .collect(),
-                        ));
+                        ui.set_remote_selection("".into());
+                        self.render_files();
                         ui.set_file_busy(false)
                     }
                 }
@@ -777,31 +753,144 @@ impl State {
                 id,
                 directory,
                 local,
+                transfer,
+                folder,
             } => {
                 let confirmed = rfd::MessageDialog::new()
                     .set_title("覆盖远程文件")
-                    .set_description("同名文件已存在，是否覆盖？")
+                    .set_description(if folder {
+                        "同名文件夹已存在，是否合并并覆盖其中的同名文件？"
+                    } else {
+                        "同名文件已存在，是否覆盖？"
+                    })
                     .set_buttons(rfd::MessageButtons::YesNo)
                     .show()
                     == rfd::MessageDialogResult::Yes;
                 if confirmed {
-                    if let Some(transport) =
-                        self.sessions.get(&id).and_then(|s| s.transport.as_ref())
-                    {
-                        let _ = transport.commands.try_send(Command::Upload {
-                            directory,
-                            local,
-                            overwrite: true,
-                        });
+                    if let Some(transport) = self.sessions.get(&id).and_then(|s| s.transport.as_ref()) {
+                        let command = if transfer == 0 {
+                            Command::Upload {
+                                directory,
+                                local,
+                                overwrite: true,
+                            }
+                        } else if folder {
+                            Command::UploadTree {
+                                transfer,
+                                directory,
+                                local,
+                                overwrite: true,
+                            }
+                        } else {
+                            Command::UploadFile {
+                                transfer,
+                                directory,
+                                local,
+                                overwrite: true,
+                            }
+                        };
+                        if transport.commands.try_send(command).is_err() {
+                            self.finish_transfer(transfer, "传输队列繁忙".into(), true, false);
+                        }
                     }
                 } else {
-                    self.status("Upload cancelled", false);
+                    self.finish_transfer(transfer, "传输已取消".into(), false, true);
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_busy(false)
                     }
                 }
             }
+            Event::DeleteRequired {
+                id,
+                directory,
+                name,
+                files,
+                dirs,
+                bytes,
+            } => {
+                let confirmed = rfd::MessageDialog::new()
+                    .set_title("确认删除")
+                    .set_description(format!(
+                        "删除 {name}？\n{files} 个文件，{dirs} 个子文件夹，{}。此操作无法撤销。",
+                        format_size(bytes)
+                    ))
+                    .set_buttons(rfd::MessageButtons::YesNo)
+                    .show()
+                    == rfd::MessageDialogResult::Yes;
+                if confirmed {
+                    if let Some(transport) = self.sessions.get(&id).and_then(|s| s.transport.as_ref()) {
+                        if transport
+                            .commands
+                            .try_send(Command::Delete {
+                                directory,
+                                name,
+                                confirmed: true,
+                            })
+                            .is_err()
+                        {
+                            self.status("文件任务队列繁忙", true);
+                        }
+                    }
+                }
+            }
+            Event::TransferProgress {
+                id,
+                transfer,
+                name,
+                direction,
+                transferred,
+                total,
+                speed,
+            } => {
+                if let Some((_, row)) = self
+                    .transfers
+                    .get_mut(&transfer)
+                    .filter(|(session, _)| session == &id)
+                {
+                    row.name = format!("{direction} · {name}").into();
+                    row.percent = if total == 0 {
+                        0
+                    } else {
+                        (transferred.saturating_mul(100) / total).min(100) as i32
+                    };
+                    row.detail = format!(
+                        "{} / {} · {}% · {}/s",
+                        format_size(transferred),
+                        format_size(total),
+                        row.percent,
+                        format_size(speed)
+                    )
+                    .into();
+                    self.render_transfers();
+                }
+            }
+            Event::TransferFinished {
+                id,
+                transfer,
+                message,
+                error,
+                cancelled,
+            } => {
+                if self
+                    .transfers
+                    .get(&transfer)
+                    .is_some_and(|(session, _)| session == &id)
+                {
+                    self.finish_transfer(transfer, message, error, cancelled);
+                    if self.active.as_deref() == Some(&id) && !error && !cancelled {
+                        self.list_files(self.file_path.clone());
+                        self.list_local(String::new());
+                    }
+                }
+            }
             Event::Closed { id } => {
+                for (session, row) in self.transfers.values_mut() {
+                    if session == &id && row.pending {
+                        row.pending = false;
+                        row.detail = "连接已关闭，传输已取消".into();
+                    }
+                }
+                self.render_transfers();
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = false;
                     if s.status == "已连接" || s.status == "连接中" {
@@ -955,7 +1044,7 @@ impl State {
     }
     fn list_files(&self, path: String) {
         if !self.remote_ready() {
-            self.status("Select a connected host first", true);
+            self.status("请先选择已连接的远程主机", true);
             return;
         }
         if let Some(ui) = self.ui.upgrade() {
@@ -966,9 +1055,11 @@ impl State {
     }
     fn reset_files(&mut self) {
         self.file_path = ".".into();
+        self.remote_entries.clear();
         if let Some(ui) = self.ui.upgrade() {
             ui.set_files(model(Vec::new()));
             ui.set_file_path(".".into());
+            ui.set_remote_selection("".into());
             ui.set_file_busy(false)
         }
     }
@@ -982,33 +1073,9 @@ impl State {
         let generation = self.local_request;
         let weak = self.ui.clone();
         self.runtime.spawn_blocking(move || {
-            let result = (|| -> anyhow::Result<(PathBuf, Vec<(String, bool, u64, String)>)> {
+            let result = (|| -> anyhow::Result<(PathBuf, Vec<ssh::LocalFile>)> {
                 let path = path.canonicalize()?;
-                anyhow::ensure!(path.is_dir(), "Select a local folder");
-                let mut files = Vec::new();
-                for entry in std::fs::read_dir(&path)?.take(20000) {
-                    let entry = entry?;
-                    let Ok(meta) = entry.metadata() else { continue };
-                    let date = meta
-                        .modified()
-                        .ok()
-                        .map(|time| {
-                            chrono::DateTime::<chrono::Local>::from(time)
-                                .format("%Y-%m-%d %H:%M")
-                                .to_string()
-                        })
-                        .unwrap_or_default();
-                    files.push((
-                        entry.file_name().to_string_lossy().to_string(),
-                        meta.is_dir(),
-                        meta.len(),
-                        date,
-                    ));
-                }
-                files.sort_by(|a, b| {
-                    b.1.cmp(&a.1)
-                        .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
-                });
+                let files = ssh::read_local_dir(&path)?;
                 Ok((path, files))
             })();
             let _ = weak.upgrade_in_event_loop(move |ui| {
@@ -1019,35 +1086,296 @@ impl State {
                     match result {
                         Ok((path, files)) => {
                             s.local_path = path;
+                            s.local_entries = files;
                             let display = s.local_path.to_string_lossy();
                             ui.set_local_path(
                                 display.strip_prefix(r"\\?\").unwrap_or(&display).into(),
                             );
-                            ui.set_local_files(model(
-                                files
-                                    .into_iter()
-                                    .map(|(name, is_dir, size, date)| FileRow {
-                                        name: name.into(),
-                                        is_directory: is_dir,
-                                        size: if is_dir {
-                                            "".into()
-                                        } else {
-                                            format_size(size).into()
-                                        },
-                                        modified: date.into(),
-                                        kind: if is_dir {
-                                            "Folder".into()
-                                        } else {
-                                            "File".into()
-                                        },
-                                    })
-                                    .collect(),
-                            ));
+                            ui.set_local_selection("".into());
+                            s.render_files();
                         }
                         Err(e) => s.status(e.to_string(), true),
                     }
                 });
             });
+        });
+    }
+    fn render_files(&mut self) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        let hidden = ui.get_show_hidden();
+        ssh::sort_remote_files(
+            &mut self.remote_entries,
+            ssh::SortColumn::parse(&ui.get_remote_sort()),
+            ui.get_remote_ascending(),
+        );
+        ssh::sort_local_files(
+            &mut self.local_entries,
+            ssh::SortColumn::parse(&ui.get_local_sort()),
+            ui.get_local_ascending(),
+        );
+        ui.set_files(model(
+            self.remote_entries
+                .iter()
+                .filter(|e| hidden || !ssh::is_hidden_name(&e.name))
+                .map(|e| {
+                    file_row(
+                        &e.name,
+                        e.is_dir,
+                        e.size,
+                        e.modified.parse().unwrap_or(0),
+                        e.permissions,
+                    )
+                })
+                .collect(),
+        ));
+        ui.set_local_files(model(
+            self.local_entries
+                .iter()
+                .filter(|e| hidden || !ssh::is_hidden_name(&e.name))
+                .map(|e| file_row(&e.name, e.is_dir, e.size, e.modified, None))
+                .collect(),
+        ));
+    }
+    fn render_transfers(&self) {
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_transfers(model(
+                self.transfers
+                    .values()
+                    .filter(|(_, row)| row.pending)
+                    .chain(self.transfers.values().rev().filter(|(_, row)| !row.pending))
+                    .map(|(_, row)| row.clone())
+                    .collect(),
+            ));
+        }
+    }
+    fn finish_transfer(&mut self, transfer: u64, message: String, error: bool, cancelled: bool) {
+        if let Some((_, row)) = self.transfers.get_mut(&transfer) {
+            row.pending = false;
+            if !error && !cancelled {
+                row.percent = 100;
+            }
+            row.detail = message.clone().into();
+        }
+        self.render_transfers();
+        self.status(message, error);
+    }
+    fn queue_transfer(&mut self, name: &str, direction: &str, job: impl FnOnce(u64) -> Command) {
+        if !self.remote_ready() {
+            self.status("请先选择已连接的远程主机", true);
+            return;
+        }
+        if self
+            .transfers
+            .values()
+            .filter(|(_, row)| row.pending)
+            .count()
+            >= 8
+        {
+            self.status("传输队列已满（最多 8 项），请等待或取消任务", true);
+            return;
+        }
+        while self.transfers.len() >= 32 {
+            let old = self
+                .transfers
+                .iter()
+                .find(|(_, (_, row))| !row.pending)
+                .map(|(id, _)| *id);
+            if let Some(old) = old {
+                self.transfers.remove(&old);
+            } else {
+                break;
+            }
+        }
+        self.next_transfer += 1;
+        let transfer = self.next_transfer;
+        let id = self.active.clone().unwrap();
+        let row = TransferRow {
+            id: transfer.to_string().into(),
+            name: format!("{direction} · {name}").into(),
+            detail: "排队中".into(),
+            percent: 0,
+            pending: true,
+        };
+        self.transfers.insert(transfer, (id.clone(), row));
+        let result = self.sessions[&id]
+            .transport
+            .as_ref()
+            .unwrap()
+            .commands
+            .try_send(job(transfer));
+        if result.is_err() {
+            self.finish_transfer(transfer, "传输队列繁忙".into(), true, false);
+        }
+        self.render_transfers();
+    }
+    fn upload_path(&mut self, local: PathBuf) {
+        let name = local
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let directory = self.file_path.clone();
+        let folder = local.is_dir();
+        self.queue_transfer(&name, "Upload", |transfer| {
+            if folder {
+                Command::UploadTree {
+                    transfer,
+                    directory,
+                    local,
+                    overwrite: false,
+                }
+            } else {
+                Command::UploadFile {
+                    transfer,
+                    directory,
+                    local,
+                    overwrite: false,
+                }
+            }
+        });
+    }
+    fn download_entry(&mut self, name: &str, destination: Option<PathBuf>) {
+        if !ssh::safe_local_component(name) {
+            self.status("远程文件名无法用于本地路径", true);
+            return;
+        }
+        let Some(entry) = self.remote_entries.iter().find(|e| e.name == name) else {
+            return;
+        };
+        let remote = entry.path.clone();
+        let folder = entry.is_dir;
+        let local = destination.unwrap_or_else(|| {
+            if folder {
+                self.local_path.clone()
+            } else {
+                self.local_path.join(name)
+            }
+        });
+        self.queue_transfer(name, "Download", |transfer| {
+            if folder {
+                Command::DownloadTree {
+                    transfer,
+                    remote,
+                    local_dir: local,
+                }
+            } else {
+                Command::DownloadFile {
+                    transfer,
+                    remote,
+                    local,
+                }
+            }
+        });
+    }
+    fn file_operation(&mut self, local: bool, operation: &str, name: &str, value: &str) {
+        let new_name = operation == "mkdir" || operation == "rename";
+        if (operation != "mkdir"
+            && !(if local {
+                ssh::safe_local_component(name)
+            } else {
+                ssh::safe_remote_component(name)
+            }))
+            || (new_name
+                && !(if local {
+                    ssh::safe_local_component(value)
+                } else {
+                    ssh::safe_remote_component(value)
+                }))
+        {
+            self.status("文件名无效", true);
+            return;
+        }
+        if !local {
+            if !self.remote_ready() {
+                self.status("请先连接远程主机", true);
+                return;
+            }
+            let directory = self.file_path.clone();
+            match operation {
+                "mkdir" => self.send(Command::CreateDir {
+                    directory,
+                    name: value.into(),
+                }),
+                "rename" => self.send(Command::Rename {
+                    directory,
+                    from: name.into(),
+                    to: value.into(),
+                }),
+                "delete" => self.send(Command::Delete {
+                    directory,
+                    name: name.into(),
+                    confirmed: false,
+                }),
+                _ => {}
+            }
+            return;
+        }
+        let root = self.local_path.clone();
+        let path = root.join(name);
+        let destination = root.join(value);
+        let operation = operation.to_string();
+        let weak = self.ui.clone();
+        self.runtime.spawn_blocking(move || {
+            if operation == "delete" {
+                let summary = ssh::local_tree_summary(&path);
+                let _ = weak.upgrade_in_event_loop(move |_| {
+                    let summary = match summary {
+                        Ok(summary) => summary,
+                        Err(e) => {
+                            with_state(|s| s.status(e.to_string(), true));
+                            return;
+                        }
+                    };
+                    let confirmed = rfd::MessageDialog::new()
+                        .set_title("确认删除")
+                        .set_description(format!(
+                            "删除 {}？\n{} 个文件，{} 个子文件夹，{}。此操作无法撤销。",
+                            path.display(),
+                            summary.files,
+                            summary.dirs,
+                            format_size(summary.bytes)
+                        ))
+                        .set_buttons(rfd::MessageButtons::YesNo)
+                        .show()
+                        == rfd::MessageDialogResult::Yes;
+                    if confirmed {
+                        with_state(|s| {
+                            let weak = s.ui.clone();
+                            s.runtime.spawn_blocking(move || {
+                                let result = ssh::delete_local_tree(&path);
+                                let _ = weak.upgrade_in_event_loop(move |_| {
+                                    with_state(|s| {
+                                        match result {
+                                            Ok(()) => s.status("已删除", false),
+                                            Err(e) => s.status(e.to_string(), true),
+                                        };
+                                        s.list_local(String::new());
+                                    });
+                                });
+                            });
+                        });
+                    }
+                });
+            } else {
+                let result = (|| -> anyhow::Result<()> {
+                    anyhow::ensure!(!destination.try_exists()?, "目标名称已存在");
+                    match operation.as_str() {
+                        "mkdir" => std::fs::create_dir(destination)?,
+                        "rename" => std::fs::rename(path, destination)?,
+                        _ => anyhow::bail!("不支持的文件操作"),
+                    }
+                    Ok(())
+                })();
+                let _ = weak.upgrade_in_event_loop(move |_| {
+                    with_state(|s| {
+                        match result {
+                            Ok(()) => s.status("文件操作已完成", false),
+                            Err(e) => s.status(e.to_string(), true),
+                        };
+                        s.list_local(String::new());
+                    });
+                });
+            }
         });
     }
     fn select_sftp(&mut self, host_id: &str) {
@@ -1081,11 +1409,45 @@ fn format_size(size: u64) -> String {
     }
 }
 fn safe_filename(name: &str) -> bool {
-    !name.is_empty()
-        && name != "."
-        && name != ".."
-        && !name.contains(['/', '\\', ':'])
-        && !name.chars().any(char::is_control)
+    ssh::safe_local_component(name)
+}
+fn file_row(
+    name: &str,
+    is_dir: bool,
+    size: u64,
+    modified: i64,
+    permissions: Option<u32>,
+) -> FileRow {
+    FileRow {
+        name: name.into(),
+        is_directory: is_dir,
+        size: if is_dir {
+            "".into()
+        } else {
+            format_size(size).into()
+        },
+        modified: chrono::DateTime::from_timestamp(modified, 0)
+            .map(|dt| {
+                dt.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_default()
+            .into(),
+        kind: if is_dir {
+            "Folder".into()
+        } else {
+            std::path::Path::new(name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("File")
+                .into()
+        },
+        permissions: permissions
+            .map(ssh::format_permissions)
+            .unwrap_or_default()
+            .into(),
+    }
 }
 fn capture(ui: &AppWindow, output: &std::path::Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(output)?;
@@ -1205,6 +1567,10 @@ fn run() -> anyhow::Result<()> {
             local_path: dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
             local_request: 0,
             pending_sftp: None,
+            remote_entries: Vec::new(),
+            local_entries: Vec::new(),
+            transfers: BTreeMap::new(),
+            next_transfer: 0,
             render_model: Rc::new(VecModel::from(Vec::new())),
         })
     });
@@ -1382,40 +1748,25 @@ fn run() -> anyhow::Result<()> {
     ui.on_upload_local(|name| {
         with_state(|s| {
             if !safe_filename(&name) {
-                s.status("Invalid local filename", true);
+                s.status("本地文件名无效", true);
                 return;
             }
             if !s.remote_ready() {
-                s.status("Select a remote host first", true);
+                s.status("请先选择远程主机", true);
                 return;
             }
-            s.send(Command::Upload {
-                directory: s.file_path.clone(),
-                local: s.local_path.join(name.as_str()),
-                overwrite: false,
-            });
+            s.upload_path(s.local_path.join(name.as_str()));
         });
     });
     ui.on_download_to_local(|name| {
         with_state(|s| {
-            if !safe_filename(&name) {
-                s.status("Invalid remote filename", true);
-                return;
-            }
-            s.send(Command::Download {
-                remote: format!("{}/{}", s.file_path.trim_end_matches('/'), name),
-                local: s.local_path.join(name.as_str()),
-            });
+            s.download_entry(&name, None);
         });
     });
     ui.on_upload_file(|| {
         if let Some(local) = rfd::FileDialog::new().set_title("上传文件").pick_file() {
             with_state(|s| {
-                s.send(Command::Upload {
-                    directory: s.file_path.clone(),
-                    local,
-                    overwrite: false,
-                });
+                s.upload_path(local);
             });
         }
     });
@@ -1426,12 +1777,49 @@ fn run() -> anyhow::Result<()> {
             .save_file()
         {
             with_state(|s| {
-                s.send(Command::Download {
-                    remote: format!("{}/{}", s.file_path.trim_end_matches('/'), name),
-                    local,
-                })
+                s.download_entry(&name, Some(local));
             });
         }
+    });
+    ui.on_upload_folder(|| {
+        if let Some(local) = rfd::FileDialog::new().set_title("上传文件夹").pick_folder() {
+            with_state(|s| s.upload_path(local));
+        }
+    });
+    ui.on_file_operation(|local, operation, name, value| {
+        with_state(|s| s.file_operation(local, &operation, &name, &value));
+    });
+    ui.on_update_file_view(|| {
+        with_state(|s| s.render_files());
+    });
+    ui.on_cancel_transfer(|value| {
+        with_state(|s| {
+            let Ok(transfer) = value.parse::<u64>() else {
+                return;
+            };
+            if let Some((id, row)) = s
+                .transfers
+                .get_mut(&transfer)
+                .filter(|(_, row)| row.pending)
+            {
+                if let Some(transport) = s
+                    .sessions
+                    .get(id)
+                    .and_then(|session| session.transport.as_ref())
+                {
+                    if transport
+                        .commands
+                        .try_send(Command::CancelTransfer { transfer })
+                        .is_ok()
+                    {
+                        row.detail = "正在取消…".into();
+                    } else {
+                        s.status("取消请求未发送，请重试", true);
+                    }
+                }
+            }
+            s.render_transfers();
+        });
     });
     ui.on_import_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
@@ -1517,7 +1905,7 @@ fn run() -> anyhow::Result<()> {
     if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
         ui.invoke_open_section(section.into());
     }
-    if smoke && scene == "sftp" {
+    if smoke && (scene == "sftp" || scene == "section-sftp") {
         with_state(|s| {
             let folder = s.store.lock().unwrap().path.parent().unwrap().join("files");
             let _ = std::fs::create_dir_all(&folder);
