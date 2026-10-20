@@ -2426,8 +2426,6 @@ mod terminal_ux_tests {
             selecting: false, mouse_button: None,
             forwards: BTreeMap::new(), forward_errors: BTreeMap::new(),
             forwarding_timer: slint::Timer::default(),
-            remote_entries: Vec::new(), local_entries: Vec::new(),
-            transfers: BTreeMap::new(), next_transfer: 0,
         }
     }
 
