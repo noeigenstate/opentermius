@@ -215,11 +215,12 @@ fn duplicate_names_remain_unique_beyond_one_thousand_copies() {
 fn duplicating_maximum_length_names_keeps_config_readable() {
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(temp.path().join("data.json")).unwrap();
-    for (id, name) in [("ascii", "x".repeat(512)), ("unicode", "🖥".repeat(128))] {
+    for (id, name) in [("ascii", "x".repeat(128)), ("unicode", "🖥".repeat(128))] {
         store.save(profile(id, &name), None, false).unwrap();
         let copied_id = hosts::duplicate_profile(&mut store, id).unwrap();
         let copy = store.data.hosts.iter().find(|p| p.id == copied_id).unwrap();
         assert!(copy.name.len() <= 512);
+        assert!(copy.name.chars().count() <= 128);
         assert!(copy.name.ends_with(" (copy)"));
     }
     assert_eq!(Store::open(store.path.clone()).unwrap().data.hosts.len(), 4);

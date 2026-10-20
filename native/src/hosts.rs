@@ -218,9 +218,9 @@ pub fn tag_counts(hosts: &[Profile]) -> Vec<(String, i32)> {
 /// Generates a unique "Name (copy)" label for duplicated hosts.
 pub fn duplicate_name<'a>(base: &str, existing: impl IntoIterator<Item = &'a str>) -> String {
     fn label(base: &str, suffix: &str) -> String {
-        // Leave room for the suffix within Profile's 512-byte name limit.
+        // Leave room for the suffix within Profile's character and byte limits.
         let mut name = String::new();
-        for ch in base.chars() {
+        for ch in base.chars().take(128 - suffix.chars().count()) {
             if name.len() + ch.len_utf8() + suffix.len() > 512 {
                 break;
             }
