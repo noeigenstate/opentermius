@@ -101,6 +101,21 @@ pub fn spawn(
     known_key: Option<String>,
     events: mpsc::Sender<Event>,
 ) -> Session {
+    spawn_with_key_material(rt, id, profile, secret, None, known_key, events)
+}
+
+/// Spawn a session whose "key" authentication uses decrypted keychain material
+/// instead of a private key file. File-path authentication keeps using
+/// [`spawn`].
+pub fn spawn_with_key_material(
+    rt: &Handle,
+    id: String,
+    profile: Profile,
+    secret: String,
+    key_material: Option<crate::keychain::KeyMaterial>,
+    known_key: Option<String>,
+    events: mpsc::Sender<Event>,
+) -> Session {
     let (commands, rx) = mpsc::channel(64);
     let session_id = id.clone();
     let task = rt.spawn(async move {
@@ -108,6 +123,7 @@ pub fn spawn(
             &id,
             profile,
             Zeroizing::new(secret),
+            key_material,
             known_key,
             events.clone(),
             rx,
@@ -181,10 +197,15 @@ async fn connect(
     id: &str,
     p: &Profile,
     secret: &str,
+    key_material: Option<crate::keychain::KeyMaterial>,
     known: Option<String>,
     events: &mpsc::Sender<Event>,
     cancelled: watch::Receiver<bool>,
 ) -> Result<client::Handle<Client>> {
+    ensure!(
+        p.auth_type != "key" || p.key_id.is_empty() || key_material.is_some(),
+        "Keychain 密钥材料缺失"
+    );
     let config = Arc::new(client::Config {
         keepalive_interval: Some(Duration::from_secs(15)),
         keepalive_max: 3,
@@ -207,25 +228,31 @@ async fn connect(
     .await
     .context("SSH 连接超时")??;
     let authenticated = if p.auth_type == "key" {
-        let path = p.private_key_path.clone();
-        let passphrase = Zeroizing::new(secret.to_owned());
-        let key = tokio::task::spawn_blocking(move || -> Result<_> {
-            ensure!(
-                std::fs::metadata(&path)?.len() <= 1024 * 1024,
-                "私钥不能超过 1 MB"
-            );
-            let text = Zeroizing::new(std::fs::read_to_string(&path).context("读取私钥失败")?);
-            Ok(russh::keys::decode_secret_key(
-                &text,
-                if passphrase.is_empty() {
-                    None
-                } else {
-                    Some(passphrase.as_str())
-                },
-            )
-            .context("私钥或口令无效")?)
-        })
-        .await??;
+        let key = if let Some(material) = key_material {
+            tokio::task::spawn_blocking(move || material.into_private_key())
+                .await
+                .context("私钥解密任务失败")??
+        } else {
+            let path = p.private_key_path.clone();
+            let passphrase = Zeroizing::new(secret.to_owned());
+            tokio::task::spawn_blocking(move || -> Result<_> {
+                ensure!(
+                    std::fs::metadata(&path)?.len() <= 1024 * 1024,
+                    "私钥不能超过 1 MB"
+                );
+                let text = Zeroizing::new(std::fs::read_to_string(&path).context("读取私钥失败")?);
+                Ok(russh::keys::decode_secret_key(
+                    &text,
+                    if passphrase.is_empty() {
+                        None
+                    } else {
+                        Some(passphrase.as_str())
+                    },
+                )
+                .context("私钥或口令无效")?)
+            })
+            .await??
+        };
         let hash = timeout(Duration::from_secs(30), ssh.best_supported_rsa_hash())
             .await
             .context("密钥协商超时")??
@@ -315,6 +342,7 @@ async fn run(
     id: &str,
     p: Profile,
     secret: Zeroizing<String>,
+    key_material: Option<crate::keychain::KeyMaterial>,
     known: Option<String>,
     events: mpsc::Sender<Event>,
     mut commands: mpsc::Receiver<Command>,
@@ -322,7 +350,7 @@ async fn run(
     let (cancel_tx, cancel_rx) = watch::channel(false);
     let _cancellation = CancelOnDrop(cancel_tx);
     let ssh = {
-        let connecting = connect(id, &p, &secret, known, &events, cancel_rx);
+        let connecting = connect(id, &p, &secret, key_material, known, &events, cancel_rx);
         tokio::pin!(connecting);
         loop {
             tokio::select! {

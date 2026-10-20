@@ -279,6 +279,7 @@ impl State {
                 "password".into()
             },
             private_key_path: d.key_path.to_string(),
+            key_id: d.key_id.to_string(),
             encrypted_secret: None,
         };
         let mut secret = d.secret.to_string();
@@ -316,6 +317,7 @@ impl State {
                 group: p.group.into(),
                 auth_index: i32::from(p.auth_type == "key"),
                 key_path: p.private_key_path.into(),
+                key_id: p.key_id.into(),
                 secret: SharedString::default(),
                 remember: p.encrypted_secret.is_some(),
             }
@@ -377,6 +379,12 @@ impl State {
             self.next_prompt();
             return;
         }
+        if profile.auth_type == "key" && !profile.key_id.is_empty() {
+            // The keychain material is protected by DPAPI, so no passphrase
+            // prompt is needed on connect.
+            self.start(&id, String::new());
+            return;
+        }
         let encrypted = profile.encrypted_secret;
         if let Some(value) = encrypted {
             match store::unprotect(&value) {
@@ -393,24 +401,49 @@ impl State {
         }
     }
     fn start(&mut self, id: &str, secret: String) {
-        let Some(view) = self.sessions.get_mut(id) else {
+        let Some(profile) = self.sessions.get(id).map(|view| view.profile.clone()) else {
             return;
+        };
+        let key_material = if profile.auth_type == "key" && !profile.key_id.is_empty() {
+            match self
+                .store
+                .lock()
+                .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                .and_then(|store| store.key_material(&profile.key_id))
+            {
+                Ok(material) => Some(material),
+                Err(error) => {
+                    if let Some(view) = self.sessions.get_mut(id) {
+                        view.status = format!("{error:#}");
+                    }
+                    self.status(format!("{error:#}"), true);
+                    self.tabs();
+                    return;
+                }
+            }
+        } else {
+            None
         };
         let known = self.store.lock().ok().and_then(|s| {
             s.data
                 .known_hosts
-                .get(&store::key(&view.profile.host, view.profile.port))
+                .get(&store::key(&profile.host, profile.port))
                 .cloned()
         });
-        view.status = "连接中".into();
-        view.transport = Some(ssh::spawn(
-            self.runtime.handle(),
-            id.to_string(),
-            view.profile.clone(),
-            secret,
-            known,
-            self.events.clone(),
-        ));
+        let runtime = self.runtime.handle().clone();
+        let events = self.events.clone();
+        if let Some(view) = self.sessions.get_mut(id) {
+            view.status = "连接中".into();
+            view.transport = Some(ssh::spawn_with_key_material(
+                &runtime,
+                id.to_string(),
+                profile,
+                secret,
+                key_material,
+                known,
+                events,
+            ));
+        }
         self.tabs();
     }
     fn open_terminal(&mut self) {
@@ -432,6 +465,7 @@ impl State {
             username: "local".into(),
             auth_type: "password".into(),
             private_key_path: String::new(),
+            key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
         };
