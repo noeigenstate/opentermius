@@ -7,6 +7,7 @@ import { KnownHostsBridge, KnownHostsPage, KnownHostRow } from "pages/known_host
 import { LogsBridge, LogsPage, LogRow } from "pages/logs.slint";
 import { SettingsBridge, SettingsPage } from "pages/settings.slint";
 import { RecoveryBridge, RecoveryPanel } from "pages/recovery.slint";
+import { GalleryPage } from "pages/gallery.slint";
 export { KeychainBridge }
 export { ForwardingBridge }
 export { ForwardRow }
@@ -24,7 +25,8 @@ export struct HostRow { id: string, name: string, address: string, group: string
 export struct TabRow { id: string, title: string, status: string, disconnected: bool, local: bool }
 export struct TerminalRun { text: string, row: int, col: int, width: int, fg: color, bg: color, bold: bool, underline: bool }
 export struct SelectionRun { row: int, col: int, width: int }
-export struct FileRow { name: string, is-directory: bool, size: string, modified: string, kind: string }
+export struct FileRow { name: string, is-directory: bool, size: string, modified: string, kind: string, permissions: string }
+export struct TransferRow { id: string, name: string, detail: string, percent: int, pending: bool }
 export struct GroupRow { name: string, count: int }
 export struct TagRow { name: string, count: int }
 export struct HostDraft { id: string, name: string, host: string, port: string, username: string, group: string, auth-index: int, key-path: string, secret: string, remember: bool, tags: string }
@@ -32,17 +34,22 @@ export struct HostDraft { id: string, name: string, host: string, port: string, 
 component FileTableRow inherits Rectangle {
     in property <FileRow> file;
     in property <bool> heading: false;
-    height: root.heading ? 44px : 40px;
+    in property <bool> remote: false;
+    in property <string> sort-column;
+    in property <bool> ascending: true;
+    callback sort(string);
+    height: root.heading ? 38px : 40px;
     background: Theme.base;
-    border-width: root.heading ? 1px : 0px; border-color: #d5dde0;
-    if !root.heading: Image { source: root.file.is-directory ? @image-url("icons/folder-filled.svg") : @image-url("icons/file.svg"); colorize: root.file.is-directory ? #66ccef : Theme.secondary; x: 20px; y: 11px; width: 18px; height: 18px; }
-    Text { x: root.heading ? 20px : 46px; width: parent.width * 0.44 - self.x - 10px; text: root.heading ? "Name" : root.file.name; color: Theme.text; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
-    Text { x: parent.width * 0.44 + 20px; width: parent.width * 0.24 - 30px; text: root.heading ? "Date Modified" : root.file.modified; color: root.heading ? Theme.text : Theme.secondary; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
-    Text { x: parent.width * 0.68 + 20px; width: parent.width * 0.16 - 30px; text: root.heading ? "Size" : root.file.size; color: root.heading ? Theme.text : Theme.secondary; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
-    Text { x: parent.width * 0.84 + 20px; width: parent.width * 0.16 - 30px; text: root.heading ? "Kind" : root.file.kind; color: root.heading ? Theme.text : Theme.secondary; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
-    if root.heading: Rectangle { x: parent.width * 0.44; width: 1px; background: #d5dde0; }
-    if root.heading: Rectangle { x: parent.width * 0.68; width: 1px; background: #d5dde0; }
-    if root.heading: Rectangle { x: parent.width * 0.84; width: 1px; background: #d5dde0; }
+    if !root.heading: Image { source: root.file.is-directory ? @image-url("icons/folder-filled.svg") : @image-url("icons/file.svg"); colorize: root.file.is-directory ? #66ccef : Theme.secondary; x: 12px; y: 11px; width: 18px; height: 18px; }
+    Text { x: root.heading ? 12px : 38px; width: parent.width * (root.remote ? 0.33 : 0.39) - self.x - 8px; text: root.heading ? "Name" + (root.sort-column == "name" ? (root.ascending ? " +" : " -") : "") : root.file.name; color: Theme.text; font-weight: root.heading ? 600 : 450; font-size: 13px; overflow: elide; vertical-alignment: center; }
+    Text { x: parent.width * (root.remote ? 0.33 : 0.39); width: parent.width * (root.remote ? 0.22 : 0.29) - 6px; text: root.heading ? "Modified" + (root.sort-column == "date" ? (root.ascending ? " +" : " -") : "") : root.file.modified; color: Theme.secondary; font-size: 12px; overflow: elide; vertical-alignment: center; }
+    Text { x: parent.width * (root.remote ? 0.55 : 0.68); width: parent.width * (root.remote ? 0.12 : 0.16) - 6px; text: root.heading ? "Size" + (root.sort-column == "size" ? (root.ascending ? " +" : " -") : "") : root.file.size; color: Theme.secondary; font-size: 12px; overflow: elide; vertical-alignment: center; }
+    Text { x: parent.width * (root.remote ? 0.67 : 0.84); width: parent.width * (root.remote ? 0.13 : 0.16) - 6px; text: root.heading ? "Kind" + (root.sort-column == "kind" ? (root.ascending ? " +" : " -") : "") : root.file.kind; color: Theme.secondary; font-size: 12px; overflow: elide; vertical-alignment: center; }
+    if root.remote: Text { x: parent.width * 0.80; width: parent.width * 0.20 - 8px; text: root.heading ? "Permissions" : root.file.permissions; color: Theme.secondary; font-size: 11px; font-family: "Consolas"; overflow: elide; vertical-alignment: center; }
+    if root.heading: TouchArea { width: parent.width * (root.remote ? 0.33 : 0.39); clicked => { root.sort("name"); } }
+    if root.heading: TouchArea { x: parent.width * (root.remote ? 0.33 : 0.39); width: parent.width * (root.remote ? 0.22 : 0.29); clicked => { root.sort("date"); } }
+    if root.heading: TouchArea { x: parent.width * (root.remote ? 0.55 : 0.68); width: parent.width * (root.remote ? 0.12 : 0.16); clicked => { root.sort("size"); } }
+    if root.heading: TouchArea { x: parent.width * (root.remote ? 0.67 : 0.84); width: parent.width * (root.remote ? 0.13 : 0.16); clicked => { root.sort("kind"); } }
 }
 
 export component AppWindow inherits Window {
@@ -70,6 +77,18 @@ export component AppWindow inherits Window {
     in property <[FileRow]> files;
     in property <[FileRow]> local-files;
     in property <string> local-path;
+    in property <[TransferRow]> transfers;
+    in-out property <string> local-selection;
+    in-out property <string> remote-selection;
+    in-out property <bool> show-hidden: true;
+    in-out property <string> local-sort: "name";
+    in-out property <string> remote-sort: "name";
+    in-out property <bool> local-ascending: true;
+    in-out property <bool> remote-ascending: true;
+    property <string> file-dialog;
+    property <bool> file-dialog-local;
+    property <string> file-dialog-source;
+    property <string> file-dialog-value;
     in-out property <bool> sftp-page: false;
     in-out property <string> tab-menu-session: "";
     in-out property <bool> tab-menu-reconnectable: false;
@@ -158,6 +177,10 @@ export component AppWindow inherits Window {
     callback download-to-local(string);
     callback select-sftp-host(string);
     callback upload-file;
+    callback upload-folder;
+    callback file-operation(bool, string, string, string);
+    callback update-file-view;
+    callback cancel-transfer(string);
     callback download-file(string);
     callback import-hosts;
     callback import-xshell;
@@ -184,6 +207,7 @@ export component AppWindow inherits Window {
     changed terminal-cols => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
     changed terminal-rows => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
     changed active-session => {
+        root.file-dialog = "";
         if root.active-session != "" { root.hosts-page = false; if !root.sftp-page { terminal-focus.focus(); } }
         else if !root.sftp-page { root.hosts-page = true; }
     }
@@ -207,7 +231,7 @@ export component AppWindow inherits Window {
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
     public function focus-terminal() { terminal-focus.focus(); }
-    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = false; root.hosts-page = true; root.section = name; } } }
+    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = name == "sftp"; root.hosts-page = true; root.section = name; if name == "sftp" { root.open-sftp(); } } } }
     public function activate-session(session-id: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(session-id); terminal-focus.focus(); } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.group-editing = false; root.draft.secret = ""; }
     public function open-host-menu(id: string, name: string, x: length, y: length) {
@@ -545,6 +569,7 @@ export component AppWindow inherits Window {
                     if root.hosts-page && root.section == "known-hosts": KnownHostsPage { vertical-stretch: 1; }
                     if root.hosts-page && root.section == "logs": LogsPage { vertical-stretch: 1; }
                     if root.hosts-page && root.section == "settings": SettingsPage { vertical-stretch: 1; }
+                    if root.hosts-page && root.section == "gallery": GalleryPage { vertical-stretch: 1; }
                     if !root.hosts-page: Rectangle { height: 40px; background: Theme.high;
                         HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 6px;
                             Text { text: root.local-session ? "Local" : "SSH"; color: Theme.secondary; width: 45px; vertical-alignment: center; }
@@ -626,67 +651,120 @@ export component AppWindow inherits Window {
     }
     if root.sftp-page: Rectangle {
         x: 0px; y: 51px; width: root.width; height: root.height - 51px; background: Theme.base;
-        Rectangle { background: transparent;
-            Rectangle { x: 0px; y: 0px; width: (root.width - 1px) / 2; height: parent.height; background: Theme.base; clip: true;
-                VerticalLayout { spacing: 0px;
-                    Rectangle { height: 50px; background: Theme.high;
-                        HorizontalLayout { padding-left: 16px; padding-right: 16px; spacing: 10px;
-                            Rectangle { width: 24px; background: transparent;
-                                Rectangle { x: 0px; y: (parent.height - 24px) / 2; width: 24px; height: 24px; border-radius: 8px; background: #00527c;
-                                    Image { source: @image-url("icons/local.svg"); colorize: white; x: 5px; y: 5px; width: 14px; height: 14px; }
-                                }
+        VerticalLayout { spacing: 0px;
+            HorizontalLayout { spacing: 1px;
+                Rectangle { horizontal-stretch: 1; clip: true;
+                    VerticalLayout { spacing: 0px;
+                        Rectangle { height: 44px; background: Theme.high;
+                            HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 8px;
+                                Text { text: "Local"; color: Theme.text; font-weight: 600; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                                Action { text: root.show-hidden ? "Hidden: shown" : "Hidden: off"; flat: true; text-size: 12px; clicked => { root.show-hidden = !root.show-hidden; root.update-file-view(); } }
+                                Action { text: "Refresh"; flat: true; text-size: 12px; clicked => { root.list-local(root.local-path); } }
                             }
-                            Text { text: "Local"; color: Theme.text; vertical-alignment: center; font-size: 14px; }
-                            Rectangle { horizontal-stretch: 1; background: transparent; }
-                            Action { text: "Filter"; flat: true; disabled: true; }
-                            Action { text: "Actions ⌄"; flat: true; clicked => { root.list-local(root.local-path); } }
+                        }
+                        Rectangle { height: 46px; background: Theme.high;
+                            HorizontalLayout { padding: 6px; spacing: 6px;
+                                Action { text: "Up"; flat: true; clicked => { root.list-local(root.local-path + "/.."); } }
+                                Input { text: root.local-path; accepted => { root.list-local(self.text); } }
+                            }
+                        }
+                        Rectangle { height: 42px; background: Theme.high;
+                            HorizontalLayout { padding: 6px; spacing: 5px;
+                                Action { text: "New folder"; text-size: 12px; clicked => { root.file-dialog-local = true; root.file-dialog-source = ""; root.file-dialog-value = ""; root.file-dialog = "mkdir"; } }
+                                Action { text: "Rename"; text-size: 12px; disabled: root.local-selection == ""; clicked => { root.file-dialog-local = true; root.file-dialog-source = root.local-selection; root.file-dialog-value = root.local-selection; root.file-dialog = "rename"; } }
+                                Action { text: "Delete"; text-size: 12px; disabled: root.local-selection == ""; clicked => { root.file-operation(true, "delete", root.local-selection, ""); } }
+                                Action { text: "Upload >"; text-size: 12px; disabled: root.local-selection == "" || !root.remote-connected; clicked => { root.upload-local(root.local-selection); } }
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                        }
+                        FileTableRow { heading: true; sort-column: root.local-sort; ascending: root.local-ascending; sort(column) => { root.local-ascending = root.local-sort == column ? !root.local-ascending : true; root.local-sort = column; root.update-file-view(); } }
+                        ListView {
+                            for entry in root.local-files: FileTableRow { file: entry; background: root.local-selection == entry.name ? #2091f626 : local-touch.has-hover ? #798c941a : transparent;
+                                local-touch := TouchArea { clicked => { root.local-selection = entry.name; } double-clicked => { if entry.is-directory { root.list-local(root.local-path + "/" + entry.name); } else { root.upload-local(entry.name); } } }
+                            }
                         }
                     }
-                    Rectangle { height: 50px; background: Theme.high;
-                        HorizontalLayout { padding: 10px; spacing: 10px;
-                            Action { text: "‹"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.list-local(root.local-path + "/.."); } }
-                            Input { text: root.local-path; accepted => { root.list-local(self.text); } }
+                }
+                Rectangle { width: 1px; background: Theme.border; }
+                Rectangle { horizontal-stretch: 1; clip: true;
+                    VerticalLayout { spacing: 0px;
+                        Rectangle { height: 44px; background: Theme.high;
+                            HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 8px;
+                                Text { text: root.remote-connected ? root.active-host : "Remote"; color: Theme.text; font-weight: 600; overflow: elide; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                                Action { text: "Select host"; flat: true; text-size: 12px; clicked => { root.host-picker-open = true; } }
+                                Action { text: "Refresh"; flat: true; text-size: 12px; disabled: !root.remote-connected; clicked => { root.list-files(root.file-path); } }
+                            }
                         }
-                    }
-                    FileTableRow { heading: true; }
-                    ListView {
-                        for entry in root.local-files: FileTableRow { file: entry; background: local-touch.has-hover ? #798c941a : transparent;
-                            local-touch := TouchArea { clicked => { if entry.is-directory { root.list-local(root.local-path + "/" + entry.name); } else { root.upload-local(entry.name); } } }
+                        if root.remote-connected: Rectangle { height: 46px; background: Theme.high;
+                            HorizontalLayout { padding: 6px; spacing: 6px;
+                                Action { text: "Up"; flat: true; clicked => { root.list-files(root.file-path + "/.."); } }
+                                Input { text: root.file-path; accepted => { root.list-files(self.text); } }
+                            }
+                        }
+                        if root.remote-connected: Rectangle { height: 42px; background: Theme.high;
+                            HorizontalLayout { padding: 6px; spacing: 5px;
+                                Action { text: "New folder"; text-size: 12px; clicked => { root.file-dialog-local = false; root.file-dialog-source = ""; root.file-dialog-value = ""; root.file-dialog = "mkdir"; } }
+                                Action { text: "Rename"; text-size: 12px; disabled: root.remote-selection == ""; clicked => { root.file-dialog-local = false; root.file-dialog-source = root.remote-selection; root.file-dialog-value = root.remote-selection; root.file-dialog = "rename"; } }
+                                Action { text: "Delete"; text-size: 12px; disabled: root.remote-selection == ""; clicked => { root.file-operation(false, "delete", root.remote-selection, ""); } }
+                                Action { text: "< Download"; text-size: 12px; disabled: root.remote-selection == ""; clicked => { root.download-to-local(root.remote-selection); } }
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                        }
+                        if root.remote-connected: FileTableRow { heading: true; remote: true; sort-column: root.remote-sort; ascending: root.remote-ascending; sort(column) => { root.remote-ascending = root.remote-sort == column ? !root.remote-ascending : true; root.remote-sort = column; root.update-file-view(); } }
+                        if root.remote-connected: ListView {
+                            for entry in root.files: FileTableRow { file: entry; remote: true; background: root.remote-selection == entry.name ? #2091f626 : remote-touch.has-hover ? #798c941a : transparent;
+                                remote-touch := TouchArea { clicked => { root.remote-selection = entry.name; } double-clicked => { if entry.is-directory { root.list-files(root.file-path + "/" + entry.name); } else { root.download-to-local(entry.name); } } }
+                            }
+                        }
+                        if !root.remote-connected: Rectangle {
+                            VerticalLayout { alignment: center; spacing: 14px; padding: 30px;
+                                Text { text: "Connect to host"; font-size: 20px; font-weight: 600; color: Theme.text; horizontal-alignment: center; }
+                                Text { text: "Select a saved host to manage files with SFTP."; color: Theme.secondary; wrap: word-wrap; horizontal-alignment: center; }
+                                HorizontalLayout { alignment: center; Action { text: "Select host"; clicked => { root.host-picker-open = true; } } }
+                            }
                         }
                     }
                 }
             }
-            Rectangle { x: (root.width - 1px) / 2; width: 1px; background: #d5dde0; }
-            Rectangle { x: (root.width + 1px) / 2; y: 0px; width: (root.width - 1px) / 2; height: parent.height; background: Theme.base; clip: true;
-                if !root.remote-connected: Rectangle { width: parent.width - 40px; height: 222px; x: 20px; y: (parent.height + 160px - self.height) / 2;
-                    Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; background: #798c941a;
-                        Image { source: @image-url("icons/folder-filled.svg"); colorize: Theme.text; x: 20px; y: 20px; width: 20px; height: 20px; }
+            Rectangle { height: 1px; background: Theme.border; }
+            Rectangle { height: root.transfers.length > 0 ? 154px : 46px; background: Theme.high;
+                VerticalLayout { padding: 8px; spacing: 4px;
+                    HorizontalLayout { spacing: 8px;
+                        Text { text: "Transfers"; font-weight: 600; color: Theme.text; vertical-alignment: center; }
+                        Text { text: "8 queued maximum"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                        Rectangle { horizontal-stretch: 1; }
+                        Action { text: "Upload file"; flat: true; text-size: 12px; disabled: !root.remote-connected; clicked => { root.upload-file(); } }
+                        Action { text: "Upload folder"; flat: true; text-size: 12px; disabled: !root.remote-connected; clicked => { root.upload-folder(); } }
                     }
-                    Text { y: 90px; height: 26px; width: parent.width; text: "Connect to host"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
-                    Text { y: 125px; height: 21px; width: parent.width; text: "Start by connecting to a saved host"; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
-                    Text { y: 146px; height: 21px; width: parent.width; text: "to manage your files with SFTP."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
-                    Action { x: (parent.width - self.width) / 2; y: 185px; width: 104px; height: 36px; border-radius: 10px; text: "Select host"; clicked => { root.host-picker-open = true; } }
+                    if root.transfers.length > 0: ListView {
+                        for transfer in root.transfers: Rectangle { height: 52px;
+                            HorizontalLayout { spacing: 12px;
+                                VerticalLayout { spacing: 2px;
+                                    Text { text: transfer.name; color: Theme.text; font-size: 12px; overflow: elide; }
+                                    Text { text: transfer.detail; color: Theme.secondary; font-size: 11px; overflow: elide; }
+                                    Rectangle { height: 3px; background: Theme.border; Rectangle { width: parent.width * transfer.percent / 100; background: Theme.accent; } }
+                                }
+                                Action { text: "Cancel"; text-size: 12px; disabled: !transfer.pending; clicked => { root.cancel-transfer(transfer.id); } }
+                            }
+                        }
+                    }
                 }
-                if root.remote-connected: VerticalLayout { spacing: 0px;
-                    Rectangle { height: 50px; background: Theme.high;
-                        HorizontalLayout { padding-left: 16px; padding-right: 16px; spacing: 10px;
-                            Text { text: root.active-host; color: Theme.text; vertical-alignment: center; overflow: elide; }
-                            Rectangle { horizontal-stretch: 1; background: transparent; }
-                            Action { text: "Select host"; flat: true; clicked => { root.host-picker-open = true; } }
-                            Action { text: "Refresh"; flat: true; clicked => { root.list-files(root.file-path); } }
-                        }
-                    }
-                    Rectangle { height: 50px; background: Theme.high;
-                        HorizontalLayout { padding: 10px; spacing: 10px;
-                            Action { text: "‹"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.list-files(root.file-path + "/.."); } }
-                            Input { text: root.file-path; accepted => { root.list-files(self.text); } }
-                        }
-                    }
-                    FileTableRow { heading: true; }
-                    ListView {
-                        for entry in root.files: FileTableRow { file: entry; background: remote-touch.has-hover ? #798c941a : transparent;
-                            remote-touch := TouchArea { clicked => { if entry.is-directory { root.list-files(root.file-path + "/" + entry.name); } else { root.download-to-local(entry.name); } } }
-                        }
+            }
+            Rectangle { height: 28px; background: Theme.high;
+                Text { x: 12px; width: parent.width - 24px; text: root.status-text; color: root.status-error ? #dc4545 : Theme.secondary; font-size: 11px; overflow: elide; vertical-alignment: center; }
+            }
+        }
+        if root.file-dialog != "": Rectangle { background: #14172980;
+            TouchArea { clicked => { } }
+            Rectangle { width: 380px; height: 190px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px;
+                VerticalLayout { padding: 20px; spacing: 14px;
+                    Text { text: (root.file-dialog-local ? "Local / " : "Remote / ") + (root.file-dialog == "mkdir" ? "New folder" : "Rename"); color: Theme.text; font-weight: 600; }
+                    Input { text <=> root.file-dialog-value; init => { self.focus(); } accepted => { root.file-operation(root.file-dialog-local, root.file-dialog, root.file-dialog-source, root.file-dialog-value); root.file-dialog = ""; } }
+                    HorizontalLayout { alignment: end; spacing: 8px;
+                        Action { text: "Cancel"; clicked => { root.file-dialog = ""; } }
+                        Action { text: "Save"; primary: true; disabled: root.file-dialog-value == ""; clicked => { root.file-operation(root.file-dialog-local, root.file-dialog, root.file-dialog-source, root.file-dialog-value); root.file-dialog = ""; } }
                     }
                 }
             }
