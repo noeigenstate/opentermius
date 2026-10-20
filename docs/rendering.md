@@ -98,7 +98,7 @@ Skia 的 `skia-bindings` 构建脚本可能下载 GitHub 上的预编译原生�
 - 共享单行 Input 的编辑区域覆盖控件高度，并显式垂直居中；窄输入框的可用宽度下限为零。Field、SearchField、端口和 SFTP 路径栏共用此修正。
 - Logs 表头固定为表格完整宽度，保留与数据行相同的列比例和重连操作槽。
 - SFTP 进度条固定从左侧零点开始，宽度按限制在 0–100 的百分比计算；`section-sftp` 提供断开状态的 42% 视觉样例，不启动传输。`section-forwarding-editor` 提供含 8080/5432 端口的编辑器样例。
-- Settings 改用共享主题开关和分隔线，标签在窄布局省略，字体提示改为平台等宽字体；Appearance 移到页首先显示 GPU 偏好。其他页的初始页面、控件画廊及主机编辑器已检查深浅主题。
+- Settings 保留 main 的分组布局和共享组件，在 Appearance 中加入 GPU 偏好开关；字体提示显示实际平台等宽字体。其他页的初始页面、控件画廊及主机编辑器已检查深浅主题。
 
 | 检查 | 本轮结果 |
 | --- | --- |
@@ -106,12 +106,12 @@ Skia 的 `skia-bindings` 构建脚本可能下载 GitHub 上的预编译原生�
 | `transport::native_gui_live_selftest -- --ignored --nocapture` | 成功，软件渲染；真实回环 SSH/SFTP、指纹、DPAPI、持久化及截图 |
 | 渲染器选择 | 单元测试覆盖默认值、CLI/环境变量/设置优先级和既有 GPU 失败重试条件；6 次实际启动检查保存的 GPU 偏好、两种覆盖和未编译 Skia 的软件回退 |
 | 偏好设置 | 旧配置默认关闭 GPU；持久化使用 `gpuRendering`；指针点击切换、恢复默认及重开配置均已测试 |
-| 视觉检查 | 11 个场景 × 深浅主题，均实际使用 `winit-software`；提交下列 6 张最终截图 |
+| 视觉检查 | 原分支检查了 11 个场景 × 深浅主题，均实际使用 `winit-software`；合并后重新检查 Settings 深浅主题，GPU 提示和平台字体名称完整显示 |
 
 | 页面 | 浅色 | 深色 |
 | --- | --- | --- |
 | 端口转发编辑器 | [截图](screenshots/ui-followup-forwarding-editor-light.png) | [截图](screenshots/ui-followup-forwarding-editor-dark.png) |
 | Logs 完整表头 | [截图](screenshots/ui-followup-logs-light.png) | [截图](screenshots/ui-followup-logs-dark.png) |
-| SFTP 与 Settings | [截图](screenshots/ui-followup-sftp-settings-light.png) | [截图](screenshots/ui-followup-sftp-settings-dark.png) |
+| Settings（合并后） | [截图](screenshots/settings-light.png) | [截图](screenshots/settings-dark.png) |
 
-最后一行各由两张完整原生窗口截图上下拼接，未缩放。GPU 初始化故障在本机未实际复现；软件重试判定沿用已有测试。其他平台及 Windows 11 外框仍需对应环境验证。
+合并后的 Settings 截图来自完整原生窗口，使用软件渲染和 Cascadia Mono。GPU 初始化故障在本机未实际复现；软件重试判定沿用已有测试。其他平台及 Windows 11 外框仍需对应环境验证。

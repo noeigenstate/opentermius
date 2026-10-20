@@ -253,12 +253,13 @@ mod tests {
         let bridge = ui.global::<SettingsBridge>();
         assert!(!bridge.get_gpu_rendering());
         ui.invoke_open_section("settings".into());
-        click(&ui, 1174., 250.);
+        // Settings uses main's 720px column; click the GPU switch in Appearance.
+        click(&ui, 887., 235.);
         assert!(current().gpu_rendering);
         assert!(opentermius::store::Store::open(path.clone()).unwrap().data.settings.gpu_rendering);
-        click(&ui, 1174., 250.);
+        click(&ui, 887., 235.);
         assert!(!current().gpu_rendering);
-        click(&ui, 1174., 250.);
+        click(&ui, 887., 235.);
         assert!(current().gpu_rendering);
         for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
             bridge.set_appearance(appearance.index());

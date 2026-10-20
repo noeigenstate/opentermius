@@ -1,5 +1,6 @@
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Action, Toggle } from "../common.slint";
+import { Theme, Action, Toggle, Segmented, Select, SettingRow, Caption } from "../common.slint";
+import { RecoveryBridge } from "recovery.slint";
 
 // Rust reads and drives this page through the global bridge.
 export global SettingsBridge {
@@ -29,43 +30,21 @@ export global SettingsBridge {
     callback open-config-folder;
 }
 
-component SectionTitle inherits Text {
-    color: Theme.text;
-    font-size: 16px;
-    font-weight: 600;
-    height: 22px;
-    vertical-alignment: center;
-}
-
-component SettingRow inherits Rectangle {
+// Card has fixed inner padding; grouped settings need edge-to-edge SettingRows.
+component SettingsGroup inherits VerticalLayout {
     in property <string> title;
-    in property <string> description: "";
-    height: root.description == "" ? 52px : 64px;
-    background: transparent;
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 12px;
-        spacing: 14px;
-        VerticalLayout {
-            horizontal-stretch: 1;
-            alignment: center;
-            spacing: 3px;
-            Text { text: root.title; color: Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; }
-            if root.description != "": Text { text: root.description; color: Theme.secondary; font-size: 12px; vertical-alignment: center; overflow: elide; }
-        }
-        VerticalLayout {
-            alignment: center;
-            horizontal-stretch: 0;
-            @children
-        }
+    spacing: Theme.space-8;
+    Text {
+        text: root.title; color: Theme.secondary; font-size: Theme.font-mono;
+        font-weight: 600; height: Theme.space-20; vertical-alignment: center;
+    }
+    Rectangle {
+        background: Theme.highest; border-radius: Theme.r-field;
+        VerticalLayout { spacing: 0px; @children }
     }
 }
 
-component Separator inherits Rectangle {
-    height: 1px;
-    background: Theme.divider;
-}
-
+// Numeric preferences keep their existing ranges and apply immediately.
 component Stepper inherits Rectangle {
     in property <int> value;
     in property <int> minimum: 0;
@@ -73,39 +52,22 @@ component Stepper inherits Rectangle {
     in property <int> step: 1;
     in property <string> suffix: "";
     callback value-changed(int);
-    width: 156px;
-    height: 32px;
-    border-radius: 8px;
-    border-width: 1px;
-    border-color: Theme.border;
-    background: Theme.high;
+    width: 200px; height: Theme.input-height;
+    border-radius: Theme.r-field; border-width: 1px; border-color: Theme.border;
+    background: transparent;
     HorizontalLayout {
-        spacing: 0px;
+        padding: Theme.space-2; spacing: 0px; cross-axis-alignment: center;
         Action {
-            text: "−";
-            flat: true;
-            min-width: 30px;
-            max-width: 30px;
-            min-height: 30px;
-            max-height: 30px;
+            kind: "flat"; text: "−"; width: Theme.button-m;
             disabled: root.value <= root.minimum;
             clicked => { root.value-changed(Math.max(root.minimum, root.value - root.step)); }
         }
         Text {
-            text: root.value + root.suffix;
-            color: Theme.text;
-            font-size: 13px;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            horizontal-stretch: 1;
+            text: root.value + root.suffix; color: Theme.text; font-size: Theme.font-body;
+            horizontal-alignment: center; vertical-alignment: center; horizontal-stretch: 1;
         }
         Action {
-            text: "+";
-            flat: true;
-            min-width: 30px;
-            max-width: 30px;
-            min-height: 30px;
-            max-height: 30px;
+            kind: "flat"; text: "+"; width: Theme.button-m;
             disabled: root.value >= root.maximum;
             clicked => { root.value-changed(Math.min(root.maximum, root.value + root.step)); }
         }
@@ -114,319 +76,147 @@ component Stepper inherits Rectangle {
 
 export component SettingsPage inherits Rectangle {
     background: Theme.base;
-
-    ScrollView {
-        VerticalLayout {
-            padding-left: 28px;
-            padding-right: 28px;
-            padding-top: 22px;
-            padding-bottom: 28px;
-            spacing: 16px;
-
+    scroller := ScrollView {
+        content-height: column.preferred-height;
+        column := VerticalLayout {
+            width: Math.min(720px, scroller.visible-width - Theme.gutter * 2);
+            x: Theme.gutter;
+            padding-top: Theme.space-24; padding-bottom: Theme.space-32;
+            spacing: Theme.space-24;
             Text {
-                text: "Settings";
-                color: Theme.text;
-                font-size: 20px;
-                font-weight: 600;
-                height: 30px;
-                vertical-alignment: center;
+                text: "Settings"; color: Theme.text; font-size: Theme.font-title;
+                font-weight: 600; height: 28px; vertical-alignment: center;
             }
 
-            SectionTitle { text: "Appearance"; }
-            Rectangle {
-                height: 198px;
-                background: Theme.highest;
-                border-width: 1px;
-                border-color: Theme.border;
-                border-radius: 10px;
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 0px;
-                    SettingRow {
-                        title: "App appearance";
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Action {
-                                text: "Light";
-                                primary: SettingsBridge.appearance == 0;
-                                clicked => { SettingsBridge.appearance = 0; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "Dark";
-                                primary: SettingsBridge.appearance == 1;
-                                clicked => { SettingsBridge.appearance = 1; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "System";
-                                primary: SettingsBridge.appearance == 2;
-                                clicked => { SettingsBridge.appearance = 2; SettingsBridge.apply(); }
-                            }
-                        }
+            SettingsGroup {
+                title: "Appearance";
+                SettingRow {
+                    label: "Theme";
+                    Segmented {
+                        options: ["Light", "Dark", "System"]; current-index <=> SettingsBridge.appearance;
+                        changed(index) => { SettingsBridge.apply(); }
                     }
-                    Separator {}
-                    SettingRow {
-                        title: "Smoother rendering (GPU)";
-                        description: "Uses more memory. Takes effect after restart.";
-                        Toggle {
-                            checked: SettingsBridge.gpu-rendering;
-                            toggled => {
-                                SettingsBridge.gpu-rendering = !SettingsBridge.gpu-rendering;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Terminal color scheme";
-                        description: "Applied to every terminal session";
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Action {
-                                text: "Default";
-                                primary: SettingsBridge.color-scheme == 0;
-                                clicked => { SettingsBridge.color-scheme = 0; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "Solarized Dark";
-                                primary: SettingsBridge.color-scheme == 1;
-                                clicked => { SettingsBridge.color-scheme = 1; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "Monokai";
-                                primary: SettingsBridge.color-scheme == 2;
-                                clicked => { SettingsBridge.color-scheme = 2; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "Light";
-                                primary: SettingsBridge.color-scheme == 3;
-                                clicked => { SettingsBridge.color-scheme = 3; SettingsBridge.apply(); }
-                            }
-                        }
+                }
+                SettingRow {
+                    label: "Smoother rendering (GPU)"; description: "Uses more memory. Takes effect after restart.";
+                    Toggle { checked <=> SettingsBridge.gpu-rendering; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
+                    label: "Terminal color scheme"; description: "Applied to every terminal session"; divider: false;
+                    Select {
+                        width: 200px; options: ["Default", "Solarized Dark", "Monokai", "Light"];
+                        current-index <=> SettingsBridge.color-scheme;
+                        changed(index) => { SettingsBridge.apply(); }
                     }
                 }
             }
 
-            SectionTitle { text: "Terminal"; }
-            Rectangle {
-                height: 369px;
-                background: Theme.highest;
-                border-width: 1px;
-                border-color: Theme.border;
-                border-radius: 10px;
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 0px;
-                    SettingRow {
-                        title: "Font size";
-                        description: "Platform monospace font, 10–24 px";
-                        Stepper {
-                            value: SettingsBridge.terminal-font-size;
-                            minimum: 10;
-                            maximum: 24;
-                            suffix: " px";
-                            value-changed(value) => {
-                                SettingsBridge.terminal-font-size = value;
-                                SettingsBridge.apply();
-                            }
-                        }
+            SettingsGroup {
+                title: "Terminal";
+                SettingRow {
+                    label: "Font size"; description: "Terminal font (" + Theme.mono-font + "), 10–24 px";
+                    Select {
+                        width: 200px;
+                        options: ["10 px", "11 px", "12 px", "13 px", "14 px", "15 px", "16 px", "17 px", "18 px", "19 px", "20 px", "21 px", "22 px", "23 px", "24 px"];
+                        current-index: SettingsBridge.terminal-font-size - 10;
+                        changed(index) => { SettingsBridge.terminal-font-size = index + 10; SettingsBridge.apply(); }
                     }
-                    Separator {}
-                    SettingRow {
-                        title: "Scrollback";
-                        description: "History lines for new terminal sessions";
-                        Stepper {
-                            value: SettingsBridge.scrollback-lines;
-                            minimum: 1000;
-                            maximum: 100000;
-                            step: 1000;
-                            suffix: " lines";
-                            value-changed(value) => {
-                                SettingsBridge.scrollback-lines = value;
-                                SettingsBridge.apply();
-                            }
-                        }
+                }
+                SettingRow {
+                    label: "Scrollback"; description: "History lines for new terminal sessions";
+                    Stepper {
+                        value: SettingsBridge.scrollback-lines; minimum: 1000; maximum: 100000; step: 1000; suffix: " lines";
+                        value-changed(value) => { SettingsBridge.scrollback-lines = value; SettingsBridge.apply(); }
                     }
-                    Separator {}
-                    SettingRow {
-                        title: "Cursor blink";
-                        Toggle {
-                            checked: SettingsBridge.cursor-blink;
-                            toggled => {
-                                SettingsBridge.cursor-blink = !SettingsBridge.cursor-blink;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Copy on select";
-                        Toggle {
-                            checked: SettingsBridge.copy-on-select;
-                            toggled => {
-                                SettingsBridge.copy-on-select = !SettingsBridge.copy-on-select;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Confirm multi-line paste";
-                        Toggle {
-                            checked: SettingsBridge.confirm-multiline-paste;
-                            toggled => {
-                                SettingsBridge.confirm-multiline-paste = !SettingsBridge.confirm-multiline-paste;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Bell";
-                        description: "Audible bell is not used";
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Action {
-                                text: "None";
-                                primary: SettingsBridge.bell-mode == 0;
-                                clicked => { SettingsBridge.bell-mode = 0; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "Visual";
-                                primary: SettingsBridge.bell-mode == 1;
-                                clicked => { SettingsBridge.bell-mode = 1; SettingsBridge.apply(); }
-                            }
-                        }
+                }
+                SettingRow {
+                    label: "Cursor blink";
+                    Toggle { checked <=> SettingsBridge.cursor-blink; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
+                    label: "Copy on select";
+                    Toggle { checked <=> SettingsBridge.copy-on-select; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
+                    label: "Confirm multi-line paste";
+                    Toggle { checked <=> SettingsBridge.confirm-multiline-paste; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
+                    label: "Bell"; description: "Audible bell is not used"; divider: false;
+                    Segmented {
+                        options: ["None", "Visual"]; current-index <=> SettingsBridge.bell-mode;
+                        changed(index) => { SettingsBridge.apply(); }
                     }
                 }
             }
 
-            SectionTitle { text: "SSH"; }
-            Rectangle {
-                height: 145px;
-                background: Theme.highest;
-                border-width: 1px;
-                border-color: Theme.border;
-                border-radius: 10px;
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 0px;
-                    SettingRow {
-                        title: "Keepalive interval";
-                        description: "New SSH sessions; seconds, 0 disables";
-                        Stepper {
-                            value: SettingsBridge.keepalive-seconds;
-                            minimum: 0;
-                            maximum: 3600;
-                            step: 5;
-                            suffix: " s";
-                            value-changed(value) => {
-                                SettingsBridge.keepalive-seconds = value;
-                                SettingsBridge.apply();
-                            }
-                        }
+            SettingsGroup {
+                title: "SSH";
+                SettingRow {
+                    label: "Keepalive interval"; description: "New sessions; 0 disables keepalive";
+                    Stepper {
+                        value: SettingsBridge.keepalive-seconds; minimum: 0; maximum: 3600; step: 5; suffix: " s";
+                        value-changed(value) => { SettingsBridge.keepalive-seconds = value; SettingsBridge.apply(); }
                     }
-                    Separator {}
-                    SettingRow {
-                        title: "Connection timeout";
-                        description: "New SSH sessions; handshake timeout in seconds";
-                        Stepper {
-                            value: SettingsBridge.connection-timeout-seconds;
-                            minimum: 1;
-                            maximum: 300;
-                            step: 1;
-                            suffix: " s";
-                            value-changed(value) => {
-                                SettingsBridge.connection-timeout-seconds = value;
-                                SettingsBridge.apply();
-                            }
-                        }
+                }
+                SettingRow {
+                    label: "Connection timeout"; description: "Handshake timeout for new sessions"; divider: false;
+                    Stepper {
+                        value: SettingsBridge.connection-timeout-seconds; minimum: 1; maximum: 300; suffix: " s";
+                        value-changed(value) => { SettingsBridge.connection-timeout-seconds = value; SettingsBridge.apply(); }
                     }
                 }
             }
 
-            SectionTitle { text: "SFTP"; }
-            Rectangle {
-                height: 145px;
-                background: Theme.highest;
-                border-width: 1px;
-                border-color: Theme.border;
-                border-radius: 10px;
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 0px;
-                    SettingRow {
-                        title: "Confirm overwrite on upload";
-                        description: "Ask before replacing an existing remote file";
-                        Toggle {
-                            checked: SettingsBridge.confirm-overwrite;
-                            toggled => {
-                                SettingsBridge.confirm-overwrite = !SettingsBridge.confirm-overwrite;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Show hidden files";
-                        description: "Dotfiles and Windows hidden files in file lists";
-                        Toggle {
-                            checked: SettingsBridge.show-hidden-files;
-                            toggled => {
-                                SettingsBridge.show-hidden-files = !SettingsBridge.show-hidden-files;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
+            SettingsGroup {
+                title: "SFTP";
+                SettingRow {
+                    label: "Confirm overwrite on upload"; description: "Ask before replacing a remote file";
+                    Toggle { checked <=> SettingsBridge.confirm-overwrite; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
+                    label: "Show hidden files"; description: "Include dotfiles and Windows hidden files"; divider: false;
+                    Toggle { checked <=> SettingsBridge.show-hidden-files; toggled => { SettingsBridge.apply(); } }
                 }
             }
 
-            SectionTitle { text: "About"; }
-            Rectangle {
-                height: 330px;
-                background: Theme.highest;
-                border-width: 1px;
-                border-color: Theme.border;
-                border-radius: 10px;
-                VerticalLayout {
-                    padding: 16px;
-                    spacing: 9px;
+            SettingsGroup {
+                title: "Data";
+                SettingRow {
+                    label: "Backup & Restore"; description: "Move your configuration between machines, offline"; divider: false;
+                    Action { kind: "secondary"; text: "Open…"; clicked => { RecoveryBridge.visible = true; } }
+                }
+            }
+
+            SettingsGroup {
+                title: "About";
+                SettingRow {
+                    label: "OpenTermius"; description: "Version " + SettingsBridge.version;
+                    Action { kind: "flat"; text: "Restore defaults"; clicked => { SettingsBridge.restore-defaults(); } }
+                }
+                Rectangle {
+                    height: 64px;
                     HorizontalLayout {
-                        spacing: 8px;
-                        Text { text: "OpenTermius"; color: Theme.text; font-size: 17px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: "Version " + SettingsBridge.version; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
-                        Rectangle { horizontal-stretch: 1; background: transparent; }
-                        Action {
-                            text: "Restore defaults";
-                            flat: true;
-                            clicked => { SettingsBridge.restore-defaults(); }
+                        padding-left: Theme.gutter; padding-right: Theme.gutter; spacing: Theme.space-12;
+                        cross-axis-alignment: center;
+                        VerticalLayout {
+                            spacing: Theme.space-4; horizontal-stretch: 1;
+                            Text { text: "Config folder"; color: Theme.text; font-size: Theme.font-body; font-weight: 500; }
+                            Text {
+                                text: SettingsBridge.config-path; color: Theme.secondary; font-family: "Consolas";
+                                font-size: Theme.font-caption; overflow: elide;
+                            }
                         }
+                        Action { kind: "secondary"; size: "s"; text: "Open"; clicked => { SettingsBridge.open-config-folder(); } }
                     }
-                    HorizontalLayout {
-                        spacing: 8px;
-                        Text { text: "Config"; color: Theme.secondary; font-size: 12px; width: 48px; vertical-alignment: center; }
-                        Text { text: SettingsBridge.config-path; color: Theme.text; font-size: 12px; horizontal-stretch: 1; overflow: elide; vertical-alignment: center; }
-                        Action {
-                            text: "Open config folder";
-                            clicked => { SettingsBridge.open-config-folder(); }
-                        }
-                    }
-                    Separator {}
-                    Text { text: "Privacy"; color: Theme.text; font-size: 13px; font-weight: 600; height: 18px; vertical-alignment: center; }
-                    Text {
-                        text: "凭据由 Windows DPAPI 加密。无产品账号、云同步和遥测。\n支持导入和导出本地主机 JSON；导出文件不含保存的凭据。";
-                        color: Theme.secondary;
-                        font-size: 12px;
-                        height: 36px;
-                        wrap: word-wrap;
-                    }
-                    Text { text: "License"; color: Theme.text; font-size: 13px; font-weight: 600; height: 18px; vertical-alignment: center; }
-                    Text {
-                        text: "OpenTermius " + SettingsBridge.version + " — UNLICENSED. Third-party components remain under their respective licenses (Rust, Slint, russh, vt100, and others).";
-                        color: Theme.secondary;
-                        font-size: 12px;
-                        height: 52px;
-                        wrap: word-wrap;
-                    }
+                    Rectangle { x: Theme.gutter; y: parent.height - 1px; width: parent.width - Theme.gutter * 2; height: 1px; background: Theme.divider; }
+                }
+                VerticalLayout {
+                    padding: Theme.gutter; spacing: Theme.space-12;
+                    Text { text: "Privacy"; color: Theme.text; font-size: Theme.font-body; font-weight: 600; }
+                    Caption { text: "Credentials are encrypted with Windows DPAPI. No account, cloud sync or telemetry. Host JSON exports exclude saved credentials."; wrap: word-wrap; }
+                    Text { text: "License"; color: Theme.text; font-size: Theme.font-body; font-weight: 600; }
+                    Caption { text: "OpenTermius " + SettingsBridge.version + " — UNLICENSED. Third-party components remain under their respective licenses (Rust, Slint, russh, vt100, and others)."; wrap: word-wrap; }
                 }
             }
         }
