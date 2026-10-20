@@ -68,6 +68,14 @@ fn refresh(s: &State) {
 }
 fn start(s: &mut State, id: &str) -> Result<()> {
     ensure!(!busy(s, id), "规则正在运行");
+    ensure!(
+        s.forwards
+            .values()
+            .filter(|rule| matches!(rule.status().phase, Phase::Starting | Phase::Running))
+            .count()
+            < opentermius::forwarding::MAX_RULES,
+        "同时运行的转发规则过多"
+    );
     let (rule, host, secret, key_material, known) = {
         let store = s.store.lock().map_err(|_| anyhow::anyhow!("配置不可用"))?;
         let rule = store

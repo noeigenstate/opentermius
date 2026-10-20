@@ -215,7 +215,10 @@ pub fn generate(label: &str, kind: KeyKind) -> Result<KeyEntry> {
 /// Decode OpenSSH, PKCS#1 and PKCS#8 private keys, using the passphrase when
 /// the key is encrypted.
 pub fn decode_private_key(text: &str, passphrase: Option<&str>) -> Result<PrivateKey> {
-    let key = russh::keys::decode_secret_key(text, passphrase).context("私钥或口令无效")?;
+    // PPK parser errors can contain entire input lines. Do not retain them as
+    // an error source: callers display both Display and Debug error chains.
+    let key = russh::keys::decode_secret_key(text, passphrase)
+        .map_err(|_| anyhow::anyhow!("私钥或口令无效"))?;
     ensure!(!key.is_encrypted(), "私钥口令无效或缺失");
     Ok(key)
 }

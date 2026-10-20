@@ -10,6 +10,8 @@ use std::{
 use zeroize::Zeroizing;
 
 const MAX_SESSION_BYTES: u64 = 5 * 1024 * 1024;
+const MAX_ENTRIES: usize = 10_000;
+const MAX_DEPTH: usize = 64;
 
 #[derive(Clone, Debug)]
 pub struct HostDraft {
@@ -52,11 +54,35 @@ impl ImportSummary {
 /// Errors contain fixed reasons rather than session contents or credentials.
 pub fn scan(dir: impl AsRef<Path>) -> ScanResult {
     let mut result = ScanResult::default();
-    visit(dir.as_ref(), dir.as_ref(), &mut result);
+    let mut seen = 0;
+    visit(dir.as_ref(), dir.as_ref(), &mut result, &mut seen, 0);
     result
 }
 
-fn visit(root: &Path, dir: &Path, result: &mut ScanResult) {
+fn is_link(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        metadata.file_type().is_symlink()
+    }
+}
+
+fn visit(root: &Path, dir: &Path, result: &mut ScanResult, seen: &mut usize, depth: usize) {
+    if depth >= MAX_DEPTH {
+        result.skipped.push((dir.into(), "会话目录过深".into()));
+        return;
+    }
+    match fs::symlink_metadata(dir) {
+        Ok(metadata) if metadata.is_dir() && !is_link(&metadata) => {}
+        _ => {
+            result.skipped.push((dir.into(), "会话目录无效或为链接".into()));
+            return;
+        }
+    }
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(_) => {
@@ -66,6 +92,11 @@ fn visit(root: &Path, dir: &Path, result: &mut ScanResult) {
     };
     let mut paths = Vec::new();
     for entry in entries {
+        if *seen >= MAX_ENTRIES {
+            result.skipped.push((dir.into(), "会话目录项目过多".into()));
+            break;
+        }
+        *seen += 1;
         match entry {
             Ok(entry) => paths.push(entry.path()),
             Err(_) => result.skipped.push((dir.into(), "无法读取目录项".into())),
@@ -81,17 +112,10 @@ fn visit(root: &Path, dir: &Path, result: &mut ScanResult) {
             }
         };
         // Windows junctions are also reparse points; do not traverse them.
-        #[cfg(windows)]
-        let link = {
-            use std::os::windows::fs::MetadataExt;
-            metadata.file_attributes() & 0x400 != 0
-        };
-        #[cfg(not(windows))]
-        let link = metadata.file_type().is_symlink();
-        if link {
+        if is_link(&metadata) {
             result.skipped.push((path, "不导入链接目录或文件".into()));
         } else if metadata.is_dir() {
-            visit(root, &path, result);
+            visit(root, &path, result, seen, depth + 1);
         } else if metadata.is_file()
             && path
                 .extension()
