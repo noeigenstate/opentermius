@@ -96,10 +96,7 @@ impl LogBook {
         let mut entries = Vec::new();
         let mut skipped = false;
         if path.exists() {
-            ensure!(
-                fs::metadata(&path)?.len() < MAX_FILE_BYTES,
-                "连接历史文件过大"
-            );
+            ensure!(fs::metadata(&path)?.len() < MAX_FILE_BYTES, "{}", crate::i18n::t("Connection history file is too large"));
             let bytes = fs::read(&path)?;
             for line in String::from_utf8_lossy(&bytes).lines() {
                 let line = line.trim();
@@ -141,14 +138,14 @@ impl LogBook {
         address: &str,
         kind: &str,
     ) -> Result<String> {
-        ensure!(valid_kind(kind), "未知的会话类型");
+        ensure!(valid_kind(kind), "{}", crate::i18n::t("Unknown session type"));
         let id = Uuid::new_v4().to_string();
         let address = clean(address, MAX_ADDRESS);
         let label = match clean(label, MAX_LABEL) {
             value if value.is_empty() => clean(&address, MAX_LABEL),
             value => value,
         };
-        ensure!(!address.is_empty(), "会话地址不能为空");
+        ensure!(!address.is_empty(), "{}", crate::i18n::t("Session address cannot be empty"));
         let entry = LogEntry {
             id: id.clone(),
             host_id: clean(host_id, MAX_ID),
@@ -176,7 +173,7 @@ impl LogBook {
     /// Updates the status of an entry. Unknown ids are ignored so a late event
     /// from a cleared history stays harmless.
     pub fn update(&mut self, id: &str, status: &str, error: Option<&str>) -> Result<()> {
-        ensure!(valid_status(status), "未知的会话状态");
+        ensure!(valid_status(status), "{}", crate::i18n::t("Unknown session status"));
         let Some(index) = self.entries.iter().position(|entry| entry.id == id) else {
             return Ok(());
         };
@@ -250,7 +247,7 @@ impl LogBook {
         let parent = self
             .path
             .parent()
-            .ok_or_else(|| anyhow::anyhow!("无效的数据目录"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::i18n::t("Invalid data directory")))?;
         fs::create_dir_all(parent)?;
         let temporary = parent.join(format!("opentermius-logs-{}.tmp", Uuid::new_v4()));
         let result = (|| -> Result<()> {
@@ -337,32 +334,32 @@ pub fn elapsed_seconds(
 pub fn format_duration(seconds: i64) -> String {
     let seconds = seconds.max(0);
     if seconds < 60 {
-        return format!("{seconds}s");
+        return crate::tf!("{seconds}s", "seconds" => format!("{}", seconds));
     }
     let minutes = seconds / 60;
     if minutes < 60 {
         let rest = seconds % 60;
         return if rest == 0 {
-            format!("{minutes}m")
+            crate::tf!("{minutes}m", "minutes" => minutes.to_string())
         } else {
-            format!("{minutes}m {rest}s")
+            crate::tf!("{minutes}m {rest}s", "minutes" => format!("{}", minutes), "rest" => format!("{}", rest))
         };
     }
     let hours = minutes / 60;
     let rest = minutes % 60;
     if hours < 24 {
         return if rest == 0 {
-            format!("{hours}h")
+            crate::tf!("{hours}h", "hours" => hours.to_string())
         } else {
-            format!("{hours}h {rest}m")
+            crate::tf!("{hours}h {rest}m", "hours" => format!("{}", hours), "rest" => format!("{}", rest))
         };
     }
     let days = hours / 24;
     let rest = hours % 24;
     if rest == 0 {
-        format!("{days}d")
+        crate::tf!("{days}d", "days" => days.to_string())
     } else {
-        format!("{days}d {rest}h")
+        crate::tf!("{days}d {rest}h", "days" => format!("{}", days), "rest" => format!("{}", rest))
     }
 }
 

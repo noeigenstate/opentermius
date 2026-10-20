@@ -106,7 +106,7 @@ fn select_shell(preferred: Option<std::ffi::OsString>) -> Result<std::path::Path
         .into_iter()
         .map(PathBuf::from)
         .find(usable)
-        .context("没有可用的本地 Shell")
+        .context(crate::i18n::t("No local shell is available"))
 }
 
 #[cfg(all(test, unix))]
@@ -147,9 +147,9 @@ fn supervise(
             pixel_height: 0,
         })
         .context(if cfg!(windows) {
-            "无法创建本地伪终端，请确认 Windows 版本支持 ConPTY"
+            crate::i18n::t("Cannot create a local pseudo-terminal; check that Windows supports ConPTY")
         } else {
-            "无法创建本地伪终端"
+            crate::i18n::t("Cannot create a local pseudo-terminal")
         })?;
     #[cfg(windows)]
     let executable = std::path::PathBuf::from(
@@ -174,9 +174,9 @@ fn supervise(
         pair.slave
             .spawn_command(command)
             .context(if cfg!(windows) {
-                "无法启动本地 PowerShell"
+                crate::i18n::t("Cannot start local PowerShell")
             } else {
-                "无法启动本地 Shell"
+                crate::i18n::t("Cannot start local shell")
             })?,
     );
     let mut reader = pair.master.try_clone_reader()?;
@@ -200,7 +200,7 @@ fn supervise(
                         state.dirty = true;
                         let replies = state.terminal.take_responses();
                         if !replies.is_empty() && writes.try_send(replies).is_err() {
-                            state.fail("本地终端输入队列已满，无法回复终端查询");
+                            state.fail(crate::i18n::t("Local terminal input queue is full; cannot answer terminal query"));
                         }
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -223,7 +223,7 @@ fn supervise(
             }
             reader_eof.store(true, Ordering::Release);
         })
-        .context("无法启动终端读取线程")?;
+        .context(crate::i18n::t("Cannot start terminal reader thread"))?;
     let writer_screen = screen.clone();
     let writing = std::thread::Builder::new()
         .name("opentermius-pty-write".into())
@@ -237,7 +237,7 @@ fn supervise(
                 }
             }
         })
-        .context("无法启动终端输入线程")?;
+        .context(crate::i18n::t("Cannot start terminal input thread"))?;
     let accepted = ready.send(Ok(())).is_ok();
     if accepted {
         loop {
@@ -254,7 +254,7 @@ fn supervise(
                             Ok(()) => {
                                 let mut state = screen
                                     .lock()
-                                    .map_err(|_| anyhow::anyhow!("终端状态不可用"))?;
+                                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;
                                 state.terminal.resize(rows, cols);
                                 state.dirty = true;
                             }
@@ -317,13 +317,13 @@ async fn run(
             );
             let _ = done_tx.send(result);
         })
-        .context("无法启动本地终端管理线程")?;
+        .context(crate::i18n::t("Cannot start local terminal manager thread"))?;
     tokio::pin!(ready_rx);
     loop {
         tokio::select! {
             result=&mut ready_rx=>match result{
                 Ok(result)=>{result?;break},
-                Err(_)=>{drop(writes);drop(owner);worker.await.context("本地终端管理线程已退出")??;bail!("本地终端启动失败")}
+                Err(_)=>{drop(writes);drop(owner);worker.await.context(crate::i18n::t("Local terminal manager thread has exited"))??;bail!("{}", crate::i18n::t("Local terminal failed to start"))}
             },
             command=commands.recv()=>if matches!(command,None|Some(Command::Disconnect)){drop(writes);drop(owner);let _=worker.await;return Ok(())},
         }
@@ -333,33 +333,33 @@ async fn run(
             id: id.into(),
             connected: true,
             message: if cfg!(windows) {
-                "本地 PowerShell 已连接"
+                crate::i18n::t("Local PowerShell connected")
             } else {
-                "本地 Shell 已连接"
+                crate::i18n::t("Local shell connected")
             }
             .into(),
             error: false,
         })
         .await
-        .context("界面已关闭")?;
+        .context(crate::i18n::t("Window closed"))?;
     let mut frames = interval(Duration::from_millis(34));
     frames.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut pending = None;
     loop {
         tokio::select! {
-            permit=writes.reserve(),if pending.is_some()=>{permit.context("本地终端输入已关闭")?.send(pending.take().context("缺少终端输入")?);},
+            permit=writes.reserve(),if pending.is_some()=>{permit.context(crate::i18n::t("Local terminal input closed"))?.send(pending.take().context(crate::i18n::t("Terminal input is missing"))?);},
             command=commands.recv(),if pending.is_none()=>match command{
                 None|Some(Command::Disconnect)=>break,
                 Some(Command::Input(data))=>{pending=Some(data)},
                 Some(Command::Resize{cols,rows})=>{
                     let(cols,rows)=(cols.clamp(2,500),rows.clamp(2,300));
-                    owner.control.send(Control::Resize{cols,rows}).await.context("本地终端已关闭")?;
+                    owner.control.send(Control::Resize{cols,rows}).await.context(crate::i18n::t("Local terminal closed"))?;
                 }
-                Some(Command::Scroll(delta))=>{let mut state=screen.lock().map_err(|_|anyhow::anyhow!("终端状态不可用"))?;state.terminal.scroll(delta);state.dirty=true;},
-                Some(_)=>{events.send(Event::Transfer{id:id.into(),message:"本地终端不提供 SFTP，请连接 SSH 主机后使用文件功能".into(),error:true}).await.context("界面已关闭")?;}
+                Some(Command::Scroll(delta))=>{let mut state=screen.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;state.terminal.scroll(delta);state.dirty=true;},
+                Some(_)=>{events.send(Event::Transfer{id:id.into(),message:crate::i18n::t("Local terminals do not support SFTP. Connect to an SSH host to manage files").into(),error:true}).await.context(crate::i18n::t("Window closed"))?;}
             },
             _=frames.tick()=>{
-                let mut state=screen.lock().map_err(|_|anyhow::anyhow!("终端状态不可用"))?;
+                let mut state=screen.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;
                 ensure!(state.error.is_none(),"{}",state.error.as_deref().unwrap_or_default());
                 if state.dirty{
                     let snapshot=state.terminal.snapshot();
@@ -377,7 +377,7 @@ async fn run(
     drop(owner);
     tokio::time::timeout(Duration::from_secs(5), worker)
         .await
-        .context("本地终端关闭超时")??
-        .context("本地终端退出失败")?;
+        .context(crate::i18n::t("Local terminal shutdown timed out"))??
+        .context(crate::i18n::t("Local terminal exit failed"))?;
     Ok(())
 }

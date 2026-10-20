@@ -157,7 +157,7 @@ fn passwords_passphrases_and_key_names_never_enter_profiles_or_persistence() {
     let summary = import_xshell::merge(&mut store, result).unwrap();
     assert_eq!(summary.imported, 4);
     assert_eq!(summary.needs_key, 3);
-    assert!(summary.message().contains("选择私钥"));
+    assert!(summary.message().contains("Select a private key"));
     let json = fs::read_to_string(&store.path).unwrap();
     for marker in [
         "fake-password-marker",

@@ -655,7 +655,7 @@ async fn links_below_chosen_root_remain_blocked_for_uploads_and_downloads() {
         assert!(
             f.finished(index as u64 + 1, true, false)
                 .await
-                .contains("链接")
+                .contains("links cannot be followed")
         );
     }
     assert_eq!(
@@ -675,7 +675,7 @@ async fn links_below_chosen_root_remain_blocked_for_uploads_and_downloads() {
         local: link.0.join("saved.txt"),
     })
     .await;
-    assert!(f.finished(3, true, false).await.contains("链接"));
+    assert!(f.finished(3, true, false).await.contains("links cannot be followed"));
     let tree_link = DirectoryLink::new(dir.path().join("tree"), outside.path());
     f.send(Command::DownloadTree {
         local_root: dir.path().into(),
@@ -684,7 +684,7 @@ async fn links_below_chosen_root_remain_blocked_for_uploads_and_downloads() {
         local_dir: dir.path().into(),
     })
     .await;
-    assert!(f.finished(4, true, false).await.contains("链接"));
+    assert!(f.finished(4, true, false).await.contains("links cannot be followed"));
     assert!(!tree_link.0.join("file.txt").exists());
     assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 1);
     assert_eq!(
@@ -1092,7 +1092,7 @@ async fn unsafe_server_names_never_create_local_files() {
         .await;
         let message = f.finished(index as u64 + 1, true, false).await;
         assert!(
-            message.contains("文件名"),
+            message.contains("file name"),
             "unexpected rejection: {message}"
         );
         assert_eq!(
@@ -1193,7 +1193,7 @@ async fn bounded_queue_reports_rejections_and_all_accepted_jobs_can_be_cancelled
             assert!(finished.insert(transfer), "duplicate terminal event");
             if error {
                 rejected += 1;
-                assert!(message.contains("队列"));
+                assert!(message.contains("queue"));
             } else {
                 assert!(cancelled);
             }

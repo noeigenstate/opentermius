@@ -86,6 +86,7 @@ fn config_directory() -> Option<std::path::PathBuf> {
 fn read(ui: &AppWindow) -> Settings {
     let bridge = ui.global::<SettingsBridge>();
     let mut settings = Settings {
+        language: crate::i18n::Language::from_index(bridge.get_language()),
         font_size: bridge
             .get_terminal_font_size()
             .clamp(0, i32::from(u16::MAX)) as u16,
@@ -107,6 +108,9 @@ fn read(ui: &AppWindow) -> Settings {
 }
 
 fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
+    let locale = crate::i18n::set_language(settings.language);
+    slint::select_bundled_translation(locale).expect("bundled English and Chinese translations");
+    super::refresh_language(ui);
     opentermius::terminal::set_default_scrollback(settings.scrollback_lines);
     let bridge = ui.global::<SettingsBridge>();
     bridge.set_terminal_font_size(i32::from(settings.font_size));
@@ -117,6 +121,7 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     bridge.set_bell_mode(settings.bell.index());
     bridge.set_color_scheme(settings.color_scheme.index());
     bridge.set_appearance(settings.appearance.index());
+    bridge.set_language(settings.language.index());
     bridge.set_gpu_rendering(settings.gpu_rendering);
     ui.global::<Theme>()
         .set_dark(settings.appearance.is_dark(settings::system_dark()));
@@ -146,7 +151,7 @@ fn persist(settings: &Settings) -> bool {
         let result = state
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
             .and_then(|mut store| settings::persist(&mut store, settings.clone()));
         match result {
             Ok(saved) => {
@@ -159,7 +164,7 @@ fn persist(settings: &Settings) -> bool {
                         state.list_files(state.file_path.clone());
                     }
                 }
-                state.status("设置已保存", false);
+                state.status(crate::i18n::t("Settings saved"), false);
                 true
             }
             Err(error) => {
@@ -189,7 +194,7 @@ fn open_config_folder() {
         .arg(&directory)
         .spawn();
     if let Err(error) = result {
-        crate::with_state(|state| state.status(format!("无法打开配置目录：{error}"), true));
+        crate::with_state(|state| state.status(opentermius::tf!("Cannot open configuration folder: {error}", "error" => format!("{}", error)), true));
     }
 }
 
@@ -235,6 +240,7 @@ mod tests {
         let mut store = opentermius::store::Store::open(path.clone()).unwrap();
         let saved = Settings {
             appearance: Appearance::Dark,
+            language: crate::i18n::Language::English,
             ..Settings::default()
         };
         settings::persist(&mut store, saved.clone()).unwrap();
@@ -254,12 +260,12 @@ mod tests {
         assert!(!bridge.get_gpu_rendering());
         ui.invoke_open_section("settings".into());
         // Settings uses main's 720px column; click the GPU switch in Appearance.
-        click(&ui, 887., 235.);
+        click(&ui, 887., 293.);
         assert!(current().gpu_rendering);
         assert!(opentermius::store::Store::open(path.clone()).unwrap().data.settings.gpu_rendering);
-        click(&ui, 887., 235.);
+        click(&ui, 887., 293.);
         assert!(!current().gpu_rendering);
-        click(&ui, 887., 235.);
+        click(&ui, 887., 293.);
         assert!(current().gpu_rendering);
         for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
             bridge.set_appearance(appearance.index());
@@ -277,6 +283,37 @@ mod tests {
                 appearance
             );
         }
+
+        // Runtime language selection persists and refreshes already-visible messages.
+        crate::with_state(|state| {
+            state.remote_entries = vec![opentermius::ssh::RemoteFile {
+                name: "Connected".into(), path: "/Connected".into(), size: 1,
+                is_dir: false, modified: "0".into(), permissions: None,
+            }];
+            state.transfers.insert(7, ("test".into(), crate::TransferRow {
+                id: "7".into(), name: "Upload · Connected".into(), detail: "Queued".into(),
+                percent: 0, pending: true,
+            }));
+        });
+        ui.global::<crate::KeychainBridge>().set_message("Key deleted".into());
+        bridge.set_language(crate::i18n::Language::Chinese.index());
+        bridge.invoke_apply();
+        assert_eq!(crate::i18n::t("Connected"), "已连接");
+        assert_eq!(ui.get_status_text(), "设置已保存");
+        assert_eq!(ui.global::<crate::KeychainBridge>().get_message(), "密钥已删除");
+        let file = slint::Model::row_data(&ui.get_files(), 0).unwrap();
+        assert_eq!(file.name, "Connected");
+        assert_eq!(file.kind, "文件");
+        let transfer = slint::Model::row_data(&ui.get_transfers(), 0).unwrap();
+        assert_eq!(transfer.name, "上传 · Connected");
+        assert_eq!(transfer.detail, "排队中");
+        assert_eq!(opentermius::store::Store::open(path.clone()).unwrap().data.settings.language, crate::i18n::Language::Chinese);
+        bridge.set_language(crate::i18n::Language::English.index());
+        bridge.invoke_apply();
+        assert_eq!(crate::i18n::t("Connected"), "Connected");
+        assert_eq!(ui.global::<crate::KeychainBridge>().get_message(), "Key deleted");
+        assert_eq!(slint::Model::row_data(&ui.get_files(), 0).unwrap().kind, "File");
+        assert_eq!(slint::Model::row_data(&ui.get_transfers(), 0).unwrap().name, "Upload · Connected");
 
         // The SFTP toolbar and Settings share the same persisted hidden-file switch.
         crate::with_state(|state| {

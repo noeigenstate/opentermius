@@ -50,7 +50,7 @@ component LogTableRow inherits Rectangle {
     }
     Rectangle { x: root.table-width * root.offsets[3]; y: 0px; width: root.table-width * root.cols[3]; height: parent.height;
         HorizontalLayout { padding-left: Theme.space-16; padding-right: Theme.space-8; spacing: Theme.space-8; cross-axis-alignment: center;
-            StatusDot { kind: root.entry.status == "Connected" ? "ok" : root.entry.status == "Failed" ? "error" : root.entry.status == "Connecting" ? "busy" : "idle"; }
+            StatusDot { kind: root.entry.status == @tr("Connected") ? "ok" : root.entry.status == @tr("Failed") ? "error" : root.entry.status == @tr("Connecting") ? "busy" : "idle"; }
             Text { text: root.entry.status; color: Theme.text; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
         }
     }
@@ -60,7 +60,7 @@ component LogTableRow inherits Rectangle {
     reconnect := Action {
         x: parent.width - root.action-width + Theme.space-4; y: (parent.height - self.height) / 2;
         width: root.action-width - Theme.space-12;
-        kind: "flat"; size: "s"; text: "Connect again"; visible: root.entry.can-connect;
+        kind: "flat"; size: "s"; text: @tr("Connect again"); visible: root.entry.can-connect;
         clicked => { LogsBridge.connect-again(root.entry.host-id); }
     }
     Rectangle { x: Theme.space-12; y: parent.height - 1px; width: parent.width - Theme.space-24; height: 1px; background: Theme.divider; }
@@ -75,14 +75,14 @@ export component LogsPage inherits Rectangle {
     property <length> action-width: 120px;
     VerticalLayout { spacing: 0px;
         PageHeader {
-            placeholder: "Filter logs"; search <=> LogsBridge.query; show-primary: false;
+            placeholder: @tr("Filter logs"); search <=> LogsBridge.query; show-primary: false;
             search-changed => { LogsBridge.refresh(); }
             search-accepted => { LogsBridge.refresh(); }
         }
         PageToolbar {
-            Caption { text: LogsBridge.query == "" ? (LogsBridge.total == 1 ? "1 session" : LogsBridge.total + " sessions") : LogsBridge.rows.length + " of " + LogsBridge.total + " shown"; }
+            Caption { text: LogsBridge.query == "" ? (LogsBridge.total == 1 ? @tr("1 session") : LogsBridge.total + @tr(" sessions")) : LogsBridge.rows.length + @tr(" of ") + LogsBridge.total + @tr(" shown"); }
             Rectangle { horizontal-stretch: 1; }
-            Action { kind: "danger-flat"; text: "Clear logs"; has-icon: true; icon: @image-url("../icons/trash.svg"); disabled: LogsBridge.total == 0; clicked => { root.confirm-clear = true; } }
+            Action { kind: "danger-flat"; text: @tr("Clear logs"); has-icon: true; icon: @image-url("../icons/trash.svg"); disabled: LogsBridge.total == 0; clicked => { root.confirm-clear = true; } }
         }
         if LogsBridge.storage-error != "": Rectangle {
             height: Theme.input-height; background: Theme.danger-soft;
@@ -91,8 +91,8 @@ export component LogsPage inherits Rectangle {
         Rectangle { vertical-stretch: 1; background: Theme.base;
             if LogsBridge.rows.length == 0: EmptyState {
                 icon: LogsBridge.query == "" ? @image-url("../icons/history.svg") : @image-url("../icons/search.svg");
-                title: LogsBridge.total == 0 ? "No log entries" : "No matching sessions";
-                description: LogsBridge.total == 0 ? "Connect to a host or open a terminal to see it here." : "Try a different host, address or status.";
+                title: LogsBridge.total == 0 ? @tr("No log entries") : @tr("No matching sessions");
+                description: LogsBridge.total == 0 ? @tr("Connect to a host or open a terminal to see it here.") : @tr("Try a different host, address or status.");
                 action-visible: false;
             }
             if LogsBridge.rows.length > 0: Rectangle {
@@ -103,7 +103,7 @@ export component LogsPage inherits Rectangle {
                     Rectangle { width: parent.width; height: Theme.table-header-height; background: Theme.high;
                         heading := Rectangle { x: 0px; y: 0px; width: parent.width - root.action-width; height: parent.height;
                             // Explicit cells keep intrinsic label widths from shifting columns.
-                            for label[index] in ["Host / address", "Started", "Duration", "Status", "Details"]: TableHeader {
+                            for label[index] in [@tr("Host / address"), @tr("Started"), @tr("Duration"), @tr("Status"), @tr("Details")]: TableHeader {
                                 x: heading.width * root.offsets[index]; y: 0px;
                                 width: heading.width * root.cols[index]; height: Theme.table-header-height;
                                 labels: [label]; cols: [1];
@@ -118,15 +118,15 @@ export component LogsPage inherits Rectangle {
         }
         Rectangle { height: Theme.input-height; background: Theme.high;
             Rectangle { x: 0px; y: 0px; height: 1px; width: parent.width; background: Theme.divider; }
-            Caption { x: Theme.gutter; width: parent.width - 2 * Theme.gutter; height: parent.height; text: "History is stored locally. Credentials and terminal output are never recorded."; overflow: elide; }
+            Caption { x: Theme.gutter; width: parent.width - 2 * Theme.gutter; height: parent.height; text: @tr("History is stored locally. Credentials and terminal output are never recorded."); overflow: elide; }
         }
     }
     Timer { interval: 1000ms; running: true; triggered => { LogsBridge.refresh(); } }
     init => { LogsBridge.refresh(); }
     Dialog {
-        open <=> root.confirm-clear; title: "Clear connection history?";
-        description: "This removes every connection log stored on this computer. It cannot be undone.";
-        confirm-text: "Clear logs"; confirm-kind: "danger";
+        open <=> root.confirm-clear; title: @tr("Clear connection history?");
+        description: @tr("This removes every connection log stored on this computer. It cannot be undone.");
+        confirm-text: @tr("Clear logs"); confirm-kind: "danger";
         confirm => { root.confirm-clear = false; LogsBridge.clear(); }
     }
 }

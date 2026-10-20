@@ -47,7 +47,7 @@ component SnippetItem inherits Rectangle {
             icon: @image-url("../icons/play.svg");
             visible: row.hovered || self.hovered || row.selected;
             accessible-role: button;
-            accessible-label: "Run snippet";
+            accessible-label: @tr("Run snippet");
             clicked => { SnippetsBridge.run(root.snippet.id); }
         }
     }
@@ -59,9 +59,9 @@ export component SnippetsPage inherits Rectangle {
     HorizontalLayout { spacing: 0px;
         VerticalLayout { spacing: 0px; horizontal-stretch: 1;
             PageHeader {
-                placeholder: "Search snippets";
+                placeholder: @tr("Search snippets");
                 search <=> SnippetsBridge.query;
-                primary-text: "New snippet";
+                primary-text: @tr("New snippet");
                 primary-has-icon: true;
                 primary-icon: @image-url("../icons/plus.svg");
                 search-changed => { SnippetsBridge.search(self.search); }
@@ -69,16 +69,16 @@ export component SnippetsPage inherits Rectangle {
                 primary-clicked => { SnippetsBridge.create(); }
             }
             PageToolbar {
-                Action { kind: "flat"; text: "Import"; disabled: true; }
+                Action { kind: "flat"; text: @tr("Import"); disabled: true; }
                 Rectangle { horizontal-stretch: 1; }
-                Caption { text: SnippetsBridge.snippets.length == 1 ? "1 snippet" : SnippetsBridge.snippets.length + " snippets"; }
+                Caption { text: SnippetsBridge.snippets.length == 1 ? @tr("1 snippet") : SnippetsBridge.snippets.length + @tr(" snippets"); }
             }
             content := Rectangle { background: Theme.base; vertical-stretch: 1;
                 if SnippetsBridge.snippets.length == 0: EmptyState {
                     icon: SnippetsBridge.query == "" ? @image-url("../icons/snippets.svg") : @image-url("../icons/search.svg");
-                    title: SnippetsBridge.query == "" ? "No snippets yet" : "No matching snippets";
-                    description: SnippetsBridge.query == "" ? "Save commands you run often and paste them into any session." : "Try another name, command, or tag.";
-                    action-text: "New snippet";
+                    title: SnippetsBridge.query == "" ? @tr("No snippets yet") : @tr("No matching snippets");
+                    description: SnippetsBridge.query == "" ? @tr("Save commands you run often and paste them into any session.") : @tr("Try another name, command, or tag.");
+                    action-text: @tr("New snippet");
                     action-visible: SnippetsBridge.query == "" && !SnippetsBridge.editing;
                     action-clicked => { SnippetsBridge.create(); }
                 }
@@ -91,18 +91,18 @@ export component SnippetsPage inherits Rectangle {
             }
         }
         if SnippetsBridge.editing: DetailPanel {
-            title: SnippetsBridge.draft-id == "" ? "New snippet" : "Edit snippet";
+            title: SnippetsBridge.draft-id == "" ? @tr("New snippet") : @tr("Edit snippet");
             more-visible: SnippetsBridge.draft-id != "";
-            primary-text: "Save";
+            primary-text: @tr("Save");
             close => { SnippetsBridge.cancel(); }
             more-clicked => { root.delete-menu-open = true; }
             primary-clicked => { SnippetsBridge.save(SnippetsBridge.draft-name, SnippetsBridge.draft-tags, SnippetsBridge.draft-script); }
-            Card { title: "Label";
-                Field { label: "Name"; placeholder: "e.g. Deploy staging"; text <=> SnippetsBridge.draft-name; }
-                Field { label: "Tags"; placeholder: "Comma separated"; text <=> SnippetsBridge.draft-tags; }
+            Card { title: @tr("Label");
+                Field { label: @tr("Name"); placeholder: @tr("e.g. Deploy staging"); text <=> SnippetsBridge.draft-name; }
+                Field { label: @tr("Tags"); placeholder: @tr("Comma separated"); text <=> SnippetsBridge.draft-tags; }
             }
-            Card { title: "Script";
-                TextArea { height: 200px; mono: true; filled: false; placeholder: "Enter one or more commands..."; text <=> SnippetsBridge.draft-script; }
+            Card { title: @tr("Script");
+                TextArea { height: 200px; mono: true; filled: false; placeholder: @tr("Enter one or more commands..."); text <=> SnippetsBridge.draft-script; }
             }
             if SnippetsBridge.error-text != "": Text {
                 text: SnippetsBridge.error-text; color: Theme.danger;
@@ -115,7 +115,7 @@ export component SnippetsPage inherits Rectangle {
         anchor-x: root.width - 200px - Theme.gutter;
         anchor-y: Theme.header-height;
         MenuItem {
-            text: "Delete snippet"; danger: true; has-icon: true;
+            text: @tr("Delete snippet"); danger: true; has-icon: true;
             icon: @image-url("../icons/trash.svg");
             clicked => { root.delete-menu-open = false; SnippetsBridge.delete(SnippetsBridge.draft-id); }
         }

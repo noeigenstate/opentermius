@@ -319,7 +319,7 @@ fn host_deletion_releases_key_but_preserves_detectable_orphan_forward() {
             .delete_key(&entry.id)
             .unwrap_err()
             .to_string()
-            .contains("正在使用")
+            .contains("is using this key")
     );
     assert_eq!(snapshot(&store), before);
     assert_eq!(snapshot(&Store::open(store.path.clone()).unwrap()), before);
@@ -378,7 +378,7 @@ fn garbage_imports_and_recovery_are_bounded_and_do_not_mutate_config() {
         recovery::restore(&mut store, &huge, None, RestoreMode::Replace)
             .unwrap_err()
             .to_string()
-            .contains("过长")
+            .contains("too long")
     );
     assert!(
         store::parse_known_hosts(&"x".repeat(1024 * 1024))

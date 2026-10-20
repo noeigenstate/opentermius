@@ -44,7 +44,7 @@ impl Renderer {
             "software" => Ok(Self::Software),
             "femtovg" => Ok(Self::Femtovg),
             "skia" => Ok(Self::Skia),
-            _ => bail!("无效的渲染器 {value:?}；请使用 software、femtovg 或 skia"),
+            _ => bail!("{}", opentermius::tf!("Invalid renderer {value:?}; use software, femtovg or skia", "value:?" => format!("{:?}", value))),
         }
     }
 }
@@ -58,7 +58,7 @@ pub fn requested(
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         if arg == "--renderer" {
-            cli = Some(args.next().context("--renderer 缺少参数")?.as_str());
+            cli = Some(args.next().context(crate::i18n::t("--renderer requires an argument"))?.as_str());
         } else if let Some(value) = arg.strip_prefix("--renderer=") {
             cli = Some(value);
         }
@@ -78,7 +78,7 @@ pub fn requested(
 pub struct PlatformFailure;
 impl std::fmt::Display for PlatformFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("无法初始化窗口或渲染上下文")
+        f.write_str(crate::i18n::t("Cannot initialize window or rendering context"))
     }
 }
 impl std::error::Error for PlatformFailure {}
@@ -99,7 +99,7 @@ pub fn retry_software() -> anyhow::Result<i32> {
             std::process::id().to_string(),
         )
         .status()
-        .context("无法启动软件渲染回退进程")?;
+        .context(crate::i18n::t("Cannot start software renderer fallback process"))?;
     Ok(status.code().unwrap_or(1))
 }
 
@@ -234,7 +234,7 @@ impl CustomApplicationHandler for WindowPolish {
                     Ok(())
                 })();
                 if let Err(error) = result {
-                    eprintln!("无法记录首帧计时：{error}");
+                    eprintln!("{}", opentermius::tf!("Cannot record first frame timing: {error}", "error" => format!("{}", error)));
                 }
             }
         }
