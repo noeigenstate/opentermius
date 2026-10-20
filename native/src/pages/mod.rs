@@ -5,7 +5,7 @@ mod keychain;
 mod forwarding;
 mod snippets;
 mod known_hosts;
-mod logs;
+pub(crate) mod logs;
 mod settings;
 
 pub fn install(ui: &AppWindow) {

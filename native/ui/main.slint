@@ -4,9 +4,9 @@ import { KeychainBridge, KeychainPage } from "pages/keychain.slint";
 import { ForwardingBridge, ForwardingPage } from "pages/forwarding.slint";
 import { SnippetsBridge, SnippetsPage } from "pages/snippets.slint";
 import { KnownHostsBridge, KnownHostsPage } from "pages/known_hosts.slint";
-import { LogsBridge, LogsPage } from "pages/logs.slint";
+import { LogsBridge, LogsPage, LogRow } from "pages/logs.slint";
 import { SettingsBridge, SettingsPage } from "pages/settings.slint";
-export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge }
+export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge, LogRow }
 
 export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
 export struct TabRow { id: string, title: string, status: string }
