@@ -365,6 +365,10 @@ impl Store {
     pub fn add_key(&mut self, mut entry: KeyEntry) -> Result<()> {
         entry.validate()?;
         ensure!(
+            !self.data.keys.iter().any(|key| key.id == entry.id),
+            "密钥 ID 已存在"
+        );
+        ensure!(
             !self
                 .data
                 .keys
