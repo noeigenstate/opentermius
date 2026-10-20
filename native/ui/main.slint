@@ -8,13 +8,14 @@ import { LogsBridge, LogsPage } from "pages/logs.slint";
 import { SettingsBridge, SettingsPage } from "pages/settings.slint";
 export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge }
 
-export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
+export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool, tags: string }
 export struct TabRow { id: string, title: string, status: string }
 export struct TerminalRun { text: string, row: int, col: int, width: int, fg: color, bg: color, bold: bool, underline: bool }
 export struct SelectionRun { row: int, col: int, width: int }
 export struct FileRow { name: string, is-directory: bool, size: string, modified: string, kind: string }
 export struct GroupRow { name: string, count: int }
-export struct HostDraft { id: string, name: string, host: string, port: string, username: string, group: string, auth-index: int, key-path: string, secret: string, remember: bool }
+export struct TagRow { name: string, count: int }
+export struct HostDraft { id: string, name: string, host: string, port: string, username: string, group: string, auth-index: int, key-path: string, secret: string, remember: bool, tags: string }
 
 component FileTableRow inherits Rectangle {
     in property <FileRow> file;
@@ -81,11 +82,36 @@ export component AppWindow inherits Window {
     property <bool> settings-open: false;
     property <bool> menu-open: false;
     property <bool> host-picker-open: false;
-    property <HostDraft> draft;
-    property <string> search;
+    in-out property <HostDraft> draft;
+    in-out property <string> search;
     property <string> quick-host;
-    property <string> selected-host;
+    in-out property <string> selected-host;
+    in-out property <string> selected-host-name;
+    in-out property <int> host-selection-index: -1;
     property <bool> editor-focus-requested: false;
+    property <bool> search-focus-requested: false;
+    property <length> selection-scroll-y;
+    in-out property <string> host-view-mode: "grid";
+    in-out property <string> host-sort-mode: "name";
+    in-out property <string> host-tag-filter: "";
+    in property <[TagRow]> host-tags;
+    property <bool> tag-menu-open: false;
+    property <bool> sort-menu-open: false;
+    property <length> toolbar-popup-x;
+    property <length> toolbar-popup-y;
+    property <bool> host-menu-open: false;
+    property <string> host-menu-id;
+    property <string> host-menu-name;
+    property <length> host-menu-x;
+    property <length> host-menu-y;
+    property <bool> delete-open: false;
+    property <string> delete-id;
+    property <string> delete-name;
+    property <bool> group-editing: false;
+    property <[GroupRow]> group-suggestions;
+    property <bool> group-rename-open: false;
+    property <string> group-rename-old;
+    property <string> group-rename-value;
     property <int> grid-cols: Math.max(1, Math.floor((host-grid.width - 40px) / 360px));
     property <length> group-height: root.groups.length > 0 ? 48px + Math.ceil(root.groups.length / root.grid-cols) * 76px : 0px;
     property <int> draft-count: root.editor-open && root.creating-host ? 1 : 0;
@@ -115,6 +141,15 @@ export component AppWindow inherits Window {
     callback export-hosts;
     callback search-hosts(string);
     callback select-group(string);
+    callback set-host-view(string);
+    callback set-host-sort(string);
+    callback set-host-tag-filter(string);
+    callback move-host-selection(int);
+    callback duplicate-host(string);
+    callback copy-host-address(string);
+    callback open-host-sftp(string);
+    callback rename-group(string, string);
+    callback suggest-host-groups(string) -> [GroupRow];
     callback pick-key() -> string;
     callback show-settings;
     callback select-terminal(int, int, bool);
@@ -132,7 +167,7 @@ export component AppWindow inherits Window {
     public function new-host() {
         if !root.save-current-draft() { return; }
         root.draft = root.edit-host(""); root.draft.port = ""; root.creating-host = true; root.editor-open = true; root.editor-menu-open = false;
-        root.selected-host = root.draft.id; root.editor-focus-requested = true;
+        root.selected-host = root.draft.id; root.selected-host-name = ""; root.editor-focus-requested = true; root.group-editing = false;
     }
     public function save-current-draft() -> bool {
         if root.editor-open && root.draft.host != "" { return root.save-host(root.draft); }
@@ -142,13 +177,38 @@ export component AppWindow inherits Window {
         if root.editor-open && root.draft.id == host-id { return; }
         if !root.save-current-draft() { return; }
         root.draft = root.edit-host(host-id); root.selected-host = host-id; root.creating-host = false; root.editor-open = true; root.editor-menu-open = false; root.editor-focus-requested = true;
+        root.group-editing = false;
     }
     public function activate-host(host-id: string) {
         if !root.save-current-draft() { return; }
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
     public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = true; root.section = name; } }
-    public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
+    public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.group-editing = false; root.draft.secret = ""; }
+    public function open-host-menu(id: string, name: string, x: length, y: length) {
+        host-focus.focus();
+        root.selected-host = id; root.selected-host-name = name;
+        root.host-menu-id = id; root.host-menu-name = name; root.host-menu-x = x; root.host-menu-y = y;
+        root.host-menu-open = true; root.tag-menu-open = false; root.sort-menu-open = false;
+    }
+    public function ask-delete(id: string, name: string) {
+        host-focus.focus();
+        root.delete-id = id; root.delete-name = name; root.delete-open = true; root.host-menu-open = false;
+    }
+    function reveal-selection(y: length, height: length, viewport: length, current: length) {
+        if y < -current { root.selection-scroll-y = -y; }
+        else if y + height > viewport - current { root.selection-scroll-y = viewport - y - height; }
+        else { root.selection-scroll-y = current; }
+    }
+    page-focus := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape && root.group-rename-open { root.group-rename-open = false; accept }
+            else if event.text == Key.Escape && root.delete-open { root.delete-open = false; accept }
+            else if event.text == Key.Escape && (root.tag-menu-open || root.sort-menu-open || root.host-menu-open) { root.tag-menu-open = false; root.sort-menu-open = false; root.host-menu-open = false; accept }
+            else if root.host-section && !root.delete-open && !root.group-rename-open && event.modifiers.control && (event.text == "f" || event.text == "F") { root.search-focus-requested = true; accept }
+            else if event.text == Key.Escape && root.group-editing { root.group-editing = false; accept }
+            else { reject }
+        }
     terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
     VerticalLayout { spacing: 0px;
         Rectangle { height: 51px; background: Theme.lowest;
@@ -213,10 +273,11 @@ export component AppWindow inherits Window {
             Rectangle { horizontal-stretch: 1; background: Theme.base;
                 VerticalLayout { spacing: 0px;
                     if root.host-section: Rectangle { height: 56px; background: Theme.high;
+                        Timer { interval: 16ms; running: root.search-focus-requested; triggered => { search-input.focus(); root.search-focus-requested = false; } }
                         HorizontalLayout { padding: 8px; spacing: 8px;
                             Rectangle { horizontal-stretch: 1; height: 36px; background: #e6ebed; border-width: 1px; border-color: #d5dde0; border-radius: 10px;
                                 HorizontalLayout { padding: 5px; spacing: 0px;
-                                    Input { border-width: 0px; min-height: 24px; max-height: 24px; placeholder-color: Theme.secondary; placeholder-text: "Type \"ssh user@hostname -p port\" to connect..."; text <=> root.search; horizontal-stretch: 1; edited => { root.search-hosts(self.text); } accepted => { root.quick-connect(self.text); } }
+                                    search-input := Input { border-width: 0px; min-height: 24px; max-height: 24px; placeholder-color: Theme.secondary; placeholder-text: "Type \"ssh user@hostname -p port\" to connect..."; text <=> root.search; horizontal-stretch: 1; edited => { root.search-hosts(self.text); } accepted => { root.quick-connect(self.text); } }
                                     Action { text: "Connect"; min-height: 24px; max-height: 24px; disabled: root.search == ""; clicked => { root.quick-connect(root.search); } }
                                 }
                             }
@@ -240,25 +301,60 @@ export component AppWindow inherits Window {
                         }
                         Rectangle { x: parent.width - 132px; y: 7px; width: 110px; height: 30px; background: transparent;
                             HorizontalLayout { spacing: 10px;
-                                for tool-icon in [@image-url("icons/grid.svg"),@image-url("icons/tag.svg"),@image-url("icons/calendar.svg")]: Rectangle { width: 30px; height: 30px; background: transparent;
-                                    Image { source: tool-icon; colorize: Theme.text; x: 8px; y: 8px; width: 14px; height: 14px; }
+                                Rectangle { width: 30px; height: 30px; border-radius: 5px;
+                                    background: root.host-view-mode == "list" ? #798c9426 : view-touch.has-hover ? #798c941a : transparent;
+                                    Image { source: root.host-view-mode == "list" ? @image-url("icons/list.svg") : @image-url("icons/grid.svg"); colorize: root.host-view-mode == "list" ? Theme.accent : Theme.text; x: 8px; y: 8px; width: 14px; height: 14px; }
+                                    view-touch := TouchArea { clicked => { root.set-host-view(root.host-view-mode == "list" ? "grid" : "list"); root.tag-menu-open = false; root.sort-menu-open = false; root.host-menu-open = false; } }
+                                }
+                                Rectangle { width: 30px; height: 30px; border-radius: 5px;
+                                    background: root.host-tag-filter != "" || root.tag-menu-open ? #798c9426 : tag-touch.has-hover ? #798c941a : transparent;
+                                    Image { source: @image-url("icons/tag.svg"); colorize: root.host-tag-filter != "" ? Theme.accent : Theme.text; x: 8px; y: 8px; width: 14px; height: 14px; }
+                                    tag-touch := TouchArea { clicked => { host-focus.focus(); root.toolbar-popup-x = self.absolute-position.x - 194px; root.toolbar-popup-y = self.absolute-position.y + 36px; root.tag-menu-open = !root.tag-menu-open; root.sort-menu-open = false; root.host-menu-open = false; } }
+                                }
+                                Rectangle { width: 30px; height: 30px; border-radius: 5px;
+                                    background: root.sort-menu-open ? #798c9426 : sort-touch.has-hover ? #798c941a : transparent;
+                                    Image { source: @image-url("icons/calendar.svg"); colorize: root.host-sort-mode != "name" ? Theme.accent : Theme.text; x: 8px; y: 8px; width: 14px; height: 14px; }
+                                    sort-touch := TouchArea { clicked => { host-focus.focus(); root.toolbar-popup-x = self.absolute-position.x - 184px; root.toolbar-popup-y = self.absolute-position.y + 36px; root.sort-menu-open = !root.sort-menu-open; root.tag-menu-open = false; root.host-menu-open = false; } }
                                 }
                             }
                         }
                     }
                     host-grid := Rectangle { visible: root.host-section; vertical-stretch: root.host-section ? 1 : 0; min-height: 0px; max-height: root.host-section ? 100000px : 0px; background: Theme.base;
-                        host-focus := FocusScope { key-pressed(event) => { if event.text == Key.Return && root.selected-host != "" { root.activate-host(root.selected-host); accept } else { reject } } }
+                        host-focus := FocusScope {
+                            init => { self.focus(); }
+                            key-pressed(event) => {
+                                if root.delete-open && event.text == Key.Escape { root.delete-open = false; accept }
+                                else if root.group-rename-open && event.text == Key.Escape { root.group-rename-open = false; accept }
+                                else if (root.tag-menu-open || root.sort-menu-open || root.host-menu-open) && event.text == Key.Escape { root.tag-menu-open = false; root.sort-menu-open = false; root.host-menu-open = false; accept }
+                                else if root.delete-open || root.group-rename-open || root.tag-menu-open || root.sort-menu-open || root.host-menu-open { accept }
+                                else if root.editor-open { reject }
+                                else if event.text == Key.Return && root.selected-host != "" { root.activate-host(root.selected-host); accept }
+                                else if event.text == Key.Delete && root.selected-host != "" { root.ask-delete(root.selected-host, root.selected-host-name); accept }
+                                else if event.text == Key.UpArrow { root.move-host-selection(root.host-view-mode == "grid" ? -root.grid-cols : -1); accept }
+                                else if event.text == Key.DownArrow { root.move-host-selection(root.host-view-mode == "grid" ? root.grid-cols : 1); accept }
+                                else if event.text == Key.LeftArrow { root.move-host-selection(-1); accept }
+                                else if event.text == Key.RightArrow { root.move-host-selection(1); accept }
+                                else { reject }
+                            }
+                        }
                         if root.hosts.length == 0 && !root.editor-open: Rectangle {
                             width: Math.min(500px, parent.width - 40px); height: 260px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
                             Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; border-width: 1px; border-color: #798c940d; background: #798c941a;
                                 Image { source: @image-url("icons/hosts.svg"); x: 20px; y: 20px; width: 20px; height: 20px; }
                             }
-                            Text { y: 90px; height: 28px; width: parent.width; text: root.search == "" ? "Create host" : "No matching hosts"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
-                            Text { y: 125px; height: 24px; width: parent.width; text: root.search == "" ? "Save your connection details as hosts to connect in one click." : "Try another label, address, or group."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
-                            Input { x: (parent.width - self.width) / 2; y: 165px; width: 384px; height: 36px; placeholder-color: Theme.secondary; placeholder-text: "Type IP or Hostname"; text <=> root.quick-host; init => { self.focus(); } accepted => { root.new-host(); root.draft.host = root.quick-host; } }
-                            Action { x: (parent.width - self.width) / 2; y: 221px; width: 384px; height: 36px; border-radius: 10px; text: "Continue"; primary: true; clicked => { root.new-host(); root.draft.host = root.quick-host; } }
+                            Text { y: 90px; height: 28px; width: parent.width; text: root.host-tag-filter != "" ? "No hosts with this tag" : root.search == "" ? "Create host" : "No matching hosts"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
+                            Text { y: 125px; height: 24px; width: parent.width; text: root.host-tag-filter != "" ? "Clear the tag filter or add the tag to a host." : root.search == "" ? "Save your connection details as hosts to connect in one click." : "Try another label, address, or group."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+                            if root.search == "" && root.host-tag-filter == "": Input { x: (parent.width - self.width) / 2; y: 165px; width: 384px; height: 36px; placeholder-color: Theme.secondary; placeholder-text: "Type IP or Hostname"; text <=> root.quick-host; init => { self.focus(); } accepted => { root.new-host(); root.draft.host = root.quick-host; } }
+                            if root.search == "" && root.host-tag-filter == "": Action { x: (parent.width - self.width) / 2; y: 221px; width: 384px; height: 36px; border-radius: 10px; text: "Continue"; primary: true; clicked => { root.new-host(); root.draft.host = root.quick-host; } }
                         }
-                        if root.hosts.length > 0 || root.editor-open: ScrollView {
+                        if (root.hosts.length > 0 || root.editor-open) && root.host-view-mode == "grid": ScrollView {
+                            property <int> selection-index: root.host-selection-index;
+                            changed selection-index => {
+                                if self.selection-index >= 0 {
+                                    root.reveal-selection(root.group-height + 53px + Math.floor((self.selection-index + root.draft-count) / root.grid-cols) * 73px, 60px, self.height, self.content-y);
+                                    self.content-y = root.selection-scroll-y;
+                                }
+                            }
                             content-height: root.group-height + 58px + Math.ceil((root.hosts.length + root.draft-count) / root.grid-cols) * 73px;
                             if root.groups.length > 0: Text { x: 20px; y: 20px; text: "Groups"; color: Theme.text; font-weight: 600; font-size: 13px; }
                             for group[index] in root.groups: Rectangle {
@@ -274,10 +370,22 @@ export component AppWindow inherits Window {
                                         Text { text: group.name; color: Theme.text; font-size: 14px; overflow: elide; }
                                         Text { text: group.count + " Hosts"; color: Theme.secondary; font-size: 11px; }
                                     }
+                                    Rectangle { horizontal-stretch: 1; background: transparent; }
+                                    Rectangle { width: 24px; background: transparent; visible: group-touch.has-hover || group-more.has-hover;
+                                        Image { source: @image-url("icons/more.svg"); x: 5px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+                                        group-more := TouchArea { clicked => { root.group-rename-old = group.name; root.group-rename-value = group.name; root.group-rename-open = true; } }
+                                    }
                                 }
-                                group-touch := TouchArea { clicked => { root.search = group.name; root.select-group(group.name); } }
+                                group-touch := TouchArea { width: parent.width - 44px; clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.search = group.name; root.select-group(group.name); } }
                             }
                             Text { x: 30px; y: 20px + root.group-height; text: "Hosts"; color: Theme.text; font-weight: 500; font-size: 14px; }
+                            if root.host-tag-filter != "": Rectangle { x: 80px; y: root.group-height + 17px; width: 150px; height: 24px; border-radius: 6px; background: #dceeff;
+                                HorizontalLayout { padding-left: 8px; padding-right: 4px; spacing: 4px;
+                                    Text { text: "#" + root.host-tag-filter; color: Theme.accent; font-size: 11px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                    Text { text: "×"; color: Theme.accent; font-size: 13px; vertical-alignment: center; }
+                                }
+                                TouchArea { clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); } }
+                            }
                             if root.draft-count > 0: Rectangle {
                                 x: 30px; y: root.group-height + 53px; width: Math.min(350px, host-grid.width - 60px); height: 60px; border-radius: 15px;
                                 background: white; border-width: 2px; border-color: Theme.accent;
@@ -303,16 +411,92 @@ export component AppWindow inherits Window {
                                     }
                                     VerticalLayout { spacing: 3px;
                                         Text { text: host.name; color: Theme.text; font-size: 14px; overflow: elide; }
-                                        Text { text: host.address; color: Theme.secondary; font-size: 11px; overflow: elide; }
+                                        Text { text: host.tags == "" ? host.address : host.tags + "  ·  " + host.address; color: Theme.secondary; font-size: 11px; overflow: elide; }
                                     }
                                     Rectangle { width: 24px; background: transparent; visible: host-touch.has-hover || more-touch.has-hover;
                                         Image { source: @image-url("icons/more.svg"); x: 5px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
-                                        more-touch := TouchArea { clicked => { root.open-editor(host.id); } }
+                                        more-touch := TouchArea {
+                                            clicked => { root.open-host-menu(host.id, host.name, self.absolute-position.x - 178px, self.absolute-position.y + 26px); }
+                                            pointer-event(event) => { if event.kind == PointerEventKind.down && event.button == PointerEventButton.right { root.open-host-menu(host.id, host.name, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y); } }
+                                        }
                                     }
                                 }
                                 host-touch := TouchArea { width: parent.width - 42px;
-                                    clicked => { if root.editor-open { root.open-editor(host.id); } else { root.selected-host = host.id; host-focus.focus(); } }
+                                    clicked => { root.selected-host = host.id; root.selected-host-name = host.name; if root.editor-open { root.open-editor(host.id); } else { host-focus.focus(); } }
                                     double-clicked => { root.activate-host(host.id); }
+                                    pointer-event(event) => { if event.kind == PointerEventKind.down && event.button == PointerEventButton.right { root.open-host-menu(host.id, host.name, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y); } }
+                                }
+                            }
+                        }
+                        if (root.hosts.length > 0 || root.editor-open) && root.host-view-mode == "list": ScrollView {
+                            property <int> selection-index: root.host-selection-index;
+                            changed selection-index => {
+                                if self.selection-index >= 0 {
+                                    root.reveal-selection(78px + (root.groups.length > 0 ? 40px + root.groups.length * 46px : 0px) + (self.selection-index + root.draft-count) * 48px, 44px, self.height, self.content-y);
+                                    self.content-y = root.selection-scroll-y;
+                                }
+                            }
+                            VerticalLayout { padding-left: 20px; padding-right: 20px; padding-top: 14px; padding-bottom: 24px; spacing: 4px;
+                                if root.groups.length > 0: Text { text: "Groups"; color: Theme.text; font-weight: 600; font-size: 13px; height: 24px; vertical-alignment: center; }
+                                for group in root.groups: Rectangle {
+                                    height: 42px; border-radius: 8px; background: group-row-touch.has-hover ? Theme.high : Theme.highest;
+                                    HorizontalLayout { padding-left: 12px; padding-right: 8px; spacing: 10px;
+                                        Rectangle { width: 28px; height: 28px; border-radius: 7px; background: #0f5774;
+                                            Image { source: @image-url("icons/hosts.svg"); x: 6px; y: 6px; width: 16px; height: 16px; }
+                                        }
+                                        Text { text: group.name; color: Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                        Text { text: group.count + " Hosts"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                                        Rectangle { width: 24px; background: transparent; visible: group-row-touch.has-hover || group-row-more.has-hover;
+                                            Image { source: @image-url("icons/more.svg"); x: 5px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+                                            group-row-more := TouchArea { clicked => { root.group-rename-old = group.name; root.group-rename-value = group.name; root.group-rename-open = true; } }
+                                        }
+                                    }
+                                    group-row-touch := TouchArea { width: parent.width - 44px; clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.search = group.name; root.select-group(group.name); } }
+                                }
+                                if root.groups.length > 0: Rectangle { height: 8px; background: transparent; }
+                                HorizontalLayout { height: 26px; spacing: 8px;
+                                    Text { text: "Hosts"; color: Theme.text; font-weight: 500; font-size: 14px; vertical-alignment: center; }
+                                    if root.host-tag-filter != "": Rectangle { width: 150px; height: 24px; border-radius: 6px; background: #dceeff;
+                                        HorizontalLayout { padding-left: 8px; padding-right: 4px; spacing: 4px;
+                                            Text { text: "#" + root.host-tag-filter; color: Theme.accent; font-size: 11px; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                            Text { text: "×"; color: Theme.accent; font-size: 13px; vertical-alignment: center; }
+                                        }
+                                        TouchArea { clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); } }
+                                    }
+                                    Rectangle { horizontal-stretch: 1; background: transparent; }
+                                }
+                                Rectangle { height: 30px; background: Theme.high; border-radius: 6px;
+                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: "Name"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: "Address"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                                    Text { x: parent.width * 0.67; width: parent.width * 0.17 - 16px; text: "Group"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                                    Text { x: parent.width * 0.84; width: parent.width * 0.16 - 38px; text: "Auth"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                                }
+                                if root.draft-count > 0: Rectangle { height: 44px; border-radius: 8px; border-width: 2px; border-color: Theme.accent; background: white;
+                                    Image { x: 14px; y: 13px; width: 18px; height: 18px; source: @image-url("icons/hosts.svg"); }
+                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: root.draft.name != "" ? root.draft.name : root.draft.host != "" ? root.draft.host : "Enter IP or Hostname..."; color: Theme.text; vertical-alignment: center; overflow: elide; }
+                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: "ssh"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                                }
+                                for host in root.hosts: Rectangle {
+                                    height: 44px; border-radius: 8px;
+                                    border-width: root.selected-host == host.id ? 1px : 0px; border-color: Theme.accent;
+                                    background: root.selected-host == host.id ? #e6f4ff : host-row-touch.has-hover ? Theme.high : Theme.highest;
+                                    Image { x: 14px; y: 13px; width: 18px; height: 18px; source: @image-url("icons/hosts.svg"); }
+                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: host.name; color: Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; }
+                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: host.address; color: Theme.secondary; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                                    Text { x: parent.width * 0.67; width: parent.width * 0.17 - 16px; text: host.group; color: Theme.secondary; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                                    Text { x: parent.width * 0.84; width: parent.width * 0.16 - 38px; text: host.auth; color: Theme.secondary; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                                    Rectangle { x: parent.width - 32px; y: 7px; width: 26px; height: 30px; background: transparent; visible: host-row-touch.has-hover || host-row-more.has-hover;
+                                        Image { source: @image-url("icons/more.svg"); x: 6px; y: 8px; width: 14px; height: 14px; }
+                                        host-row-more := TouchArea {
+                                            clicked => { root.open-host-menu(host.id, host.name, self.absolute-position.x - 180px, self.absolute-position.y + 28px); }
+                                            pointer-event(event) => { if event.kind == PointerEventKind.down && event.button == PointerEventButton.right { root.open-host-menu(host.id, host.name, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y); } }
+                                        }
+                                    }
+                                    host-row-touch := TouchArea { width: parent.width - 38px;
+                                        clicked => { root.selected-host = host.id; root.selected-host-name = host.name; if root.editor-open { root.open-editor(host.id); } else { host-focus.focus(); } }
+                                        double-clicked => { root.activate-host(host.id); }
+                                        pointer-event(event) => { if event.kind == PointerEventKind.down && event.button == PointerEventButton.right { root.open-host-menu(host.id, host.name, self.absolute-position.x + self.mouse-x, self.absolute-position.y + self.mouse-y); } }
+                                    }
                                 }
                             }
                         }
@@ -517,8 +701,8 @@ export component AppWindow inherits Window {
                         VerticalLayout { padding: 20px; spacing: 10px;
                             Text { text: "General"; color: Theme.text; font-size: 14px; font-weight: 500; height: 16px; }
                             Input { placeholder-text: "Label"; text <=> root.draft.name; }
-                            Input { placeholder-text: "Parent Group"; text <=> root.draft.group; has-leading-icon: true; leading-icon: @image-url("icons/group.svg"); }
-                            Input { placeholder-text: "Tags"; enabled: false; }
+                            group-input := Input { placeholder-text: "Parent Group"; text <=> root.draft.group; has-leading-icon: true; leading-icon: @image-url("icons/group.svg"); edited => { root.group-suggestions = root.suggest-host-groups(self.text); root.group-editing = true; } accepted => { root.group-editing = false; } }
+                            Input { placeholder-text: "Tags (comma separated)"; text <=> root.draft.tags; has-leading-icon: true; leading-icon: @image-url("icons/tag.svg"); }
                             Input { placeholder-text: "Backspace                            Default"; enabled: false; }
                         }
                     }
@@ -548,11 +732,120 @@ export component AppWindow inherits Window {
                 }
             }
         }
+        if root.group-editing: Rectangle {
+            x: group-input.absolute-position.x - root.width + 340px;
+            y: group-input.absolute-position.y - 51px + 42px;
+            width: group-input.width;
+            height: Math.min((Math.min(root.group-suggestions.length, 5) + 1) * 30px + 12px, root.height - group-input.absolute-position.y - 48px);
+            background: white; border-width: 1px; border-color: Theme.border; border-radius: 8px;
+            ScrollView { x: 5px; y: 5px; width: parent.width - 10px; height: parent.height - 10px;
+            VerticalLayout { spacing: 0px;
+                Rectangle { height: 30px; border-radius: 5px; background: no-group-touch.has-hover ? #798c941a : transparent;
+                    Text { x: 8px; width: parent.width - 16px; text: "No group"; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+                    no-group-touch := TouchArea { clicked => { root.draft.group = ""; root.group-editing = false; } }
+                }
+                for group in root.group-suggestions: Rectangle {
+                    height: 30px; border-radius: 5px; background: suggestion-touch.has-hover ? #798c941a : transparent;
+                    Text { x: 8px; width: parent.width - 74px; text: group.name; color: Theme.text; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                    Text { x: parent.width - 66px; width: 58px; text: group.count + " Hosts"; color: Theme.secondary; font-size: 10px; vertical-alignment: center; horizontal-alignment: right; }
+                    suggestion-touch := TouchArea { clicked => { root.draft.group = group.name; root.group-editing = false; } }
+                }
+            }
+            }
+        }
     }
     if root.editor-open && root.editor-menu-open: Rectangle { x: root.width - 220px; y: 93px; width: 205px; height: 86px; background: white; border-radius: 8px; border-width: 1px; border-color: Theme.border;
         VerticalLayout { padding: 8px; spacing: 5px;
             Action { text: "Add Telnet"; flat: true; disabled: true; }
-            Action { text: "Remove"; flat: true; clicked => { if !root.creating-host { root.delete-host(root.draft.id); } root.close-editor(); } }
+            Action { text: "Remove"; flat: true; clicked => { root.editor-menu-open = false; if !root.creating-host { root.ask-delete(root.draft.id, root.draft.name); } else { root.close-editor(); } } }
+        }
+    }
+    if root.tag-menu-open || root.sort-menu-open || root.host-menu-open: Rectangle {
+        x: 0px; y: 0px; width: root.width; height: root.height; background: transparent;
+        TouchArea { clicked => { root.tag-menu-open = false; root.sort-menu-open = false; root.host-menu-open = false; } }
+    }
+    if root.tag-menu-open: Rectangle { x: root.toolbar-popup-x; y: root.toolbar-popup-y; width: 232px; height: Math.min(76px + Math.min(root.host-tags.length, 8) * 32px, root.height - self.y - 12px); background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+        ScrollView { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px;
+        VerticalLayout { padding: 8px; spacing: 2px;
+            Text { text: "Filter by tag"; color: Theme.secondary; font-size: 11px; height: 24px; vertical-alignment: center; }
+            Rectangle { height: 30px; border-radius: 5px; background: root.host-tag-filter == "" || all-tags-touch.has-hover ? #798c941a : transparent;
+                Text { x: 8px; width: parent.width - 32px; text: "All hosts"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
+                if root.host-tag-filter == "": Text { x: parent.width - 24px; width: 16px; text: "✓"; color: Theme.accent; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                all-tags-touch := TouchArea { clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.tag-menu-open = false; } }
+            }
+            for tag in root.host-tags: Rectangle {
+                height: 30px; border-radius: 5px; background: root.host-tag-filter == tag.name || tag-touch-row.has-hover ? #798c941a : transparent;
+                Text { x: 8px; width: parent.width - 70px; text: "#" + tag.name; color: Theme.text; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                Text { x: parent.width - 62px; width: 44px; text: tag.count + ""; color: Theme.secondary; font-size: 10px; horizontal-alignment: right; vertical-alignment: center; }
+                if root.host-tag-filter == tag.name: Text { x: parent.width - 28px; width: 16px; text: "✓"; color: Theme.accent; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                tag-touch-row := TouchArea { clicked => { root.host-tag-filter = tag.name; root.set-host-tag-filter(tag.name); root.tag-menu-open = false; } }
+            }
+        }
+        }
+    }
+    if root.sort-menu-open: Rectangle { x: root.toolbar-popup-x; y: root.toolbar-popup-y; width: 222px; height: 140px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+        VerticalLayout { padding: 8px; spacing: 2px;
+            Text { text: "Sort hosts"; color: Theme.secondary; font-size: 11px; height: 24px; vertical-alignment: center; }
+            Rectangle { height: 30px; border-radius: 5px; background: name-sort-touch.has-hover ? #798c941a : transparent;
+                Text { x: 8px; width: parent.width - 32px; text: "Name"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
+                if root.host-sort-mode == "name": Text { x: parent.width - 24px; width: 16px; text: "✓"; color: Theme.accent; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                name-sort-touch := TouchArea { clicked => { root.host-sort-mode = "name"; root.set-host-sort("name"); root.sort-menu-open = false; } }
+            }
+            Rectangle { height: 30px; border-radius: 5px; background: last-sort-touch.has-hover ? #798c941a : transparent;
+                Text { x: 8px; width: parent.width - 32px; text: "Last connected"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
+                if root.host-sort-mode == "last": Text { x: parent.width - 24px; width: 16px; text: "✓"; color: Theme.accent; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                last-sort-touch := TouchArea { clicked => { root.host-sort-mode = "last"; root.set-host-sort("last"); root.sort-menu-open = false; } }
+            }
+            Rectangle { height: 30px; border-radius: 5px; background: created-sort-touch.has-hover ? #798c941a : transparent;
+                Text { x: 8px; width: parent.width - 32px; text: "Date created"; color: Theme.text; font-size: 12px; vertical-alignment: center; }
+                if root.host-sort-mode == "created": Text { x: parent.width - 24px; width: 16px; text: "✓"; color: Theme.accent; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                created-sort-touch := TouchArea { clicked => { root.host-sort-mode = "created"; root.set-host-sort("created"); root.sort-menu-open = false; } }
+            }
+        }
+    }
+    if root.host-menu-open: Rectangle {
+        x: Math.max(8px, Math.min(root.host-menu-x, root.width - 218px));
+        y: Math.max(58px, Math.min(root.host-menu-y, root.height - 258px));
+        width: 210px; height: 244px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+        VerticalLayout { padding: 6px; spacing: 2px;
+            Text { x: 8px; text: root.host-menu-name; color: Theme.secondary; font-size: 11px; height: 26px; vertical-alignment: center; overflow: elide; }
+            Rectangle { height: 1px; background: #798c941a; }
+            Action { text: "Connect"; flat: true; left-aligned: true; clicked => { root.host-menu-open = false; root.activate-host(root.host-menu-id); } }
+            Action { text: "Edit"; flat: true; left-aligned: true; clicked => { root.host-menu-open = false; root.selected-host-name = root.host-menu-name; root.open-editor(root.host-menu-id); } }
+            Action { text: "Duplicate"; flat: true; left-aligned: true; clicked => { root.host-menu-open = false; root.duplicate-host(root.host-menu-id); } }
+            Action { text: "Open SFTP"; flat: true; left-aligned: true; clicked => { root.host-menu-open = false; if root.save-current-draft() { root.close-editor(); root.open-host-sftp(root.host-menu-id); } } }
+            Action { text: "Copy address"; flat: true; left-aligned: true; clicked => { root.host-menu-open = false; root.copy-host-address(root.host-menu-id); } }
+            Rectangle { height: 1px; background: #798c941a; }
+            Action { text: "Delete"; flat: true; left-aligned: true; clicked => { root.ask-delete(root.host-menu-id, root.host-menu-name); } }
+        }
+    }
+    if root.delete-open: Rectangle { background: #141729bf;
+        TouchArea { clicked => { root.delete-open = false; } }
+        Rectangle { width: 420px; height: 196px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px;
+            TouchArea { }
+            VerticalLayout { padding: 24px; spacing: 14px;
+                Text { text: "Delete host?"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Text { text: "Remove \"" + root.delete-name + "\"? This cannot be undone."; color: Theme.text; wrap: word-wrap; vertical-stretch: 1; }
+                HorizontalLayout { alignment: end; spacing: 10px;
+                    Action { text: "Cancel"; clicked => { root.delete-open = false; } }
+                    Action { text: "Delete"; primary: true; clicked => { if root.editor-open && root.draft.id == root.delete-id { root.close-editor(); } root.delete-host(root.delete-id); root.selected-host = ""; root.selected-host-name = ""; root.delete-open = false; } }
+                }
+            }
+        }
+    }
+    if root.group-rename-open: Rectangle { background: #141729bf;
+        TouchArea { clicked => { root.group-rename-open = false; } }
+        Rectangle { width: 420px; height: 212px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px;
+            TouchArea { }
+            VerticalLayout { padding: 24px; spacing: 14px;
+                Text { text: "Rename group"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Text { text: "Rename \"" + root.group-rename-old + "\" and move its hosts with it."; color: Theme.secondary; wrap: word-wrap; }
+                Input { text <=> root.group-rename-value; placeholder-text: "Group name"; init => { self.focus(); } accepted => { if root.group-rename-value != "" { root.rename-group(root.group-rename-old, root.group-rename-value); root.group-rename-open = false; } } }
+                HorizontalLayout { alignment: end; spacing: 10px;
+                    Action { text: "Cancel"; clicked => { root.group-rename-open = false; } }
+                    Action { text: "Rename"; primary: true; disabled: root.group-rename-value == ""; clicked => { root.rename-group(root.group-rename-old, root.group-rename-value); root.group-rename-open = false; } }
+                }
+            }
         }
     }
     if root.settings-open: Rectangle { background: #141729bf;
@@ -578,5 +871,6 @@ export component AppWindow inherits Window {
                 }
             }
         }
+    }
     }
 }

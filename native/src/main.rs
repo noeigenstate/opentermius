@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use anyhow::Context;
 use opentermius::{
+    hosts,
     ssh::{self, Command, Event},
     store::{self, Profile, Store},
     terminal::{Snapshot, Terminal},
@@ -66,6 +67,7 @@ struct State {
     file_path: String,
     search: String,
     group_filter: String,
+    tag_filter: String,
     local_path: PathBuf,
     local_request: u64,
     pending_sftp: Option<String>,
@@ -136,32 +138,51 @@ impl State {
                     })
                     .collect(),
             ));
-            ui.set_hosts(model(
-                store
-                    .data
-                    .hosts
-                    .iter()
-                    .filter(|p| self.group_filter.is_empty() || p.group == self.group_filter)
-                    .filter(|p| {
-                        self.search.is_empty()
-                            || format!("{} {} {} {}", p.name, p.host, p.username, p.group)
-                                .to_lowercase()
-                                .contains(&self.search)
-                    })
-                    .map(|p| HostRow {
-                        id: p.id.clone().into(),
-                        name: p.name.clone().into(),
-                        address: format!("{}@{}:{}", p.username, p.host, p.port).into(),
-                        group: p.group.clone().into(),
-                        auth: if p.auth_type == "key" {
-                            "SSH 私钥".into()
-                        } else {
-                            "密码".into()
-                        },
-                        has_secret: p.encrypted_secret.is_some(),
+            ui.set_host_tags(model(
+                hosts::tag_counts(&store.data.hosts)
+                    .into_iter()
+                    .map(|(name, count)| TagRow {
+                        name: name.into(),
+                        count,
                     })
                     .collect(),
             ));
+            let rows: Vec<HostRow> = hosts::visible_hosts(
+                &store.data.hosts,
+                &self.search,
+                &self.group_filter,
+                &self.tag_filter,
+                store.data.hosts_view.sort_mode(),
+            )
+            .into_iter()
+            .map(|p| HostRow {
+                id: p.id.clone().into(),
+                name: p.name.clone().into(),
+                address: format!("{}@{}:{}", p.username, p.host, p.port).into(),
+                group: p.group.clone().into(),
+                auth: if p.auth_type == "key" {
+                    "SSH 私钥".into()
+                } else {
+                    "密码".into()
+                },
+                has_secret: p.encrypted_secret.is_some(),
+                tags: p
+                    .tags
+                    .iter()
+                    .map(|tag| format!("#{tag}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .into(),
+            })
+            .collect();
+            let selected = ui.get_selected_host();
+            if !selected.is_empty() && !rows.iter().any(|row| row.id == selected) {
+                ui.set_selected_host("".into());
+                ui.set_selected_host_name("".into());
+            } else if let Some(row) = rows.iter().find(|row| row.id == selected) {
+                ui.set_selected_host_name(row.name.clone());
+            }
+            ui.set_hosts(model(rows));
         }
     }
     fn tabs(&self) {
@@ -280,6 +301,9 @@ impl State {
             },
             private_key_path: d.key_path.to_string(),
             encrypted_secret: None,
+            tags: hosts::parse_tags(&d.tags),
+            last_connected: None,
+            created_at: None,
         };
         let mut secret = d.secret.to_string();
         let result = self
@@ -307,6 +331,7 @@ impl State {
             .ok()
             .and_then(|s| s.data.hosts.iter().find(|p| p.id == id).cloned());
         if let Some(p) = profile {
+            let tags = hosts::tags_string(&p);
             HostDraft {
                 id: p.id.into(),
                 name: p.name.into(),
@@ -318,6 +343,7 @@ impl State {
                 key_path: p.private_key_path.into(),
                 secret: SharedString::default(),
                 remember: p.encrypted_secret.is_some(),
+                tags: tags.into(),
             }
         } else {
             HostDraft {
@@ -326,6 +352,167 @@ impl State {
                 remember: true,
                 ..HostDraft::default()
             }
+        }
+    }
+    fn set_host_view(&mut self, value: &str) {
+        let mode = hosts::ViewMode::parse(value);
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_host_view_mode(mode.as_str().into());
+        }
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| {
+                let previous = store.data.hosts_view.clone();
+                store.data.hosts_view.set_mode(mode);
+                if let Err(error) = store.persist() {
+                    store.data.hosts_view = previous;
+                    return Err(error);
+                }
+                Ok(())
+            });
+        if let Err(error) = result {
+            if let (Ok(store), Some(ui)) = (self.store.lock(), self.ui.upgrade()) {
+                ui.set_host_view_mode(store.data.hosts_view.view_mode().as_str().into());
+            }
+            self.status(format!("无法保存视图设置：{error}"), true);
+        }
+    }
+    fn set_host_sort(&mut self, value: &str) {
+        let sort = hosts::SortMode::parse(value);
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_host_sort_mode(sort.as_str().into());
+        }
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| {
+                let previous = store.data.hosts_view.clone();
+                store.data.hosts_view.set_sort(sort);
+                if let Err(error) = store.persist() {
+                    store.data.hosts_view = previous;
+                    return Err(error);
+                }
+                Ok(())
+            });
+        self.hosts();
+        if let Err(error) = result {
+            if let (Ok(store), Some(ui)) = (self.store.lock(), self.ui.upgrade()) {
+                ui.set_host_sort_mode(store.data.hosts_view.sort_mode().as_str().into());
+            }
+            self.status(format!("无法保存排序设置：{error}"), true);
+        }
+    }
+    fn set_tag_filter(&mut self, value: &str) {
+        self.tag_filter = value.trim().to_string();
+        self.hosts();
+    }
+    fn move_selection(&mut self, delta: i32) {
+        if delta == 0 {
+            return;
+        }
+        let current = self
+            .ui
+            .upgrade()
+            .map(|ui| ui.get_selected_host().to_string())
+            .unwrap_or_default();
+        let target = self.store.lock().ok().and_then(|store| {
+            let visible = hosts::visible_hosts(
+                &store.data.hosts,
+                &self.search,
+                &self.group_filter,
+                &self.tag_filter,
+                store.data.hosts_view.sort_mode(),
+            );
+            let ids: Vec<String> = visible.iter().map(|p| p.id.clone()).collect();
+            let next = hosts::next_selection(&ids, &current, delta)?;
+            visible
+                .into_iter()
+                .find(|p| p.id == next)
+                .map(|p| (p.id.clone(), p.name.clone()))
+        });
+        if let (Some((id, name)), Some(ui)) = (target, self.ui.upgrade()) {
+            let index = ui.get_hosts().iter().position(|host| host.id == id).unwrap_or(0);
+            ui.set_selected_host(id.into());
+            ui.set_selected_host_name(name.into());
+            ui.set_host_selection_index(index as i32);
+        }
+    }
+    fn duplicate(&mut self, id: &str) {
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| hosts::duplicate_profile(&mut store, id));
+        match result {
+            Ok(_) => {
+                self.hosts();
+                self.status("主机已复制", false);
+            }
+            Err(error) => self.status(error.to_string(), true),
+        }
+    }
+    fn copy_address(&self, id: &str) {
+        let address = self.store.lock().ok().and_then(|store| {
+            store
+                .data
+                .hosts
+                .iter()
+                .find(|p| p.id == id)
+                .map(hosts::copy_address)
+        });
+        match address {
+            Some(address) => {
+                match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(address))
+                {
+                    Ok(()) => self.status("地址已复制到剪贴板", false),
+                    Err(error) => self.status(error.to_string(), true),
+                }
+            }
+            None => self.status("主机不存在", true),
+        }
+    }
+    fn open_host_sftp(&mut self, id: &str) {
+        self.search.clear();
+        self.group_filter.clear();
+        self.tag_filter.clear();
+        self.hosts();
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_search("".into());
+            ui.set_host_tag_filter("".into());
+            ui.set_sftp_page(true);
+        }
+        self.list_local(String::new());
+        self.select_sftp(id);
+    }
+    fn rename_group(&mut self, old: &str, new: &str) {
+        let new_name = new.trim().to_string();
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| hosts::rename_group(&mut store, old, &new_name));
+        match result {
+            Ok(count) => {
+                if let Some(ui) = self.ui.upgrade() {
+                    let mut draft = ui.get_draft();
+                    if draft.group == old {
+                        draft.group = new_name.clone().into();
+                        ui.set_draft(draft);
+                    }
+                }
+                if self.group_filter == old {
+                    self.group_filter = new_name.clone();
+                    if let Some(ui) = self.ui.upgrade() {
+                        ui.set_search(new_name.clone().into());
+                    }
+                }
+                self.hosts();
+                self.status(format!("已重命名分组（{count} 台主机）"), false);
+            }
+            Err(error) => self.status(error.to_string(), true),
         }
     }
     fn connect(&mut self, host_id: &str) {
@@ -434,6 +621,9 @@ impl State {
             private_key_path: String::new(),
             group: String::new(),
             encrypted_secret: None,
+            tags: Vec::new(),
+            last_connected: None,
+            created_at: None,
         };
         self.sessions.insert(
             id.clone(),
@@ -669,6 +859,32 @@ impl State {
                         });
                     }
                 }
+                let mut connect_stamp_error = None;
+                if connected {
+                    let profile_id = self
+                        .sessions
+                        .get(&id)
+                        .filter(|session| !session.local)
+                        .map(|session| session.profile.id.clone());
+                    if let Some(profile_id) = profile_id {
+                        let now = hosts::now_rfc3339();
+                        let result = self
+                            .store
+                            .lock()
+                            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                            .and_then(|mut store| {
+                                hosts::mark_connected(&mut store, &profile_id, &now)
+                            });
+                        match result {
+                            Ok(true) => self.hosts(),
+                            Ok(false) => {}
+                            Err(error) => {
+                                connect_stamp_error =
+                                    Some(format!("已连接，但无法保存最近连接时间：{error}"))
+                            }
+                        }
+                    }
+                }
                 self.status(
                     if connected {
                         "Connected".to_string()
@@ -677,6 +893,9 @@ impl State {
                     },
                     error,
                 );
+                if let Some(message) = connect_stamp_error {
+                    self.status(message, true);
+                }
                 self.tabs();
                 self.display();
                 if connected && self.pending_sftp.as_deref() == Some(&id) {
@@ -1202,6 +1421,7 @@ fn run() -> anyhow::Result<()> {
             file_path: ".".into(),
             search: String::new(),
             group_filter: String::new(),
+            tag_filter: String::new(),
             local_path: dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
             local_request: 0,
             pending_sftp: None,
@@ -1260,15 +1480,52 @@ fn run() -> anyhow::Result<()> {
     });
     ui.on_search_hosts(|query| {
         with_state(|s| {
+            s.group_filter.clear();
             s.search = query.to_lowercase();
             s.hosts()
         });
     });
     ui.on_select_group(|name| {
         with_state(|s| {
+            s.search.clear();
             s.group_filter = name.to_string();
             s.hosts();
         });
+    });
+    ui.on_set_host_view(|value| {
+        with_state(|s| s.set_host_view(&value));
+    });
+    ui.on_set_host_sort(|value| {
+        with_state(|s| s.set_host_sort(&value));
+    });
+    ui.on_set_host_tag_filter(|value| {
+        with_state(|s| s.set_tag_filter(&value));
+    });
+    ui.on_move_host_selection(|delta| {
+        with_state(|s| s.move_selection(delta));
+    });
+    ui.on_duplicate_host(|id| {
+        with_state(|s| s.duplicate(&id));
+    });
+    ui.on_copy_host_address(|id| {
+        with_state(|s| s.copy_address(&id));
+    });
+    ui.on_open_host_sftp(|id| {
+        with_state(|s| s.open_host_sftp(&id));
+    });
+    ui.on_rename_group(|old, new| {
+        with_state(|s| s.rename_group(&old, &new));
+    });
+    ui.on_suggest_host_groups(|query| {
+        with_state(|s| {
+            let groups = s.store.lock().map(|store| {
+                hosts::group_suggestions(&store.data.hosts, &query)
+                    .into_iter()
+                    .map(|(name, count)| GroupRow { name: name.into(), count })
+                    .collect()
+            }).unwrap_or_default();
+            model(groups)
+        }).unwrap_or_default()
     });
     ui.on_edit_host(|id| with_state(|s| s.edit(&id)).unwrap_or_default());
     ui.on_delete_host(|id| {
@@ -1489,6 +1746,16 @@ fn run() -> anyhow::Result<()> {
         });
     });
     with_state(|s| {
+        let view = s
+            .store
+            .lock()
+            .map(|store| store.data.hosts_view.clone())
+            .unwrap_or_default()
+            .normalized();
+        if let Some(ui) = s.ui.upgrade() {
+            ui.set_host_view_mode(view.mode.into());
+            ui.set_host_sort_mode(view.sort.into());
+        }
         s.hosts();
         s.tabs();
         s.display()
