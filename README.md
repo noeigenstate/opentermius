@@ -6,7 +6,7 @@
 
 ## English
 
-OpenTermius brings host management, SSH terminals and SFTP file transfers into one native workspace. It stores configuration locally and requires no product account, subscription, cloud sync or telemetry. Windows x64 is a validated preview; macOS and Linux desktop validation is still pending.
+OpenTermius brings host management, SSH terminals and SFTP file transfers into one native workspace. It stores configuration locally and requires no product account, subscription, cloud sync or telemetry. Windows x64 is a validated preview with an installer. macOS and Linux build and pass the full test suite in GitHub Actions CI, but have not yet been hand-tested on real desktops.
 
 The interface uses English, with Simplified Chinese available in **Settings → Appearance → Language**. Choose **English**, **简体中文**, or **System**. System is the persisted default: it uses Chinese when the Windows UI language is Chinese (or `LANG` starts with `zh` on other platforms), otherwise English. Changes apply immediately to labels, messages and page models. Server responses, terminal output, file names and user-created labels retain their original text. All translations are bundled; no translation service is contacted.
 
@@ -25,8 +25,8 @@ OpenTermius 面向 **Windows、macOS 和 Linux** 打造轻量原生终端体验�
 | 平台 | 当前状态 |
 | --- | --- |
 | Windows x64 | 可运行的预览版本，已验证 |
-| macOS | aarch64 交叉检查已通过；已配置 CI，待首次通过；尚未经真机手工验证 |
-| Linux | Rust 全目标交叉类型检查已通过（见验证记录）；原生 CI 和真机验证待完成 |
+| macOS | GitHub Actions CI（macos-latest）构建与全部测试通过；尚未经真机手工验证 |
+| Linux | GitHub Actions CI（ubuntu-latest）构建与全部测试通过；尚未经真机手工验证 |
 
 ![OpenTermius](docs/screenshots/home.png)
 
@@ -62,7 +62,7 @@ cargo build --release --locked
 
 工作区将 Slint 生成代码单独放在 `opentermius-ui` 中，`.slint` 源文件仍在 `native/ui/`。集成测试统一从 `native/tests/all/main.rs` 加载；新增测试文件后须在该入口声明模块。筛选测试使用 `cargo test --locked --test all transport::` 等模块前缀。测速方法及开发编译选项见 [编译速度记录](docs/build-speed.md)。
 
-Linux 需安装 X11/Wayland、fontconfig、xkbcommon 和等宽字体；文件对话框需要 XDG desktop portal 及桌面环境对应的 portal backend。终端字体为 Windows Consolas、macOS Menlo、Linux DejaVu Sans Mono，度量与渲染共享同一字体。
+Linux 需安装 X11/Wayland、fontconfig、xkbcommon 和等宽字体；文件对话框需要 XDG desktop portal 及桌面环境对应的 portal backend。终端字体为 Windows Cascadia Mono（未安装时 Consolas）、macOS Menlo、Linux DejaVu Sans Mono，度量与渲染共享同一字体。
 
 macOS 将随机 256 位主密钥保存为默认 Keychain 的 generic password，钥匙串锁定或拒绝访问时保存凭据会失败。Linux 为避免引入额外 Secret Service 依赖，使用配置目录下当前用户拥有、权限为 `0600` 的 `master-key-v1` 文件；配置目录不可由其他用户写入。**Linux 主密钥文件未由系统钥匙串加密**，无法防御已能读取当前用户文件的攻击者。备份配置时应安全备份该文件；丢失主密钥后无法恢复已保存的密码。非 Windows 凭据带 `v1:` 前缀，不支持直接解密其他机器/平台的已有凭据；Windows 原始 DPAPI 格式保持兼容。`--data-dir` 同时隔离便携加密主密钥。
 
