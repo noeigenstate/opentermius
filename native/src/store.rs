@@ -927,6 +927,9 @@ mod core_regression_tests {
             private_key_path: String::new(),
             group: String::new(),
             encrypted_secret: None,
+            tags: Vec::new(),
+            last_connected: None,
+            created_at: None,
         }
     }
 
