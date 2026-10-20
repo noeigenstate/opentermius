@@ -21,6 +21,7 @@ pub struct Snapshot {
     pub bracketed_paste: bool,
     pub rows: u16,
     pub cols: u16,
+    pub wrapped_rows: Vec<bool>,
 }
 impl Snapshot {
     pub fn selected_text(&self, mut start: (i32, i32), mut end: (i32, i32)) -> String {
@@ -59,12 +60,22 @@ impl Snapshot {
             }
         }
         let last = lines.len() - 1;
-        for (i, line) in lines.iter_mut().enumerate() {
-            if i != last {
-                *line = line.trim_end().into()
+        let mut text = String::new();
+        for (index, line) in lines.iter_mut().enumerate() {
+            let wrapped = self
+                .wrapped_rows
+                .get(top as usize + index)
+                .copied()
+                .unwrap_or(false);
+            if index != last && !wrapped {
+                *line = line.trim_end().into();
+            }
+            text.push_str(line);
+            if index != last && !wrapped {
+                text.push('\n');
             }
         }
-        lines.join("\n")
+        text
     }
 }
 pub struct Terminal {
@@ -215,6 +226,7 @@ impl Terminal {
             bracketed_paste: screen.bracketed_paste(),
             rows,
             cols,
+            wrapped_rows: (0..rows).map(|row| screen.row_wrapped(row)).collect(),
         }
     }
 }
@@ -294,5 +306,49 @@ mod tests {
         assert!(t.snapshot().lines[0].starts_with("你好"));
         t.feed(b"\x1b[2J\x1b[H");
         assert!(t.snapshot().lines.iter().all(|l| l.is_empty()));
+    }
+}
+
+#[cfg(test)]
+mod core_regression_tests {
+    use super::*;
+
+    #[test]
+    fn scrollback_offset_is_clamped_to_the_configured_capacity() {
+        let mut terminal = Terminal::new(5, 10);
+        for index in 0..4000 {
+            terminal.feed(format!("L{index}\r\n").as_bytes());
+        }
+        terminal.scroll(i32::MAX);
+        let screen = terminal.parser.screen();
+        assert_eq!(screen.scrollback_capacity(), 3000);
+        assert_eq!(screen.scrollback_len(), 3000);
+        assert_eq!(screen.scrollback(), 3000);
+        terminal.scroll(i32::MIN);
+        assert_eq!(terminal.parser.screen().scrollback(), 0);
+    }
+
+    #[test]
+    fn response_buffer_never_exceeds_its_limit() {
+        let mut terminal = Terminal::new(10, 60);
+        for _ in 0..30000 {
+            terminal.feed(b"\x1b[6n");
+        }
+        let responses = terminal.take_responses();
+        assert!(!responses.is_empty());
+        assert!(responses.len() <= 65536);
+        assert_eq!(responses.len() % 6, 0);
+    }
+
+    #[test]
+    fn wrapped_rows_only_mark_soft_wraps() {
+        let mut terminal = Terminal::new(4, 5);
+        terminal.feed(b"abcdefg");
+        let snapshot = terminal.snapshot();
+        assert_eq!(snapshot.wrapped_rows, vec![true, false, false, false]);
+
+        let mut terminal = Terminal::new(4, 5);
+        terminal.feed(b"abc\r\ndef");
+        assert_eq!(terminal.snapshot().wrapped_rows, vec![false, false, false, false]);
     }
 }
