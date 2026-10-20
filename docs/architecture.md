@@ -27,7 +27,7 @@ macOS 随机 256 位主密钥存于默认 Keychain 的 generic password，以配
 
 首次连接需确认 SHA-256 指纹；保存的指纹变化后拒绝连接。快速连接输入只解析支持的 SSH 参数，不作为 shell 命令执行。
 
-Windows 自定义标题栏拖动继续使用 Win32；Unix 使用 Slint 的 winit 0.30 window accessor 调用 `drag_window`。终端测量和显示共享平台等宽字体（Consolas / Menlo / DejaVu Sans Mono）。Linux 文件选择启用 XDG portal backend，需要运行中的 desktop portal 服务及桌面实现。当前代码没有文件管理器启动回调，因此无需新增 explorer/open/xdg-open 分支。
+Windows 自定义标题栏拖动继续使用 Win32；Unix 使用 Slint 的 winit 0.30 window accessor 调用 `drag_window`。终端测量、输入法和显示共享平台等宽字体（Consolas / Menlo / DejaVu Sans Mono）及设置中的字号。Linux 文件选择启用 XDG portal backend，需要运行中的 desktop portal 服务及桌面实现。设置页打开配置目录分别使用 Windows `explorer`、macOS `open`、Linux `xdg-open`。Xshell 默认目录探测和系统主题注册表查询仅在 Windows 启用；Unix 不预选 Xshell 目录，System 主题回退为浅色。
 
 `.github/workflows/ci.yml` 在 Windows、macOS、Ubuntu 上构建、测试及上传 release 可执行文件；交互式 GUI 测试保持 ignored。`native/scripts/package-macos.sh` 生成未签名 `.app`/DMG，`package-linux.sh` 生成 tar.gz、桌面文件及 PNG，均须在对应宿主执行。后续工作为真实桌面验证、发布者签名/公证及 Linux Secret Service 集成；CI 配置的存在不等于已通过平台验证。
 

@@ -1,86 +1,936 @@
-// Shared theme and controls used by the main window and the section pages.
+import { ScrollView } from "std-widgets.slint";
+
+// OpenTermius design foundation: tokens, shared controls and page bands.
+//
+// Implements docs/design-spec.md sections 1, 2 and 6. `Theme` carries every colour, spacing,
+// radius and metric token; `Theme.dark` is the only switch between the light and the dark
+// palette, so Rust (or a page) flips one boolean. Pages read tokens (`Theme.base`,
+// `Theme.space-12`, `Theme.gutter`, ...) and never copy hex literals.
+//
+// The legacy `Action` / `Input` / `NavItem` / `Field` properties keep working unchanged, so the
+// existing main window and pages compile and render exactly as before until they adopt the new
+// `kind` / `size` / state properties.
+//
+// Layout rules honoured here (spec 6.3):
+//   * absolutely positioned elements always set x and width (plus y/height when they are not
+//     meant to fill their parent);
+//   * layout children are stretched on the cross axis, so anything with a fixed cross size uses
+//     `cross-axis-alignment: center` (or a holder rectangle);
+//   * std-widgets is used only for scrollbars; all controls follow Theme.
+
+// ---------------------------------------------------------------------------
+// Theme (spec 1.1, 1.3, 1.4, 1.5). The legacy names keep their light values.
+// ---------------------------------------------------------------------------
 export global Theme {
-    out property <color> base: #edf1f2;
-    out property <color> lowest: #282b3d;
-    out property <color> high: #f7f9fa;
-    out property <color> highest: #ffffff;
-    out property <color> border: #d5dde0;
-    out property <color> secondary: #798c94;
-    out property <color> text: #141729;
-    out property <color> accent: #2091f6;
+    /// Light/dark switch. This is the only theme input; every colour derives from it.
+    in-out property <bool> dark: false;
+    /// Horizontal page gutter (spec 1.3): header, toolbar, content and grids all use it.
+    in-out property <length> gutter: 20px;
+
+    // --- Surfaces -----------------------------------------------------------
+    out property <color> base: dark ? #1b1e2e : #edf1f2;
+    out property <color> lowest: dark ? #0f111c : #282b3d;
+    out property <color> high: dark ? #22263a : #f7f9fa;
+    out property <color> highest: dark ? #2a2e44 : #ffffff;
+    out property <color> border: dark ? #3a3f58 : #d5dde0;
+    out property <color> divider: dark ? #ffffff1a : #798c9426;
+    out property <color> field-bg: dark ? #1b1e2e : #ffffff;
+    out property <color> search-bg: dark ? #1b1e2e : #e6ebed;
+
+    // --- Text ---------------------------------------------------------------
+    out property <color> text: dark ? #e8eaf3 : #141729;
+    out property <color> secondary: dark ? #8d97b3 : #798c94;
+    out property <color> muted: dark ? #5d6483 : #a4b3ba;
+
+    // --- Accent -------------------------------------------------------------
+    out property <color> accent: dark ? #3b9dff : #2091f6;
+    out property <color> accent-hover: dark ? #6ab4ff : #58adf8;
+    out property <color> accent-pressed: dark ? #2a85e6 : #1479d6;
+    out property <color> accent-soft: dark ? #3b9dff33 : #2091f61f;
+    out property <color> on-accent: dark ? #ffffff : #ffffff;
+    out property <color> focus-ring: dark ? #3b9dff : #2091f6;
+
+    // --- Status -------------------------------------------------------------
+    out property <color> danger: dark ? #ff6b6e : #f25e61;
+    out property <color> danger-hover: dark ? #ff8386 : #e04649;
+    out property <color> danger-soft: dark ? #ff6b6e2e : #f25e611f;
+    out property <color> success: dark ? #2dce7a : #21b568;
+    out property <color> success-soft: dark ? #2dce7a2e : #21b5681f;
+    out property <color> warning: dark ? #f7b84a : #e8920c;
+    out property <color> warning-soft: dark ? #f7b84a2e : #e8920c1f;
+
+    // --- Interaction --------------------------------------------------------
+    out property <color> hover: dark ? #ffffff0f : #798c9414;
+    out property <color> pressed: dark ? #ffffff1f : #798c9426;
+    out property <color> selected: dark ? #ffffff1f : #798c9426;
+    out property <color> control: dark ? #ffffff1a : #798c9426;
+    out property <color> control-hover: dark ? #3a3f58 : #d5dde0;
+    /// Disabled fill of fields and secondary buttons (spec 2.2: `#798c940d` in light).
+    out property <color> control-disabled: dark ? #ffffff1a : #798c940d;
+    out property <color> scrim: dark ? #000000a6 : #14172999;
+
+    // --- Title bar ----------------------------------------------------------
+    out property <color> tab-bg: dark ? #1c1f30 : #32364a;
+    out property <color> tab-hover: dark ? #242842 : #3b3f55;
+    out property <color> tab-active: dark ? #2f3450 : #454a63;
+    out property <color> titlebar-fg: dark ? #8d91a5 : #8d91a5;
+
+    // --- Entities -----------------------------------------------------------
+    out property <color> tile-host: dark ? #0b6aa0 : #00527c;
+    out property <color> folder: dark ? #66ccef : #66ccef;
+
+    // --- Terminal -----------------------------------------------------------
+    out property <color> terminal-bg: dark ? #0f111c : #141729;
+    out property <color> terminal-fg: dark ? #e6e9f2 : #e6e9f2;
+    out property <color> terminal-selection: dark ? #3b9dff40 : #2091f640;
+    out property <color> terminal-cursor: dark ? #ffffff80 : #ffffff80;
+
+    // --- Elevation tints (spec 1.5): stacked translucent rectangles ---------
+    out property <color> shadow-1: #14172914;
+    out property <color> shadow-2: #1417290a;
+    out property <color> shadow-3: #1417290d;
+    out property <color> shadow-4: #14172908;
+
+    // --- Spacing scale (spec 1.3) ------------------------------------------
+    out property <length> space-2: 2px;
+    out property <length> space-4: 4px;
+    out property <length> space-8: 8px;
+    out property <length> space-12: 12px;
+    out property <length> space-16: 16px;
+    out property <length> space-20: 20px;
+    out property <length> space-24: 24px;
+    out property <length> space-32: 32px;
+
+    // --- Radii (spec 1.4) ---------------------------------------------------
+    out property <length> r-control: 5px;
+    out property <length> r-field: 10px;
+    out property <length> r-card: 15px;
+    out property <length> r-dialog: 12px;
+    out property <length> r-tile: 10px;
+    out property <length> r-tile-lg: 16px;
+    out property <length> r-pill: 999px;
+
+    // --- Component metrics --------------------------------------------------
+    out property <length> titlebar-height: 51px;
+    out property <length> statusbar-height: 28px;
+    out property <length> sidebar-width: 184px;
+    out property <length> header-height: 56px;
+    out property <length> toolbar-height: 45px;
+    out property <length> panel-width: 340px;
+    out property <length> button-s: 24px;
+    out property <length> button-m: 30px;
+    out property <length> button-l: 36px;
+    out property <length> input-height: 36px;
+    out property <length> input-height-compact: 30px;
+    out property <length> row-height: 56px;
+    out property <length> row-height-single: 40px;
+    out property <length> entity-height: 60px;
+    out property <length> table-header-height: 32px;
+    out property <length> table-row-height: 40px;
+    out property <length> dialog-footer-height: 76px;
+
+    // --- Typography (spec 1.2), sizes only; weights are 400/500/600/700 ----
+    out property <length> font-micro: 11px;
+    out property <length> font-caption: 12px;
+    out property <length> font-mono: 13px;
+    out property <length> font-body: 14px;
+    out property <length> font-title: 18px;
+    out property <length> font-heading: 20px;
+    out property <length> font-display: 24px;
 }
+
+// ---------------------------------------------------------------------------
+// Button (spec 2.1)
+// ---------------------------------------------------------------------------
+// New call sites: `kind` ("primary" | "secondary" | "flat" | "danger" | "danger-flat") and
+// `size` ("s" | "m" | "l", default "m"); 24 / 30 / 36px high with the spec paddings.
+// Legacy call sites keep the original switches: `primary`, `flat`, `secondary` (grey label),
+// `has-icon`, `icon`, `disabled`, `left-aligned`, `text-size`, `clicked`, `hovered`. They render
+// exactly like before (30px, radius 5, 10px padding) and may override min/max width and height.
 export component Action inherits Rectangle {
     in property <string> text;
     in property <bool> primary: false;
-    in property <bool> disabled: false;
     in property <bool> flat: false;
+    in property <bool> secondary: false;
+    in property <bool> disabled: false;
     in property <bool> has-icon: false;
     in property <image> icon;
-    in property <bool> secondary: false;
     in property <bool> left-aligned: false;
-    in property <length> text-size: 14px;
+    /// Small labels use 12px; the legacy/default value remains 14px. May be overridden.
+    in property <length> text-size: size == "s" ? 12px : 14px;
+    /// "" keeps the legacy `primary`/`flat`/`secondary` look; otherwise one of the spec variants.
+    in property <string> kind: "";
+    /// "s" (24px) | "m" (30px) | "l" (36px). Sizes below "l" use radius 5.
+    in property <string> size: "m";
     out property <bool> hovered: touch.has-hover;
     callback clicked;
-    min-height: 30px; max-height: 30px; min-width: label.preferred-width + 22px + (root.has-icon ? 20px : 0px); border-radius: 5px;
-    background: root.disabled ? (root.flat ? transparent : #798c9426) : touch.has-hover ? (root.primary ? #58adf8 : Theme.border) : root.primary ? Theme.accent : root.flat ? transparent : #798c9426;
-    HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 6px;
+
+    private property <bool> styled: kind != "" || size != "m";
+    private property <string> variant: kind != "" ? kind : (primary ? "primary" : flat ? "flat" : "secondary");
+    private property <bool> small: styled && size == "s";
+    private property <bool> large: styled && size == "l";
+    private property <bool> filled-variant: variant != "flat" && variant != "danger-flat";
+    private property <length> pad-x: small ? 8px : large ? 16px : 10px;
+    private property <length> label-size: text-size > 0px ? text-size : (small ? 12px : 14px);
+    // Legacy fills are kept exactly as before (`Theme.control-hover` is the old `Theme.border`,
+    // `Theme.control` the old `#798c9426`); the pressed fills are only added for `kind` call sites.
+    private property <color> fill:
+        disabled ? (filled-variant ? Theme.control : transparent)
+        : variant == "flat" ? (touch.pressed && styled ? Theme.pressed : touch.has-hover ? (styled ? Theme.hover : Theme.control-hover) : transparent)
+        : variant == "danger-flat" ? (touch.has-hover || touch.pressed ? Theme.danger-soft : transparent)
+        : variant == "primary" ? (touch.pressed && styled ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+        : variant == "danger" ? (touch.has-hover || touch.pressed ? Theme.danger-hover : Theme.danger)
+        : styled ? (touch.pressed ? Theme.pressed : touch.has-hover ? Theme.control-hover : Theme.control)
+        : touch.has-hover ? Theme.control-hover : Theme.control;
+    private property <color> label-color:
+        disabled ? Theme.muted
+        : variant == "primary" || variant == "danger" ? Theme.on-accent
+        : variant == "danger-flat" ? Theme.danger
+        : secondary ? Theme.secondary
+        : Theme.text;
+
+    min-height: small ? Theme.button-s : large ? Theme.button-l : Theme.button-m;
+    max-height: small ? Theme.button-s : large ? Theme.button-l : Theme.button-m;
+    border-radius: large ? Theme.r-field : Theme.r-control;
+    horizontal-stretch: styled ? 0 : 1;
+    min-width: label.preferred-width + (styled ? pad-x * 2 + (has-icon ? 20px : 0px) : 22px + (has-icon ? 20px : 0px));
+    background: fill;
+    animate background { duration: 100ms; }
+
+    HorizontalLayout { padding-left: root.pad-x; padding-right: root.pad-x; spacing: 6px; cross-axis-alignment: center; alignment: root.left-aligned ? start : center;
         if root.has-icon: Rectangle { width: 14px; background: transparent;
-            Image { source: root.icon; colorize: root.disabled ? #a4b3ba : root.primary ? white : root.secondary ? Theme.secondary : Theme.text; width: 14px; height: 14px; x: 0px; y: (parent.height - 14px) / 2; }
+            Image { source: root.icon; colorize: root.label-color; width: 14px; height: 14px; x: 0px; y: (parent.height - 14px) / 2; }
         }
-        label := Text { text: root.text; color: root.disabled ? #a4b3ba : root.primary ? white : root.secondary ? Theme.secondary : Theme.text; font-size: root.text-size; font-weight: root.secondary ? 450 : 500; horizontal-alignment: root.left-aligned ? left : center; vertical-alignment: center; }
+        label := Text { text: root.text; color: root.label-color; font-size: root.label-size; font-weight: root.secondary ? 400 : 500; horizontal-stretch: root.styled ? 0 : 1; horizontal-alignment: root.left-aligned ? left : center; vertical-alignment: center; overflow: elide; }
     }
     touch := TouchArea { enabled: !root.disabled; clicked => { root.clicked(); } }
 }
+
+// ---------------------------------------------------------------------------
+// Square icon button (spec 2.1): flat, 14px glyph, 30x30 (M) or 24x24 (S)
+// ---------------------------------------------------------------------------
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <length> size: 30px;
+    /// Alias retained for the gallery and callers that prefer an explicit metric name.
+    in property <length> button-size: root.size;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    in property <length> glyph-size: 14px;
+    out property <bool> hovered: touch.has-hover;
+    callback clicked;
+
+    width: root.button-size;
+    height: root.button-size;
+    border-radius: Theme.r-control;
+    background: !root.enabled ? transparent : touch.pressed ? Theme.pressed : touch.has-hover ? (root.danger ? Theme.danger-soft : Theme.hover) : transparent;
+    animate background { duration: 100ms; }
+
+    Image { source: root.icon; colorize: !root.enabled ? Theme.muted : root.danger ? Theme.danger : Theme.text; x: (parent.width - root.glyph-size) / 2; y: (parent.height - root.glyph-size) / 2; width: root.glyph-size; height: root.glyph-size; }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// ---------------------------------------------------------------------------
+// Single line field (spec 2.2)
+// ---------------------------------------------------------------------------
+// Legacy: `text`, `placeholder-text`, `placeholder-color`, `input-type`, `enabled`,
+// `has-leading-icon`, `leading-icon`, `secret-visible`, `accepted`, `edited`, `focus()`.
+// New: `filled` (field-bg, for dialogs and settings rows), `compact` (30px), `invalid`
+// (danger border), `search` (header search look with a leading search glyph).
+// Disabled fields are not focusable and use the muted text / divider border / soft fill.
 export component Input inherits Rectangle {
     in-out property <string> text;
     in property <string> placeholder-text;
-    in property <color> placeholder-color: #a4b3ba;
+    in property <color> placeholder-color: Theme.muted;
     in property <InputType> input-type: InputType.text;
     in property <bool> enabled: true;
     in property <bool> has-leading-icon: false;
     in property <image> leading-icon;
+    in property <bool> filled: false;
+    in property <bool> compact: false;
+    in property <bool> invalid: false;
+    in property <bool> search: false;
     property <bool> secret-visible: false;
+    out property <bool> focused: edit.has-focus;
     callback accepted;
     callback edited;
     forward-focus: edit;
-    min-height: 36px; max-height: 36px; preferred-height: 36px; min-width: 0px;
-    border-width: 1px; border-color: edit.has-focus ? Theme.accent : #d5dde0;
-    border-radius: 10px; background: transparent;
-    Image { source: root.leading-icon; colorize: #a4b3ba; visible: root.has-leading-icon; x: 10px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
-    Text { x: root.has-leading-icon ? 32px : 10px; width: parent.width - self.x - 10px; text: root.placeholder-text; color: root.placeholder-color; vertical-alignment: center; visible: root.text == ""; }
-    edit := TextInput { x: root.has-leading-icon ? 32px : 10px; width: parent.width - self.x - (root.input-type == InputType.password ? 34px : 10px); y: (parent.height - self.height) / 2; height: 22px;
-        text <=> root.text; color: Theme.text; font-size: 14px; single-line: true; input-type: root.secret-visible ? InputType.text : root.input-type; enabled: root.enabled;
-        selection-background-color: #2091f640; selection-foreground-color: Theme.text;
+
+    private property <length> field-height: compact ? Theme.input-height-compact : Theme.input-height;
+    min-height: field-height; max-height: field-height; preferred-height: field-height; min-width: 0px;
+    border-width: 1px;
+    border-color: invalid ? Theme.danger : edit.has-focus ? Theme.focus-ring : enabled ? Theme.border : Theme.divider;
+    border-radius: Theme.r-field;
+    background: !enabled ? Theme.control-disabled : search ? Theme.search-bg : filled ? Theme.field-bg : transparent;
+    clip: true;
+
+    Image { source: root.leading-icon; colorize: root.enabled ? (root.search ? Theme.secondary : Theme.muted) : Theme.muted; visible: root.has-leading-icon; x: 10px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+    Text { x: root.has-leading-icon ? 32px : 10px; width: parent.width - self.x - 10px; text: root.placeholder-text; color: root.enabled ? root.placeholder-color : Theme.muted; font-size: 14px; vertical-alignment: center; overflow: elide; visible: root.text == ""; }
+    edit := TextInput {
+        x: root.has-leading-icon ? 32px : 10px;
+        width: parent.width - self.x - (root.input-type == InputType.password ? 34px : 10px);
+        y: (parent.height - self.height) / 2; height: 22px;
+        text <=> root.text; color: root.enabled ? Theme.text : Theme.muted; font-size: 14px; single-line: true;
+        input-type: root.secret-visible ? InputType.text : root.input-type;
+        enabled: root.enabled; read-only: !root.enabled;
+        selection-background-color: Theme.accent-soft; selection-foreground-color: Theme.text;
         accepted => { root.accepted(); } edited => { root.edited(); }
     }
     if root.input-type == InputType.password: Rectangle { x: parent.width - 30px; width: 28px; background: transparent;
-        Image { source: @image-url("icons/eye-off.svg"); width: 14px; height: 14px; x: 7px; y: (parent.height - 14px) / 2; }
-        TouchArea { enabled: root.enabled; clicked => { root.secret-visible = !root.secret-visible; edit.focus(); } }
+        Image { source: root.secret-visible ? @image-url("icons/eye.svg") : @image-url("icons/eye-off.svg"); colorize: root.enabled ? Theme.secondary : Theme.muted; width: 14px; height: 14px; x: 7px; y: (parent.height - 14px) / 2; }
+        TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.secret-visible = !root.secret-visible; edit.focus(); } }
     }
 }
-export component NavItem inherits Rectangle {
-    in property <string> text;
-    in property <image> icon;
-    in property <bool> active;
+
+// ---------------------------------------------------------------------------
+// Header search / filter field (spec 2.2 "header search variant")
+// ---------------------------------------------------------------------------
+export component SearchField inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder: "Search";
     in property <bool> enabled: true;
-    callback clicked;
-    height: 36px; border-radius: 5px;
-    background: root.active ? #798c941a : area.has-hover && root.enabled ? #798c941a : transparent;
-    HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 13px;
-        Rectangle { width: 14px; background: transparent;
-            Image { source: root.icon; colorize: Theme.text; image-fit: contain; x: 0px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
-        }
-        Text { text: root.text; color: Theme.text; font-size: 14px; min-width: 100px; vertical-alignment: center; }
+    out property <bool> focused: field.focused;
+    callback edited;
+    callback accepted;
+    height: Theme.input-height;
+    forward-focus: field;
+    field := Input {
+        search: true; filled: false;
+        has-leading-icon: true; leading-icon: @image-url("icons/search.svg");
+        placeholder-text: root.placeholder; placeholder-color: Theme.secondary;
+        text <=> root.text; enabled: root.enabled;
+        edited => { root.edited(); } accepted => { root.accepted(); }
     }
-    area := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
 }
+
+// ---------------------------------------------------------------------------
+// Multi-line text (spec 2.3): monospace for snippets, word wrapped, 10px padding
+// ---------------------------------------------------------------------------
+export component TextArea inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> placeholder-text: root.placeholder;
+    in property <bool> mono: false;
+    in property <bool> enabled: true;
+    in property <bool> invalid: false;
+    in property <bool> filled: true;
+    callback edited;
+    min-height: 120px;
+    border-width: 1px;
+    border-color: invalid ? Theme.danger : edit.has-focus ? Theme.focus-ring : enabled ? Theme.border : Theme.divider;
+    border-radius: Theme.r-field;
+    background: !enabled ? Theme.control-disabled : filled ? Theme.field-bg : transparent;
+    clip: true;
+
+    Text { x: 10px; y: 10px; width: parent.width - 20px; height: self.preferred-height; text: root.placeholder-text; color: Theme.muted; font-size: root.mono ? 13px : 14px; wrap: word-wrap; visible: root.text == ""; }
+    flick := Flickable {
+        x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px;
+        content-width: self.width;
+        content-height: Math.max(self.height, edit.preferred-height + 20px);
+        edit := TextInput {
+            x: 10px; y: 10px; width: flick.width - 20px; height: self.preferred-height;
+            text <=> root.text; color: root.enabled ? Theme.text : Theme.muted;
+            font-family: root.mono ? "Consolas" : "sans-serif"; font-size: root.mono ? 13px : 14px;
+            wrap: word-wrap; enabled: root.enabled; read-only: !root.enabled;
+            selection-background-color: Theme.accent-soft; selection-foreground-color: Theme.text;
+            edited => { root.edited(); }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Labelled field (spec 6.2 `Field` extension): label 12/500, optional helper text
+// ---------------------------------------------------------------------------
 export component Field inherits VerticalLayout {
     in property <string> label;
     in property <string> placeholder;
     in property <bool> secret: false;
     in property <bool> auto-focus: false;
+    in property <bool> invalid: false;
+    /// Helper/error text under the field; painted `danger` when `invalid` is set.
+    in property <string> helper;
     in-out property <string> text;
     spacing: 6px;
-    Text { text: root.label; color: Theme.secondary; font-size: 12px; height: 18px; }
-    Input { text <=> root.text; placeholder-text: root.placeholder; input-type: root.secret ? InputType.password : InputType.text; height: 36px; init => { if root.auto-focus { self.focus(); } } }
+    Text { text: root.label; color: Theme.secondary; font-size: 12px; font-weight: 500; height: 18px; }
+    Input { text <=> root.text; placeholder-text: root.placeholder; invalid: root.invalid; input-type: root.secret ? InputType.password : InputType.text; height: 36px; init => { if root.auto-focus { self.focus(); } } }
+    if root.helper != "": Text { text: root.helper; color: root.invalid ? Theme.danger : Theme.secondary; font-size: 12px; height: 16px; overflow: elide; }
+}
+
+// ---------------------------------------------------------------------------
+// Toggle switch (spec 2.4): 36x20 track, 16px knob
+// ---------------------------------------------------------------------------
+export component Toggle inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <bool> enabled: true;
+    callback toggled;
+    width: 36px; height: 20px;
+    border-radius: Theme.r-pill;
+    background: !root.enabled ? Theme.divider : root.checked ? Theme.accent : Theme.border;
+    animate background { duration: 100ms; }
+    knob := Rectangle { x: root.checked ? 18px : 2px; y: 2px; width: 16px; height: 16px; border-radius: Theme.r-pill; background: root.enabled ? Theme.on-accent : Theme.muted; animate x { duration: 120ms; } }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.checked = !root.checked; root.toggled(); } }
+}
+
+// ---------------------------------------------------------------------------
+// Checkbox (spec 2.4): 18x18 box, label 14/400 to the right
+// ---------------------------------------------------------------------------
+export component Checkbox inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback toggled;
+    height: 20px;
+    background: transparent;
+    HorizontalLayout { spacing: 8px; cross-axis-alignment: center;
+        Rectangle { width: 18px; height: 18px; border-radius: Theme.r-control;
+            background: !root.enabled ? transparent : root.checked ? Theme.accent : transparent;
+            border-width: 1px; border-color: !root.enabled ? Theme.divider : root.checked ? Theme.accent : Theme.border;
+            Image { source: @image-url("icons/check.svg"); visible: root.checked; colorize: root.enabled ? Theme.on-accent : Theme.muted; x: 3px; y: 3px; width: 12px; height: 12px; }
+        }
+        Text { text: root.text; color: root.enabled ? Theme.text : Theme.muted; font-size: 14px; vertical-alignment: center; overflow: elide; }
+    }
+    touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.checked = !root.checked; root.toggled(); } }
+}
+
+// ---------------------------------------------------------------------------
+// Segmented control (spec 2.5): 30px track, equal segments, selected = highest
+// ---------------------------------------------------------------------------
+export component Segmented inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> current-index: 0;
+    in property <bool> enabled: true;
+    in property <length> segment-min-width: 72px;
+    callback changed(int);
+    height: 30px;
+    min-width: root.options.length * root.segment-min-width + 4px;
+    preferred-width: root.options.length * root.segment-min-width + 4px;
+    horizontal-stretch: 0;
+    border-radius: 8px;
+    background: root.enabled ? Theme.control : Theme.control-disabled;
+    HorizontalLayout { padding: 2px; spacing: 0px;
+        for option[index] in root.options: Rectangle {
+            horizontal-stretch: 1; height: 26px;
+            min-width: root.segment-min-width;
+            border-radius: 6px;
+            background: root.current-index == index ? Theme.highest : seg-touch.has-hover && root.enabled ? Theme.hover : transparent;
+            animate background { duration: 100ms; }
+            Text { width: parent.width; height: parent.height; text: option; color: !root.enabled ? Theme.muted : root.current-index == index || seg-touch.has-hover ? Theme.text : Theme.secondary; font-size: 14px; font-weight: 500; horizontal-alignment: center; vertical-alignment: center; overflow: elide; }
+            seg-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { if root.current-index != index { root.current-index = index; root.changed(index); } } }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Floating surface (spec 2.12): menu, select list or context menu.
+// Place it as the LAST child of an element that is not laid out (page root or the window) so it
+// is drawn on top: it covers that element, adds the click-away layer, `Esc` handling and the
+// fake elevation shadow, and puts the surface at (anchor-x, anchor-y).
+// ---------------------------------------------------------------------------
+export component Popover inherits Rectangle {
+    in-out property <bool> open: false;
+    in property <length> anchor-x: 0px;
+    in property <length> anchor-y: 0px;
+    in property <length> popover-width: 200px;
+    /// 0px hugs the content.
+    in property <length> popover-height: 0px;
+    in property <bool> enabled: true;
+    callback dismissed;
+
+    private property <length> surface-w: root.popover-width;
+    private property <length> surface-h: root.popover-height > 0px ? root.popover-height : body.preferred-height;
+    background: transparent;
+    visible: root.open;
+    forward-focus: popup-focus;
+
+    TouchArea { enabled: root.enabled; clicked => { root.open = false; root.dismissed(); } }
+    popup-focus := FocusScope { key-pressed(event) => { if event.text == Key.Escape { root.open = false; root.dismissed(); accept } else { reject } } }
+    Rectangle { x: root.anchor-x - 1px; y: root.anchor-y + 1px; width: root.surface-w + 2px; height: root.surface-h + 3px; border-radius: 11px; background: Theme.shadow-1; }
+    Rectangle { x: root.anchor-x - 2px; y: root.anchor-y + 2px; width: root.surface-w + 4px; height: root.surface-h + 6px; border-radius: 12px; background: Theme.shadow-2; }
+    Rectangle {
+        x: root.anchor-x; y: root.anchor-y; width: root.surface-w; height: root.surface-h;
+        background: Theme.highest; border-width: 1px; border-color: Theme.border; border-radius: Theme.r-field;
+        TouchArea { } // Blank surface clicks must not reach the click-away layer.
+        body := VerticalLayout { padding: 4px; spacing: 0px; @children }
+    }
+    init => { if root.open { popup-focus.focus(); } }
+    changed open => { if root.open { popup-focus.focus(); } }
+}
+
+// ---------------------------------------------------------------------------
+// Dropdown (spec 2.6): a native popup escapes scrolling/clipping ancestors.
+// The popup backend provides window-wide click-away dismissal; Popover provides
+// the shared surface, shadows and Escape handling.
+// ---------------------------------------------------------------------------
+export component Select inherits Rectangle {
+    in property <[string]> options;
+    in-out property <int> current-index: -1;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    in property <bool> filled: false;
+    in property <bool> invalid: false;
+    in-out property <bool> open: false;
+    in property <float> visible-items: 6.5;
+    callback changed(int);
+    private property <string> value-text: root.current-index >= 0 && root.current-index < root.options.length ? root.options[root.current-index] : "";
+    private property <length> dropdown-height: Math.min(root.options.length * 32px, root.visible-items * 32px) + 8px;
+    private property <bool> popup-visible: dropdown.is-open;
+    changed popup-visible => { root.open = root.popup-visible; }
+
+    height: Theme.input-height;
+    border-width: 1px;
+    border-color: root.invalid ? Theme.danger : root.open ? Theme.focus-ring : root.enabled ? Theme.border : Theme.divider;
+    border-radius: Theme.r-field;
+    background: !root.enabled ? Theme.control-disabled : root.filled ? Theme.field-bg : transparent;
+
+    Text { x: 10px; width: parent.width - 38px; text: root.value-text != "" ? root.value-text : root.placeholder; color: !root.enabled || root.value-text == "" ? Theme.muted : Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; }
+    Image { source: @image-url("icons/chevron-down.svg"); colorize: root.enabled ? Theme.secondary : Theme.muted; x: parent.width - 24px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+    field-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.open = !root.open; } }
+
+    dropdown := PopupWindow {
+        x: -2px; y: root.height + 4px; width: root.width + 4px; height: root.dropdown-height + 8px;
+        close-policy: close-on-click-outside;
+        forward-focus: popup-content;
+        popup-content := Popover {
+            open <=> root.open; anchor-x: 2px; anchor-y: 0px;
+            popover-width: root.width; popover-height: root.dropdown-height;
+            dismissed => { root.open = false; }
+            list := Flickable {
+                height: root.dropdown-height - 8px;
+                content-width: self.width;
+                content-height: root.options.length * 32px;
+                for option[index] in root.options: Rectangle {
+                    x: 0px; y: index * 32px; width: list.width; height: 32px;
+                    border-radius: Theme.r-control;
+                    background: root.current-index == index ? Theme.selected : option-touch.has-hover ? Theme.hover : transparent;
+                    Text { x: 8px; width: parent.width - 34px; text: option; color: Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; }
+                    if root.current-index == index: Image { source: @image-url("icons/check.svg"); colorize: Theme.accent; x: parent.width - 24px; y: 9px; width: 14px; height: 14px; }
+                    option-touch := TouchArea { mouse-cursor: pointer; clicked => { root.current-index = index; root.open = false; root.changed(index); } }
+                }
+            }
+        }
+    }
+    init => { if root.open && root.enabled { dropdown.show(); } }
+    changed open => { if root.open && root.enabled { dropdown.show(); } else { dropdown.close(); } }
+}
+
+// ---------------------------------------------------------------------------
+// Menu item (spec 2.12): 32px, radius 5, icon 14px, danger variant
+// ---------------------------------------------------------------------------
+export component MenuItem inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    /// Set together with `icon`; icons are optional, an unset image cannot be detected.
+    in property <bool> has-icon: false;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    /// Trailing `check.svg` for select-style menus.
+    in property <bool> show-check: false;
+    callback clicked;
+    height: 32px;
+    border-radius: Theme.r-control;
+    background: !root.enabled ? transparent : item-touch.pressed ? Theme.pressed : item-touch.has-hover ? (root.danger ? Theme.danger-soft : Theme.hover) : transparent;
+    animate background { duration: 100ms; }
+    HorizontalLayout { padding-left: 8px; padding-right: 8px; spacing: 10px; cross-axis-alignment: center;
+        if root.has-icon: Rectangle { width: 14px; background: transparent;
+            Image { source: root.icon; colorize: !root.enabled ? Theme.muted : root.danger ? Theme.danger : Theme.text; width: 14px; height: 14px; x: 0px; y: (parent.height - 14px) / 2; }
+        }
+        Text { text: root.text; color: !root.enabled ? Theme.muted : root.danger ? Theme.danger : Theme.text; font-size: 14px; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        if root.show-check: Rectangle { width: 14px; background: transparent;
+            Image { source: @image-url("icons/check.svg"); colorize: root.danger ? Theme.danger : Theme.accent; width: 14px; height: 14px; x: 0px; y: (parent.height - 14px) / 2; }
+        }
+    }
+    item-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+/// 1px divider with the 4px vertical margins of a popover separator (spec 2.12).
+export component MenuSeparator inherits Rectangle {
+    height: 9px; background: transparent;
+    Rectangle { y: 4px; height: 1px; width: 100%; background: Theme.divider; }
+}
+
+// ---------------------------------------------------------------------------
+// Card (spec 2.8): panel card on `base`, highest fill, radius 10, padding 20
+// ---------------------------------------------------------------------------
+export component Card inherits Rectangle {
+    in property <string> title;
+    background: Theme.highest; border-radius: Theme.r-field;
+    VerticalLayout { padding: 20px; spacing: 10px;
+        if root.title != "": Text { text: root.title; color: Theme.text; font-size: 14px; font-weight: 600; height: 16px; }
+        @children
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Entity card (spec 2.8): 60px host / group / key card, 36px tile, hover and selected border
+// ---------------------------------------------------------------------------
+export component EntityCard inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <image> icon;
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    /// Shows the trailing "more" hit area; hide it for cards that have no menu.
+    in property <bool> show-more: true;
+    /// Trailing slot: badge, StatusDot or icon buttons, placed before the "more" button.
+    out property <bool> hovered: card-touch.has-hover;
+    callback clicked;
+    callback double-clicked;
+    callback more-clicked;
+
+    height: Theme.entity-height;
+    border-radius: Theme.r-card;
+    background: root.enabled ? Theme.highest : Theme.base;
+    border-width: root.selected ? 2px : root.hovered ? 1px : 0px;
+    border-color: root.selected ? Theme.accent : Theme.border;
+
+    card-touch := TouchArea {
+        enabled: root.enabled; mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+        double-clicked => { root.double-clicked(); }
+    }
+    HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 14px; cross-axis-alignment: center;
+        Rectangle { width: 36px; height: 36px; border-radius: Theme.r-tile; background: Theme.tile-host;
+            Image { source: root.icon; colorize: Theme.on-accent; x: 8px; y: 8px; width: 20px; height: 20px; }
+        }
+        VerticalLayout { spacing: 3px; horizontal-stretch: 1;
+            Text { text: root.title; color: Theme.text; font-size: 14px; font-weight: 500; overflow: elide; }
+            if root.subtitle != "": Text { text: root.subtitle; color: Theme.secondary; font-size: 12px; overflow: elide; }
+        }
+        @children
+        // The 24px slot is always reserved so titles do not jump when the button fades in.
+        Rectangle { width: 24px; height: 24px; background: transparent;
+            visible: root.show-more;
+            Image { source: @image-url("icons/more.svg"); colorize: Theme.secondary; visible: root.hovered || root.selected; x: 5px; y: 5px; width: 14px; height: 14px; }
+            more-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.more-clicked(); } }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// List row (spec 2.7): 56px two-line / 40px single line, hover / selected, trailing slot
+// ---------------------------------------------------------------------------
+export component ListRow inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <image> icon;
+    in property <bool> show-icon: false;
+    in property <bool> selected: false;
+    in property <bool> divider: true;
+    in property <bool> enabled: true;
+    out property <bool> hovered: row-touch.has-hover;
+    callback clicked;
+    callback double-clicked;
+
+    private property <length> row-height: root.subtitle != "" ? Theme.row-height : Theme.row-height-single;
+    height: root.row-height;
+    background: !root.enabled ? transparent : root.selected ? Theme.accent-soft : row-touch.pressed ? Theme.pressed : row-touch.has-hover ? Theme.hover : transparent;
+    animate background { duration: 100ms; }
+
+    if root.selected: Rectangle { x: 0px; y: 0px; width: 2px; height: 100%; background: Theme.accent; }
+    row-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.double-clicked(); } }
+    HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 12px; cross-axis-alignment: center;
+        if root.show-icon: Rectangle { width: 36px; height: 36px; border-radius: Theme.r-tile; background: Theme.tile-host;
+            Image { source: root.icon; colorize: Theme.on-accent; x: 8px; y: 8px; width: 20px; height: 20px; }
+        }
+        VerticalLayout { spacing: 3px; horizontal-stretch: 1;
+            Text { text: root.title; color: root.enabled ? Theme.text : Theme.muted; font-size: 14px; font-weight: 500; overflow: elide; }
+            if root.subtitle != "": Text { text: root.subtitle; color: Theme.secondary; font-size: 12px; overflow: elide; }
+        }
+        @children
+    }
+    if root.divider: Rectangle { x: 12px; y: parent.height - 1px; width: parent.width - 24px; height: 1px; background: Theme.divider; }
+}
+
+// ---------------------------------------------------------------------------
+// Table header (spec 2.9): shares `cols` with the rows; rows should use the same
+// `horizontal-stretch: cols[i]` cells so columns cannot drift.
+// ---------------------------------------------------------------------------
+export component TableHeader inherits Rectangle {
+    in property <[string]> labels;
+    in property <[float]> cols;
+    /// Vertical separators between columns (SFTP look); other tables keep them off.
+    in property <bool> separators: false;
+    in property <bool> sortable: false;
+    in property <int> sort-column: -1;
+    in property <bool> sort-ascending: true;
+    callback sort-clicked(int);
+    height: Theme.table-header-height;
+    background: Theme.high;
+    HorizontalLayout { padding-left: 0px; padding-right: 0px; spacing: 0px; cross-axis-alignment: center;
+        for label[index] in root.labels: Rectangle {
+            horizontal-stretch: index < root.cols.length ? root.cols[index] : 1;
+            background: transparent;
+            Text { x: index == 0 ? 16px : 12px; width: parent.width - self.x - 8px; text: label; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
+            if root.sortable && root.sort-column == index: Image { source: root.sort-ascending ? @image-url("icons/chevron-down.svg") : @image-url("icons/chevron-right.svg"); colorize: Theme.secondary; x: parent.width - 24px; y: 9px; width: 12px; height: 12px; }
+            if root.separators && index + 1 < root.labels.length: Rectangle { x: parent.width - 1px; width: 1px; height: 100%; background: Theme.divider; }
+            header-touch := TouchArea { enabled: root.sortable; mouse-cursor: pointer; clicked => { root.sort-clicked(index); } }
+        }
+    }
+    Rectangle { y: parent.height - 1px; height: 1px; width: 100%; background: Theme.divider; }
+}
+
+// ---------------------------------------------------------------------------
+// Status dot (spec 2.10): 8px, always next to a text label
+// ---------------------------------------------------------------------------
+export component StatusDot inherits Rectangle {
+    in property <string> kind: "idle";
+    in property <length> dot-size: 8px;
+    width: root.dot-size; height: root.dot-size;
+    border-radius: Theme.r-pill;
+    background: root.kind == "ok" ? Theme.success : root.kind == "warn" ? Theme.warning : root.kind == "error" ? Theme.danger : root.kind == "busy" ? Theme.accent : Theme.muted;
+}
+
+// ---------------------------------------------------------------------------
+// Badge (spec 2.10): 20px pill, micro text; kinds neutral|accent|success|warning|danger
+// ---------------------------------------------------------------------------
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <string> kind: "neutral";
+    height: 20px;
+    width: badge-text.preferred-width + 16px;
+    border-radius: Theme.r-pill;
+    background: root.kind == "accent" ? Theme.accent-soft : root.kind == "success" ? Theme.success-soft : root.kind == "warning" ? Theme.warning-soft : root.kind == "danger" ? Theme.danger-soft : Theme.control;
+    HorizontalLayout { padding-left: 8px; padding-right: 8px; cross-axis-alignment: center;
+        badge-text := Text { text: root.text; color: root.kind == "accent" ? Theme.accent : root.kind == "success" ? Theme.success : root.kind == "warning" ? Theme.warning : root.kind == "danger" ? Theme.danger : Theme.secondary; font-size: 11px; font-weight: 500; vertical-alignment: center; }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Small text helpers (spec 1.2)
+// ---------------------------------------------------------------------------
+export component SectionHeader inherits Text {
+    font-size: 14px; font-weight: 600; color: Theme.text; vertical-alignment: center;
+}
+
+export component Caption inherits Text {
+    font-size: 12px; font-weight: 400; color: Theme.secondary; vertical-alignment: center;
+}
+
+// ---------------------------------------------------------------------------
+// Page header band (spec 3.1): 56px `high`, search on the left, primary action L on the right
+// ---------------------------------------------------------------------------
+export component PageHeader inherits Rectangle {
+    in-out property <string> search;
+    in property <string> placeholder: "Search";
+    in property <bool> search-visible: true;
+    in property <string> primary-text: "New";
+    in property <image> primary-icon;
+    in property <bool> primary-has-icon: false;
+    in property <bool> primary-enabled: true;
+    in property <bool> show-primary: true;
+    callback search-changed;
+    callback search-accepted;
+    callback primary-clicked;
+    height: Theme.header-height;
+    background: Theme.high;
+    HorizontalLayout { padding-left: Theme.gutter; padding-right: Theme.gutter; padding-top: 10px; padding-bottom: 10px; spacing: 10px; cross-axis-alignment: center;
+        if root.search-visible: SearchField { horizontal-stretch: 1; placeholder: root.placeholder; text <=> root.search; edited => { root.search-changed(); } accepted => { root.search-accepted(); } }
+        @children
+        if root.show-primary: Action { kind: "primary"; size: "l"; text: root.primary-text; has-icon: root.primary-has-icon; icon: root.primary-icon; disabled: !root.primary-enabled; clicked => { root.primary-clicked(); } }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar band (spec 3.1): 45px `high`, 30px controls, 1px divider underneath.
+// Children are laid out on the left; add `Rectangle { horizontal-stretch: 1; }` before
+// right-aligned children.
+// ---------------------------------------------------------------------------
+export component PageToolbar inherits Rectangle {
+    height: Theme.toolbar-height;
+    background: Theme.high;
+    HorizontalLayout { y: 7px; height: 30px; padding-left: Theme.gutter; padding-right: Theme.gutter; spacing: 10px; cross-axis-alignment: center; @children }
+    Rectangle { y: parent.height - 1px; height: 1px; width: 100%; background: Theme.divider; }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state (spec 2.11): 64px tile, 18/600 title, description, optional action L
+// ---------------------------------------------------------------------------
+export component EmptyState inherits Rectangle {
+    in property <image> icon;
+    in property <string> title;
+    in property <string> description;
+    in property <string> action-text: "Continue";
+    in property <bool> action-visible: true;
+    in property <length> action-min-width: 160px;
+    in property <string> secondary-text: "";
+    callback action-clicked;
+    callback secondary-clicked;
+    background: transparent;
+
+    column := VerticalLayout {
+        width: Math.min(420px, parent.width - 40px);
+        height: self.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        cross-axis-alignment: center;
+        spacing: 0px;
+        Rectangle { width: 64px; height: 64px; border-radius: Theme.r-tile-lg; background: Theme.control;
+            Image { source: root.icon; colorize: Theme.text; x: 20px; y: 20px; width: 24px; height: 24px; }
+        }
+        Rectangle { height: 20px; background: transparent; }
+        Text { width: parent.width; text: root.title; color: Theme.text; font-size: 18px; font-weight: 600; horizontal-alignment: center; wrap: word-wrap; }
+        if root.description != "": Rectangle { height: 8px; background: transparent; }
+        if root.description != "": Text { width: parent.width; text: root.description; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; wrap: word-wrap; }
+        if root.action-visible: Rectangle { height: 20px; background: transparent; }
+        if root.action-visible: Action { kind: "primary"; size: "l"; text: root.action-text; min-width: root.action-min-width; clicked => { root.action-clicked(); } }
+        if root.secondary-text != "": Rectangle { height: 8px; background: transparent; }
+        if root.secondary-text != "": Action { kind: "flat"; size: "m"; text: root.secondary-text; clicked => { root.secondary-clicked(); } }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Right detail / editor panel (spec 3.3): 340px, 56px header, scrolling body, 76px footer
+// ---------------------------------------------------------------------------
+export component DetailPanel inherits Rectangle {
+    in property <string> title;
+    in property <bool> more-visible: true;
+    in property <string> primary-text: "Save";
+    in property <bool> primary-enabled: true;
+    in property <bool> show-primary: true;
+    in property <bool> show-delete: false;
+    in property <string> delete-text: "Delete";
+    callback close;
+    callback more-clicked;
+    callback delete-clicked;
+    callback primary-clicked;
+
+    width: Theme.panel-width;
+    background: Theme.base;
+    private property <length> footer-height: root.show-delete ? 118px : Theme.dialog-footer-height;
+    forward-focus: panel-focus;
+    panel-focus := FocusScope {
+        capture-key-pressed(event) => { if event.text == Key.Escape { root.close(); accept } else { reject } }
+    VerticalLayout { spacing: 0px;
+        Rectangle { height: Theme.header-height; background: Theme.high;
+            HorizontalLayout { padding-left: 20px; padding-right: 14px; spacing: 10px; cross-axis-alignment: center;
+                Text { text: root.title; color: Theme.text; font-size: 14px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                if root.more-visible: IconButton { icon: @image-url("icons/more.svg"); clicked => { root.more-clicked(); } }
+                IconButton { icon: @image-url("icons/collapse-right.svg"); clicked => { root.close(); } }
+            }
+        }
+        panel-scroll := ScrollView {
+            vertical-stretch: 1; min-height: 0px;
+            content-height: body.preferred-height;
+            body := VerticalLayout { x: 0px; width: panel-scroll.visible-width; padding: 15px; spacing: 15px; @children }
+        }
+        Rectangle { height: root.footer-height; background: Theme.base;
+            Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.divider; }
+            VerticalLayout { padding-left: 15px; padding-right: 15px; padding-top: 20px; padding-bottom: 20px; spacing: 10px;
+                if root.show-delete: Action { kind: "danger-flat"; size: "m"; text: root.delete-text; clicked => { root.delete-clicked(); } }
+                if root.show-primary: Action { kind: "primary"; size: "l"; text: root.primary-text; disabled: !root.primary-enabled; horizontal-stretch: 1; clicked => { root.primary-clicked(); } }
+            }
+        }
+    }
+    }
+    Rectangle { x: 0px; y: 0px; width: 1px; height: 100%; background: Theme.divider; }
+}
+
+// ---------------------------------------------------------------------------
+// Settings row (spec 3.9): 52px (64px with description), label left, control (`@children`) right
+// ---------------------------------------------------------------------------
+export component SettingRow inherits Rectangle {
+    in property <string> label;
+    in property <string> description;
+    in property <bool> divider: true;
+    in property <bool> enabled: true;
+    private property <length> row-height: root.description != "" ? 64px : 52px;
+    height: root.row-height;
+    background: transparent;
+    HorizontalLayout { padding-left: 20px; padding-right: 20px; spacing: 12px; cross-axis-alignment: center;
+        VerticalLayout { spacing: 4px; horizontal-stretch: 1;
+            Text { text: root.label; color: root.enabled ? Theme.text : Theme.muted; font-size: 14px; font-weight: 500; overflow: elide; }
+            if root.description != "": Text { text: root.description; color: Theme.secondary; font-size: 12px; overflow: elide; }
+        }
+        @children
+    }
+    if root.divider: Rectangle { x: 20px; y: parent.height - 1px; width: parent.width - 40px; height: 1px; background: Theme.divider; }
+}
+
+// ---------------------------------------------------------------------------
+// Modal dialog (spec 2.13). Place it as the last child of the window or of the page it belongs
+// to; it fills that element, adds the scrim plus the elevation shadow and centres the surface.
+// `Esc` cancels; the body scrolls. `scrim: false` draws the surface alone (gallery previews).
+// ---------------------------------------------------------------------------
+export component Dialog inherits Rectangle {
+    in-out property <bool> open: false;
+    in property <string> title;
+    in property <string> description;
+    in property <length> dialog-width: 440px;
+    in property <string> confirm-text: "OK";
+    in property <string> cancel-text: "Cancel";
+    /// "primary" (default) or "danger" for destructive confirmations.
+    in property <string> confirm-kind: "primary";
+    in property <bool> confirm-enabled: true;
+    in property <bool> cancel-visible: true;
+    in property <bool> scrim: true;
+    /// Data-entry dialogs keep this false, pickers set it true.
+    in property <bool> dismiss-on-scrim: false;
+    callback confirm;
+    callback cancel;
+
+    background: transparent;
+    visible: root.open;
+    private property <length> surface-w: Math.min(root.dialog-width, root.width - 40px);
+    private property <length> surface-h: Math.min(content.preferred-height, root.height - 80px);
+
+    if root.scrim: Rectangle { x: 0px; y: 0px; width: 100%; height: 100%; background: Theme.scrim; TouchArea { clicked => { if root.dismiss-on-scrim { root.open = false; root.cancel(); } } } }
+    dialog-focus := FocusScope {
+        capture-key-pressed(event) => {
+            if event.text == Key.Escape { root.open = false; root.cancel(); accept }
+            else if event.text == Key.Return && root.confirm-enabled { root.confirm(); accept }
+            else { reject }
+        }
+    Rectangle { x: (parent.width - root.surface-w) / 2 - 1px; y: (parent.height - root.surface-h) / 2 + 1px; width: root.surface-w + 2px; height: root.surface-h + 2px; border-radius: 13px; background: Theme.shadow-1; }
+    Rectangle { x: (parent.width - root.surface-w) / 2 - 2px; y: (parent.height - root.surface-h) / 2 + 2px; width: root.surface-w + 4px; height: root.surface-h + 4px; border-radius: 14px; background: Theme.shadow-3; }
+    Rectangle { x: (parent.width - root.surface-w) / 2 - 4px; y: (parent.height - root.surface-h) / 2 + 4px; width: root.surface-w + 8px; height: root.surface-h + 8px; border-radius: 16px; background: Theme.shadow-4; }
+    Rectangle {
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        width: root.surface-w; height: root.surface-h;
+        background: Theme.highest; border-width: 1px; border-color: Theme.border; border-radius: Theme.r-dialog; clip: true;
+        content := VerticalLayout { padding: 24px; spacing: 0px;
+            Text { text: root.title; color: Theme.text; font-size: 18px; font-weight: 600; wrap: word-wrap; }
+            if root.description != "": Rectangle { height: 8px; background: transparent; }
+            if root.description != "": Text { text: root.description; color: Theme.secondary; font-size: 14px; wrap: word-wrap; }
+            Rectangle { height: 20px; background: transparent; }
+            body := Flickable {
+                min-height: 0px;
+                preferred-height: body-content.preferred-height;
+                vertical-stretch: 1;
+                content-width: self.width;
+                content-height: body-content.preferred-height + 2px;
+                body-content := VerticalLayout { x: 0px; y: 0px; width: body.width; spacing: 12px; @children }
+            }
+            Rectangle { height: 24px; background: transparent; }
+            HorizontalLayout { alignment: end; spacing: 10px; cross-axis-alignment: center;
+                if root.cancel-visible: Action { kind: "secondary"; size: "l"; text: root.cancel-text; clicked => { root.open = false; root.cancel(); } }
+                Action { kind: root.confirm-kind; size: "l"; text: root.confirm-text; disabled: !root.confirm-enabled; clicked => { root.confirm(); } }
+            }
+        }
+    }
+    }
+    init => { if root.open { dialog-focus.focus(); } }
+    changed open => { if root.open { dialog-focus.focus(); } }
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar navigation item (spec 2.16): 36px, active is stronger than hover
+// ---------------------------------------------------------------------------
+export component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> active;
+    in property <bool> enabled: true;
+    out property <bool> hovered: area.has-hover;
+    callback clicked;
+    height: 36px;
+    border-radius: Theme.r-control;
+    background: !root.enabled ? transparent : root.active ? Theme.selected : area.pressed ? Theme.pressed : area.has-hover ? Theme.hover : transparent;
+    animate background { duration: 100ms; }
+    HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 13px; cross-axis-alignment: center;
+        Rectangle { width: 14px; background: transparent;
+            Image { source: root.icon; colorize: root.enabled ? Theme.text : Theme.muted; image-fit: contain; x: 0px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+        }
+        Text { text: root.text; color: root.enabled ? Theme.text : Theme.muted; font-size: 14px; font-weight: root.active ? 600 : 400; min-width: 100px; vertical-alignment: center; overflow: elide; }
+    }
+    area := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { root.clicked(); } }
 }

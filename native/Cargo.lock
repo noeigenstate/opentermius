@@ -3503,6 +3503,7 @@ dependencies = [
  "dirs",
  "image",
  "libc",
+ "miniz_oxide 0.8.9",
  "portable-pty",
  "raw-window-handle",
  "rfd",

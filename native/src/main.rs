@@ -1,9 +1,11 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 use anyhow::Context;
 use opentermius::{
+    settings::{BellMode, Settings},
+    hosts,
     ssh::{self, Command, Event},
     store::{self, Profile, Store},
-    terminal::{Snapshot, Terminal},
+    terminal::{self, Snapshot, Terminal},
 };
 use slint::Model;
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
@@ -27,6 +29,7 @@ struct SessionView {
     snapshot: Snapshot,
     status: String,
     connected: bool,
+    ended: bool,
     selection: Option<((i32, i32), (i32, i32))>,
 }
 enum Prompt {
@@ -51,9 +54,18 @@ enum Prompt {
         reply: oneshot::Sender<Option<Vec<String>>>,
     },
 }
+impl Prompt {
+    fn session_id(&self) -> &str {
+        match self {
+            Self::Username { id } | Self::Credential { id }
+            | Self::Host { id, .. } | Self::Auth { id, .. } => id,
+        }
+    }
+}
 struct State {
     ui: slint::Weak<AppWindow>,
     store: Arc<Mutex<Store>>,
+    settings: Settings,
     runtime: tokio::runtime::Runtime,
     events: mpsc::Sender<Event>,
     sessions: BTreeMap<String, SessionView>,
@@ -66,10 +78,20 @@ struct State {
     file_path: String,
     search: String,
     group_filter: String,
+    tag_filter: String,
     local_path: PathBuf,
     local_request: u64,
     pending_sftp: Option<String>,
+    remote_entries: Vec<ssh::RemoteFile>,
+    local_entries: Vec<ssh::LocalFile>,
+    transfers: BTreeMap<u64, (String, TransferRow)>,
+    next_transfer: u64,
     render_model: Rc<VecModel<TerminalRun>>,
+    selecting: bool,
+    mouse_button: Option<terminal::MouseButton>,
+    forwards: BTreeMap<String, opentermius::forwarding::RunningRule>,
+    forward_errors: BTreeMap<String, String>,
+    forwarding_timer: slint::Timer,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -117,6 +139,31 @@ fn drag_window(window: &slint::Window) {
     }
 }
 
+fn keypad_key(key: slint::winit_030::winit::keyboard::PhysicalKey) -> Option<char> {
+    use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
+    Some(match key {
+        PhysicalKey::Code(KeyCode::Numpad0) => '0',
+        PhysicalKey::Code(KeyCode::Numpad1) => '1',
+        PhysicalKey::Code(KeyCode::Numpad2) => '2',
+        PhysicalKey::Code(KeyCode::Numpad3) => '3',
+        PhysicalKey::Code(KeyCode::Numpad4) => '4',
+        PhysicalKey::Code(KeyCode::Numpad5) => '5',
+        PhysicalKey::Code(KeyCode::Numpad6) => '6',
+        PhysicalKey::Code(KeyCode::Numpad7) => '7',
+        PhysicalKey::Code(KeyCode::Numpad8) => '8',
+        PhysicalKey::Code(KeyCode::Numpad9) => '9',
+        PhysicalKey::Code(KeyCode::NumpadDecimal) => '.',
+        PhysicalKey::Code(KeyCode::NumpadComma) => ',',
+        PhysicalKey::Code(KeyCode::NumpadAdd) => '+',
+        PhysicalKey::Code(KeyCode::NumpadSubtract) => '-',
+        PhysicalKey::Code(KeyCode::NumpadMultiply | KeyCode::NumpadStar) => '*',
+        PhysicalKey::Code(KeyCode::NumpadDivide) => '/',
+        PhysicalKey::Code(KeyCode::NumpadEqual) => '=',
+        PhysicalKey::Code(KeyCode::NumpadEnter) => '\r',
+        _ => return None,
+    })
+}
+
 impl State {
     fn status(&self, message: impl AsRef<str>, error: bool) {
         if let Some(ui) = self.ui.upgrade() {
@@ -126,6 +173,8 @@ impl State {
     }
     fn hosts(&self) {
         if let (Some(ui), Ok(store)) = (self.ui.upgrade(), self.store.lock()) {
+            ui.set_host_view_mode(store.data.hosts_view.view_mode().as_str().into());
+            ui.set_host_sort_mode(store.data.hosts_view.sort_mode().as_str().into());
             let mut groups = BTreeMap::<String, i32>::new();
             for p in &store.data.hosts {
                 if !p.group.is_empty() {
@@ -141,32 +190,51 @@ impl State {
                     })
                     .collect(),
             ));
-            ui.set_hosts(model(
-                store
-                    .data
-                    .hosts
-                    .iter()
-                    .filter(|p| self.group_filter.is_empty() || p.group == self.group_filter)
-                    .filter(|p| {
-                        self.search.is_empty()
-                            || format!("{} {} {} {}", p.name, p.host, p.username, p.group)
-                                .to_lowercase()
-                                .contains(&self.search)
-                    })
-                    .map(|p| HostRow {
-                        id: p.id.clone().into(),
-                        name: p.name.clone().into(),
-                        address: format!("{}@{}:{}", p.username, p.host, p.port).into(),
-                        group: p.group.clone().into(),
-                        auth: if p.auth_type == "key" {
-                            "SSH 私钥".into()
-                        } else {
-                            "密码".into()
-                        },
-                        has_secret: p.encrypted_secret.is_some(),
+            ui.set_host_tags(model(
+                hosts::tag_counts(&store.data.hosts)
+                    .into_iter()
+                    .map(|(name, count)| TagRow {
+                        name: name.into(),
+                        count,
                     })
                     .collect(),
             ));
+            let rows: Vec<HostRow> = hosts::visible_hosts(
+                &store.data.hosts,
+                &self.search,
+                &self.group_filter,
+                &self.tag_filter,
+                store.data.hosts_view.sort_mode(),
+            )
+            .into_iter()
+            .map(|p| HostRow {
+                id: p.id.clone().into(),
+                name: p.name.clone().into(),
+                address: format!("{}@{}:{}", p.username, p.host, p.port).into(),
+                group: p.group.clone().into(),
+                auth: if p.auth_type == "key" {
+                    "SSH 私钥".into()
+                } else {
+                    "密码".into()
+                },
+                has_secret: p.encrypted_secret.is_some(),
+                tags: p
+                    .tags
+                    .iter()
+                    .map(|tag| format!("#{tag}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .into(),
+            })
+            .collect();
+            let selected = ui.get_selected_host();
+            if !selected.is_empty() && !rows.iter().any(|row| row.id == selected) {
+                ui.set_selected_host("".into());
+                ui.set_selected_host_name("".into());
+            } else if let Some(row) = rows.iter().find(|row| row.id == selected) {
+                ui.set_selected_host_name(row.name.clone());
+            }
+            ui.set_hosts(model(rows));
         }
     }
     fn tabs(&self) {
@@ -183,6 +251,8 @@ impl State {
                             } else {
                                 s.status.clone().into()
                             },
+                            disconnected: s.ended,
+                            local: s.local,
                         })
                     })
                     .collect(),
@@ -198,6 +268,7 @@ impl State {
                 ui.set_remote_connected(view.connected && !view.local);
                 ui.set_local_session(view.local);
                 ui.set_active_host(view.profile.name.clone().into());
+                let scheme = self.settings.color_scheme;
                 let rows: Vec<TerminalRun> = view
                     .snapshot
                     .runs
@@ -207,8 +278,8 @@ impl State {
                         row: r.row as i32,
                         col: r.col as i32,
                         width: r.width as i32,
-                        fg: ui_color(r.fg),
-                        bg: ui_color(r.bg),
+                        fg: ui_color(scheme.map_color(r.fg, r.fg_source)),
+                        bg: ui_color(scheme.map_color(r.bg, r.bg_source)),
                         bold: r.bold,
                         underline: r.underline,
                     })
@@ -225,6 +296,7 @@ impl State {
                 ui.set_cursor_row(view.snapshot.cursor.0 as i32);
                 ui.set_cursor_col(view.snapshot.cursor.1 as i32);
                 ui.set_cursor_visible(view.connected && view.snapshot.cursor_visible);
+                ui.set_reconnect_hint(view.ended && !view.local && !view.connected);
                 let mut selected = Vec::new();
                 if let Some((mut from, mut to)) = view.selection.filter(|(a, b)| a != b) {
                     if from > to {
@@ -255,7 +327,8 @@ impl State {
                 ui.set_local_session(false);
                 ui.set_active_host("".into());
                 self.render_model.set_vec(Vec::new());
-                ui.set_cursor_visible(false)
+                ui.set_cursor_visible(false);
+                ui.set_reconnect_hint(false)
             }
         }
     }
@@ -284,7 +357,11 @@ impl State {
                 "password".into()
             },
             private_key_path: d.key_path.to_string(),
+            key_id: d.key_id.to_string(),
             encrypted_secret: None,
+            tags: hosts::parse_tags(&d.tags),
+            last_connected: None,
+            created_at: None,
         };
         let mut secret = d.secret.to_string();
         let result = self
@@ -312,6 +389,7 @@ impl State {
             .ok()
             .and_then(|s| s.data.hosts.iter().find(|p| p.id == id).cloned());
         if let Some(p) = profile {
+            let tags = hosts::tags_string(&p);
             HostDraft {
                 id: p.id.into(),
                 name: p.name.into(),
@@ -321,8 +399,10 @@ impl State {
                 group: p.group.into(),
                 auth_index: i32::from(p.auth_type == "key"),
                 key_path: p.private_key_path.into(),
+                key_id: p.key_id.into(),
                 secret: SharedString::default(),
                 remember: p.encrypted_secret.is_some(),
+                tags: tags.into(),
             }
         } else {
             HostDraft {
@@ -331,6 +411,167 @@ impl State {
                 remember: true,
                 ..HostDraft::default()
             }
+        }
+    }
+    fn set_host_view(&mut self, value: &str) {
+        let mode = hosts::ViewMode::parse(value);
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_host_view_mode(mode.as_str().into());
+        }
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| {
+                let previous = store.data.hosts_view.clone();
+                store.data.hosts_view.set_mode(mode);
+                if let Err(error) = store.persist() {
+                    store.data.hosts_view = previous;
+                    return Err(error);
+                }
+                Ok(())
+            });
+        if let Err(error) = result {
+            if let (Ok(store), Some(ui)) = (self.store.lock(), self.ui.upgrade()) {
+                ui.set_host_view_mode(store.data.hosts_view.view_mode().as_str().into());
+            }
+            self.status(format!("无法保存视图设置：{error}"), true);
+        }
+    }
+    fn set_host_sort(&mut self, value: &str) {
+        let sort = hosts::SortMode::parse(value);
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_host_sort_mode(sort.as_str().into());
+        }
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| {
+                let previous = store.data.hosts_view.clone();
+                store.data.hosts_view.set_sort(sort);
+                if let Err(error) = store.persist() {
+                    store.data.hosts_view = previous;
+                    return Err(error);
+                }
+                Ok(())
+            });
+        self.hosts();
+        if let Err(error) = result {
+            if let (Ok(store), Some(ui)) = (self.store.lock(), self.ui.upgrade()) {
+                ui.set_host_sort_mode(store.data.hosts_view.sort_mode().as_str().into());
+            }
+            self.status(format!("无法保存排序设置：{error}"), true);
+        }
+    }
+    fn set_tag_filter(&mut self, value: &str) {
+        self.tag_filter = value.trim().to_string();
+        self.hosts();
+    }
+    fn move_selection(&mut self, delta: i32) {
+        if delta == 0 {
+            return;
+        }
+        let current = self
+            .ui
+            .upgrade()
+            .map(|ui| ui.get_selected_host().to_string())
+            .unwrap_or_default();
+        let target = self.store.lock().ok().and_then(|store| {
+            let visible = hosts::visible_hosts(
+                &store.data.hosts,
+                &self.search,
+                &self.group_filter,
+                &self.tag_filter,
+                store.data.hosts_view.sort_mode(),
+            );
+            let ids: Vec<String> = visible.iter().map(|p| p.id.clone()).collect();
+            let next = hosts::next_selection(&ids, &current, delta)?;
+            visible
+                .into_iter()
+                .find(|p| p.id == next)
+                .map(|p| (p.id.clone(), p.name.clone()))
+        });
+        if let (Some((id, name)), Some(ui)) = (target, self.ui.upgrade()) {
+            let index = ui.get_hosts().iter().position(|host| host.id == id).unwrap_or(0);
+            ui.set_selected_host(id.into());
+            ui.set_selected_host_name(name.into());
+            ui.set_host_selection_index(index as i32);
+        }
+    }
+    fn duplicate_host(&mut self, id: &str) {
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| hosts::duplicate_profile(&mut store, id));
+        match result {
+            Ok(_) => {
+                self.hosts();
+                self.status("主机已复制", false);
+            }
+            Err(error) => self.status(error.to_string(), true),
+        }
+    }
+    fn copy_address(&self, id: &str) {
+        let address = self.store.lock().ok().and_then(|store| {
+            store
+                .data
+                .hosts
+                .iter()
+                .find(|p| p.id == id)
+                .map(hosts::copy_address)
+        });
+        match address {
+            Some(address) => {
+                match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(address))
+                {
+                    Ok(()) => self.status("地址已复制到剪贴板", false),
+                    Err(error) => self.status(error.to_string(), true),
+                }
+            }
+            None => self.status("主机不存在", true),
+        }
+    }
+    fn open_host_sftp(&mut self, id: &str) {
+        self.search.clear();
+        self.group_filter.clear();
+        self.tag_filter.clear();
+        self.hosts();
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_search("".into());
+            ui.set_host_tag_filter("".into());
+            ui.set_sftp_page(true);
+        }
+        self.list_local(String::new());
+        self.select_sftp(id);
+    }
+    fn rename_group(&mut self, old: &str, new: &str) {
+        let new_name = new.trim().to_string();
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+            .and_then(|mut store| hosts::rename_group(&mut store, old, &new_name));
+        match result {
+            Ok(count) => {
+                if let Some(ui) = self.ui.upgrade() {
+                    let mut draft = ui.get_draft();
+                    if draft.group == old {
+                        draft.group = new_name.clone().into();
+                        ui.set_draft(draft);
+                    }
+                }
+                if self.group_filter == old {
+                    self.group_filter = new_name.clone();
+                    if let Some(ui) = self.ui.upgrade() {
+                        ui.set_search(new_name.clone().into());
+                    }
+                }
+                self.hosts();
+                self.status(format!("已重命名分组（{count} 台主机）"), false);
+            }
+            Err(error) => self.status(error.to_string(), true),
         }
     }
     fn connect(&mut self, host_id: &str) {
@@ -360,14 +601,22 @@ impl State {
                 local: false,
                 profile,
                 transport: None,
-                snapshot: Terminal::new(self.rows, self.cols).snapshot(),
+                snapshot: Terminal::with_scrollback(
+                    self.rows,
+                    self.cols,
+                    self.settings.scrollback_lines,
+                )
+                .snapshot(),
                 status: "等待认证".into(),
                 connected: false,
+                ended: false,
                 selection: None,
             },
         );
         self.order.push(id.clone());
         self.active = Some(id.clone());
+        self.selecting = false;
+        self.mouse_button = None;
         self.reset_files();
         self.tabs();
         self.display();
@@ -380,6 +629,12 @@ impl State {
         if profile.username.is_empty() {
             self.queue.push_back(Prompt::Username { id });
             self.next_prompt();
+            return;
+        }
+        if profile.auth_type == "key" && !profile.key_id.is_empty() {
+            // The keychain material is protected by DPAPI, so no passphrase
+            // prompt is needed on connect.
+            self.start(&id, String::new());
             return;
         }
         let encrypted = profile.encrypted_secret;
@@ -398,24 +653,56 @@ impl State {
         }
     }
     fn start(&mut self, id: &str, secret: String) {
-        let Some(view) = self.sessions.get_mut(id) else {
+        let Some(profile) = self.sessions.get(id).map(|view| view.profile.clone()) else {
             return;
+        };
+        pages::logs::ssh_started(id, &profile);
+        let key_material = if profile.auth_type == "key" && !profile.key_id.is_empty() {
+            match self
+                .store
+                .lock()
+                .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                .and_then(|store| store.key_material(&profile.key_id))
+            {
+                Ok(material) => Some(material),
+                Err(error) => {
+                    pages::logs::failed(id, &format!("{error:#}"));
+                    if let Some(view) = self.sessions.get_mut(id) {
+                        view.status = format!("{error:#}");
+                    }
+                    self.status(format!("{error:#}"), true);
+                    self.tabs();
+                    return;
+                }
+            }
+        } else {
+            None
         };
         let known = self.store.lock().ok().and_then(|s| {
             s.data
                 .known_hosts
-                .get(&store::key(&view.profile.host, view.profile.port))
+                .get(&store::key(&profile.host, profile.port))
                 .cloned()
         });
-        view.status = "连接中".into();
-        view.transport = Some(ssh::spawn(
-            self.runtime.handle(),
-            id.to_string(),
-            view.profile.clone(),
-            secret,
-            known,
-            self.events.clone(),
-        ));
+        let runtime = self.runtime.handle().clone();
+        let events = self.events.clone();
+        if let Some(view) = self.sessions.get_mut(id) {
+            view.status = "连接中".into();
+            view.transport = Some(ssh::spawn_with_key_material_and_options(
+                &runtime,
+                id.to_string(),
+                profile,
+                secret,
+                key_material,
+                known,
+                events,
+                ssh::ConnectOptions {
+                    keepalive_seconds: self.settings.keepalive_seconds,
+                    timeout_seconds: self.settings.connection_timeout_seconds,
+                    scrollback_lines: self.settings.scrollback_lines,
+                },
+            ));
+        }
         self.tabs();
     }
     fn open_terminal(&mut self) {
@@ -427,6 +714,7 @@ impl State {
             return;
         }
         let id = uuid::Uuid::new_v4().to_string();
+        pages::logs::local_started(&id);
         let transport =
             opentermius::local::spawn(self.runtime.handle(), id.clone(), self.events.clone());
         let profile = Profile {
@@ -437,8 +725,12 @@ impl State {
             username: "local".into(),
             auth_type: "password".into(),
             private_key_path: String::new(),
+            key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
+            tags: Vec::new(),
+            last_connected: None,
+            created_at: None,
         };
         self.sessions.insert(
             id.clone(),
@@ -446,14 +738,22 @@ impl State {
                 local: true,
                 profile,
                 transport: Some(transport),
-                snapshot: Terminal::new(self.rows, self.cols).snapshot(),
+                snapshot: Terminal::with_scrollback(
+                    self.rows,
+                    self.cols,
+                    self.settings.scrollback_lines,
+                )
+                .snapshot(),
                 status: "Starting".into(),
                 connected: false,
+                ended: false,
                 selection: None,
             },
         );
         self.order.push(id.clone());
         self.active = Some(id);
+        self.selecting = false;
+        self.mouse_button = None;
         self.reset_files();
         self.tabs();
         self.display();
@@ -478,6 +778,7 @@ impl State {
         }
     }
     fn close(&mut self, id: &str) {
+        pages::logs::closed(id);
         if let Some(view) = self.sessions.remove(id) {
             if let Some(transport) = view.transport {
                 let _ = transport.commands.try_send(Command::Disconnect);
@@ -490,10 +791,233 @@ impl State {
         self.order.retain(|i| i != id);
         if self.active.as_deref() == Some(id) {
             self.active = self.order.last().cloned();
+            self.selecting = false;
+            self.mouse_button = None;
             self.reset_files();
+        }
+        self.queue.retain(|prompt| prompt.session_id() != id);
+        if self.prompt.as_ref().is_some_and(|prompt| prompt.session_id() == id) {
+            self.answer(false, String::new());
         }
         self.tabs();
         self.display();
+    }
+    fn reconnect(&mut self, id: &str) {
+        let Some(view) = self.sessions.get(id) else {
+            return;
+        };
+        if view.local || !view.ended {
+            return;
+        }
+        let profile = view.profile.clone();
+        let position = self.order.iter().position(|item| item == id).unwrap_or(0);
+        // A fresh transport ID prevents a delayed Closed/Screen event from the
+        // previous connection from changing the replacement session.
+        self.close(id);
+        self.connect_profile(profile);
+        if let Some(new_id) = self.active.clone() {
+            self.order.retain(|item| item != &new_id);
+            self.order.insert(position.min(self.order.len()), new_id);
+        }
+        self.tabs();
+        self.focus_terminal();
+    }
+    fn duplicate(&mut self, id: &str) {
+        let Some(view) = self.sessions.get(id) else {
+            return;
+        };
+        if view.local {
+            self.open_terminal();
+        } else {
+            let profile = view.profile.clone();
+            self.connect_profile(profile);
+        }
+        self.focus_terminal();
+    }
+    fn focus_terminal(&self) {
+        if self.prompt.is_none() {
+            if let Some(ui) = self.ui.upgrade() {
+                ui.invoke_focus_terminal();
+            }
+        }
+    }
+    fn select(&mut self, row: i32, col: i32, extend: bool) {
+        if let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get_mut(id)) {
+            let p = (
+                row.clamp(0, view.snapshot.rows.saturating_sub(1) as i32),
+                col.clamp(0, view.snapshot.cols.saturating_sub(1) as i32),
+            );
+            view.selection = Some(if extend {
+                (view.selection.map_or(p, |selection| selection.0), p)
+            } else {
+                (p, p)
+            });
+        }
+        self.display();
+    }
+    fn pointer(&mut self, kind: i32, button: i32, row: i32, col: i32, ctrl: bool, alt: bool, shift: bool) {
+        let Some((mode, encoding, rows, cols)) = self
+            .active
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .map(|view| {
+                (
+                    view.snapshot.mouse_mode,
+                    view.snapshot.mouse_encoding,
+                    view.snapshot.rows,
+                    view.snapshot.cols,
+                )
+            })
+        else {
+            return;
+        };
+        let row = row.clamp(0, rows.saturating_sub(1) as i32);
+        let col = col.clamp(0, cols.saturating_sub(1) as i32);
+        // Finish a drag through the same path even if Shift changes mid-drag.
+        let tracking = mode != vt100::MouseProtocolMode::None
+            && ((!shift && !self.selecting) || self.mouse_button.is_some());
+        if !tracking {
+            match kind {
+                0 if button == 0 => {
+                    self.selecting = true;
+                    self.select(row, col, shift);
+                }
+                1 | 3 => {
+                    let was_selecting = self.selecting;
+                    self.selecting = false;
+                    if was_selecting { self.end_selection(); }
+                },
+                2 => {
+                    if self.selecting {
+                        self.select(row, col, true);
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+        let button = match button {
+            0 => terminal::MouseButton::Left,
+            1 => terminal::MouseButton::Right,
+            2 => terminal::MouseButton::Middle,
+            _ => terminal::MouseButton::None,
+        };
+        let mods = terminal::MouseMods {
+            ctrl,
+            alt,
+            shift: false,
+        };
+        let event = match kind {
+            0 => {
+                if button == terminal::MouseButton::None {
+                    return;
+                }
+                self.mouse_button = Some(button);
+                terminal::MouseEvent {
+                    kind: terminal::MouseKind::Press,
+                    button,
+                    row: row as u16 + 1,
+                    col: col as u16 + 1,
+                    mods,
+                }
+            }
+            1 | 3 => {
+                let button = self.mouse_button.take().unwrap_or(button);
+                if button == terminal::MouseButton::None {
+                    return;
+                }
+                terminal::MouseEvent {
+                    kind: terminal::MouseKind::Release,
+                    button,
+                    row: row as u16 + 1,
+                    col: col as u16 + 1,
+                    mods,
+                }
+            }
+            _ => {
+                let button = match self.mouse_button {
+                    Some(button) => button,
+                    None if mode == vt100::MouseProtocolMode::AnyMotion => {
+                        terminal::MouseButton::None
+                    }
+                    None => return,
+                };
+                terminal::MouseEvent {
+                    kind: terminal::MouseKind::Motion,
+                    button,
+                    row: row as u16 + 1,
+                    col: col as u16 + 1,
+                    mods,
+                }
+            }
+        };
+        if let Some(data) = terminal::encode_mouse(event, mode, encoding) {
+            self.send(Command::Input(data));
+        }
+    }
+    fn wheel(&mut self, row: i32, col: i32, delta: i32, ctrl: bool, alt: bool, shift: bool) {
+        if delta == 0 {
+            return;
+        }
+        let Some((mode, encoding, rows, cols)) = self
+            .active
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .map(|view| {
+                (
+                    view.snapshot.mouse_mode,
+                    view.snapshot.mouse_encoding,
+                    view.snapshot.rows,
+                    view.snapshot.cols,
+                )
+            })
+        else {
+            return;
+        };
+        if mode == vt100::MouseProtocolMode::None || shift {
+            self.send(Command::Scroll(delta));
+            return;
+        }
+        let row = row.clamp(0, rows.saturating_sub(1) as i32) as u16 + 1;
+        let col = col.clamp(0, cols.saturating_sub(1) as i32) as u16 + 1;
+        let kind = if delta > 0 {
+            terminal::MouseKind::WheelUp
+        } else {
+            terminal::MouseKind::WheelDown
+        };
+        let mods = terminal::MouseMods {
+            ctrl,
+            alt,
+            shift: false,
+        };
+        let mut data = Vec::new();
+        for _ in 0..delta.unsigned_abs().min(10) {
+            if let Some(bytes) = terminal::encode_mouse(
+                terminal::MouseEvent {
+                    kind,
+                    button: terminal::MouseButton::None,
+                    row,
+                    col,
+                    mods,
+                },
+                mode,
+                encoding,
+            ) {
+                data.extend_from_slice(&bytes);
+            }
+        }
+        if !data.is_empty() {
+            self.send(Command::Input(data));
+        }
+    }
+    fn ime(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        let data = terminal::encode_text(text);
+        if data.len() <= 1024 * 1024 {
+            self.send(Command::Input(data));
+        }
     }
     fn next_prompt(&mut self) {
         if self.prompt.is_some() {
@@ -581,8 +1105,10 @@ impl State {
                     }
                     self.credentials(id);
                 } else if let Some(view) = self.sessions.get_mut(&id) {
-                    view.status = "Cancelled".into();
+                    view.status = "已取消".into();
+                    view.ended = true;
                     self.tabs();
+                    self.display();
                 }
             }
             Some(Prompt::Credential { id }) => {
@@ -590,7 +1116,9 @@ impl State {
                     self.start(&id, std::mem::take(&mut answer))
                 } else if let Some(s) = self.sessions.get_mut(&id) {
                     s.status = "已取消".into();
+                    s.ended = true;
                     self.tabs();
+                    self.display();
                 }
             }
             Some(Prompt::Host {
@@ -643,8 +1171,19 @@ impl State {
         }
         answer.zeroize();
         self.next_prompt();
+        self.focus_terminal();
     }
     fn event(&mut self, event: Event) {
+        let id = match &event {
+            Event::Status { id, .. } | Event::Screen { id, .. } | Event::HostKey { id, .. }
+            | Event::AuthPrompt { id, .. } | Event::Files { id, .. } | Event::Transfer { id, .. }
+            | Event::OverwriteRequired { id, .. } | Event::Closed { id } | Event::Bell { id }
+            | Event::DeleteRequired { id, .. } | Event::TransferProgress { id, .. }
+            | Event::TransferFinished { id, .. } => id,
+        };
+        if !self.sessions.contains_key(id) {
+            return;
+        }
         match event {
             Event::Status {
                 id,
@@ -654,6 +1193,9 @@ impl State {
             } => {
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = connected;
+                    if connected {
+                        s.ended = false;
+                    }
                     s.status = if connected {
                         "已连接".into()
                     } else {
@@ -661,6 +1203,8 @@ impl State {
                     };
                 }
                 if connected {
+                    self.selecting = false;
+                    self.mouse_button = None;
                     if let Some(ui) = self.ui.upgrade() {
                         self.cols = ui.get_terminal_cols().clamp(2, 500) as u16;
                         self.rows = ui.get_terminal_rows().clamp(2, 300) as u16;
@@ -674,6 +1218,35 @@ impl State {
                         });
                     }
                 }
+                let mut connect_stamp_error = None;
+                if connected {
+                    pages::logs::connected(&id);
+                    let profile_id = self
+                        .sessions
+                        .get(&id)
+                        .filter(|session| !session.local)
+                        .map(|session| session.profile.id.clone());
+                    if let Some(profile_id) = profile_id {
+                        let now = hosts::now_rfc3339();
+                        let result = self
+                            .store
+                            .lock()
+                            .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                            .and_then(|mut store| {
+                                hosts::mark_connected(&mut store, &profile_id, &now)
+                            });
+                        match result {
+                            Ok(true) => self.hosts(),
+                            Ok(false) => {}
+                            Err(error) => {
+                                connect_stamp_error =
+                                    Some(format!("已连接，但无法保存最近连接时间：{error}"))
+                            }
+                        }
+                    }
+                } else if error {
+                    pages::logs::failed(&id, &message);
+                }
                 self.status(
                     if connected {
                         "Connected".to_string()
@@ -682,6 +1255,9 @@ impl State {
                     },
                     error,
                 );
+                if let Some(message) = connect_stamp_error {
+                    self.status(message, true);
+                }
                 self.tabs();
                 self.display();
                 if connected && self.pending_sftp.as_deref() == Some(&id) {
@@ -697,6 +1273,14 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(&id) {
                     if s.snapshot.lines != snapshot.lines {
                         s.selection = None;
+                    }
+                    if snapshot.bell_count != s.snapshot.bell_count
+                        && self.settings.bell == BellMode::Visual
+                        && self.active.as_deref() == Some(&id)
+                    {
+                        if let Some(ui) = self.ui.upgrade() {
+                            ui.set_bell_flash(true);
+                        }
                     }
                     s.snapshot = snapshot;
                     if self.active.as_deref() == Some(&id) {
@@ -733,39 +1317,11 @@ impl State {
             Event::Files { id, path, entries } => {
                 if self.active.as_deref() == Some(&id) {
                     self.file_path = path.clone();
+                    self.remote_entries = entries;
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_path(path.into());
-                        ui.set_files(model(
-                            entries
-                                .into_iter()
-                                .map(|e| FileRow {
-                                    name: e.name.into(),
-                                    is_directory: e.is_dir,
-                                    size: if e.is_dir {
-                                        "".into()
-                                    } else {
-                                        format_size(e.size).into()
-                                    },
-                                    modified: e
-                                        .modified
-                                        .parse::<i64>()
-                                        .ok()
-                                        .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
-                                        .map(|dt| {
-                                            dt.with_timezone(&chrono::Local)
-                                                .format("%Y-%m-%d %H:%M")
-                                                .to_string()
-                                        })
-                                        .unwrap_or(e.modified)
-                                        .into(),
-                                    kind: if e.is_dir {
-                                        "Folder".into()
-                                    } else {
-                                        "File".into()
-                                    },
-                                })
-                                .collect(),
-                        ));
+                        ui.set_remote_selection("".into());
+                        self.render_files();
                         ui.set_file_busy(false)
                     }
                 }
@@ -782,36 +1338,162 @@ impl State {
                 id,
                 directory,
                 local,
+                transfer,
+                folder,
             } => {
                 let confirmed = rfd::MessageDialog::new()
                     .set_title("覆盖远程文件")
-                    .set_description("同名文件已存在，是否覆盖？")
+                    .set_description(if folder {
+                        "同名文件夹已存在，是否合并并覆盖其中的同名文件？"
+                    } else {
+                        "同名文件已存在，是否覆盖？"
+                    })
                     .set_buttons(rfd::MessageButtons::YesNo)
                     .show()
                     == rfd::MessageDialogResult::Yes;
                 if confirmed {
-                    if let Some(transport) =
-                        self.sessions.get(&id).and_then(|s| s.transport.as_ref())
-                    {
-                        let _ = transport.commands.try_send(Command::Upload {
-                            directory,
-                            local,
-                            overwrite: true,
-                        });
+                    if let Some(transport) = self.sessions.get(&id).and_then(|s| s.transport.as_ref()) {
+                        let command = if transfer == 0 {
+                            Command::Upload {
+                                directory,
+                                local,
+                                overwrite: true,
+                            }
+                        } else if folder {
+                            Command::UploadTree {
+                                transfer,
+                                directory,
+                                local,
+                                overwrite: true,
+                            }
+                        } else {
+                            Command::UploadFile {
+                                transfer,
+                                directory,
+                                local,
+                                overwrite: true,
+                            }
+                        };
+                        if transport.commands.try_send(command).is_err() {
+                            self.finish_transfer(transfer, "传输队列繁忙".into(), true, false);
+                        }
                     }
                 } else {
-                    self.status("Upload cancelled", false);
+                    self.finish_transfer(transfer, "传输已取消".into(), false, true);
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_busy(false)
                     }
                 }
             }
+            Event::Bell { id } => {
+                if self.settings.bell == BellMode::Visual && self.active.as_deref() == Some(&id) {
+                    if let Some(ui) = self.ui.upgrade() {
+                        ui.set_bell_flash(true);
+                    }
+                }
+            }
+            Event::DeleteRequired {
+                id,
+                directory,
+                name,
+                files,
+                dirs,
+                bytes,
+            } => {
+                let confirmed = rfd::MessageDialog::new()
+                    .set_title("确认删除")
+                    .set_description(format!(
+                        "删除 {name}？\n{files} 个文件，{dirs} 个子文件夹，{}。此操作无法撤销。",
+                        format_size(bytes)
+                    ))
+                    .set_buttons(rfd::MessageButtons::YesNo)
+                    .show()
+                    == rfd::MessageDialogResult::Yes;
+                if confirmed {
+                    if let Some(transport) = self.sessions.get(&id).and_then(|s| s.transport.as_ref()) {
+                        if transport
+                            .commands
+                            .try_send(Command::Delete {
+                                directory,
+                                name,
+                                confirmed: true,
+                            })
+                            .is_err()
+                        {
+                            self.status("文件任务队列繁忙", true);
+                        }
+                    }
+                }
+            }
+            Event::TransferProgress {
+                id,
+                transfer,
+                name,
+                direction,
+                transferred,
+                total,
+                speed,
+            } => {
+                if let Some((_, row)) = self
+                    .transfers
+                    .get_mut(&transfer)
+                    .filter(|(session, _)| session == &id)
+                {
+                    row.name = format!("{direction} · {name}").into();
+                    row.percent = if total == 0 {
+                        0
+                    } else {
+                        (transferred.saturating_mul(100) / total).min(100) as i32
+                    };
+                    row.detail = format!(
+                        "{} / {} · {}% · {}/s",
+                        format_size(transferred),
+                        format_size(total),
+                        row.percent,
+                        format_size(speed)
+                    )
+                    .into();
+                    self.render_transfers();
+                }
+            }
+            Event::TransferFinished {
+                id,
+                transfer,
+                message,
+                error,
+                cancelled,
+            } => {
+                if self
+                    .transfers
+                    .get(&transfer)
+                    .is_some_and(|(session, _)| session == &id)
+                {
+                    self.finish_transfer(transfer, message, error, cancelled);
+                    if self.active.as_deref() == Some(&id) && !error && !cancelled {
+                        self.list_files(self.file_path.clone());
+                        self.list_local(String::new());
+                    }
+                }
+            }
             Event::Closed { id } => {
+                pages::logs::closed(&id);
+                for (session, row) in self.transfers.values_mut() {
+                    if session == &id && row.pending {
+                        row.pending = false;
+                        row.detail = "连接已关闭，传输已取消".into();
+                    }
+                }
+                self.render_transfers();
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = false;
+                    s.ended = true;
                     if s.status == "已连接" || s.status == "连接中" {
                         s.status = "已断开".into();
                     }
+                }
+                if self.active.as_deref() == Some(&id) {
+                    self.selecting = false;
+                    self.mouse_button = None;
                 }
                 self.queue.retain(|prompt| match prompt {
                     Prompt::Username { id: pending }
@@ -842,86 +1524,47 @@ impl State {
             self.paste();
             return;
         }
-        use slint::platform::Key;
-        if shift
-            && (text == SharedString::from(Key::PageUp).as_str()
-                || text == SharedString::from(Key::PageDown).as_str())
-        {
-            self.send(Command::Scroll(
-                if text == SharedString::from(Key::PageUp).as_str() {
-                    self.rows as i32
-                } else {
-                    -(self.rows as i32)
-                },
-            ));
+        let Some(id) = self.active.clone() else {
+            return;
+        };
+        let Some((ended, local, app_cursor)) = self
+            .sessions
+            .get(&id)
+            .map(|view| (view.ended, view.local, view.snapshot.application_cursor))
+        else {
+            return;
+        };
+        if ended {
+            if !local
+                && !ctrl
+                && !alt
+                && matches!(
+                    terminal::Key::from_text(text),
+                    Some(terminal::Key::Named(terminal::NamedKey::Enter))
+                )
+            {
+                self.reconnect(&id);
+            }
             return;
         }
-        let application = self
-            .active
-            .as_ref()
-            .and_then(|id| self.sessions.get(id))
-            .is_some_and(|s| s.snapshot.application_cursor);
-        let arrows = [
-            (Key::UpArrow, 'A'),
-            (Key::DownArrow, 'B'),
-            (Key::RightArrow, 'C'),
-            (Key::LeftArrow, 'D'),
-        ];
-        let mut data = if let Some((_, suffix)) = arrows
-            .iter()
-            .find(|(key, _)| text == SharedString::from(*key).as_str())
-        {
-            format!("\x1b{}{suffix}", if application { "O" } else { "[" }).into_bytes()
-        } else {
-            let mut special = None;
-            for (k, v) in [
-                (Key::Return, "\r"),
-                (Key::Backspace, "\x7f"),
-                (Key::Tab, "\t"),
-                (Key::Escape, "\x1b"),
-                (Key::Delete, "\x1b[3~"),
-                (Key::Home, "\x1b[H"),
-                (Key::End, "\x1b[F"),
-                (Key::PageUp, "\x1b[5~"),
-                (Key::PageDown, "\x1b[6~"),
-                (Key::Insert, "\x1b[2~"),
-                (Key::F1, "\x1bOP"),
-                (Key::F2, "\x1bOQ"),
-                (Key::F3, "\x1bOR"),
-                (Key::F4, "\x1bOS"),
-                (Key::F5, "\x1b[15~"),
-                (Key::F6, "\x1b[17~"),
-                (Key::F7, "\x1b[18~"),
-                (Key::F8, "\x1b[19~"),
-                (Key::F9, "\x1b[20~"),
-                (Key::F10, "\x1b[21~"),
-                (Key::F11, "\x1b[23~"),
-                (Key::F12, "\x1b[24~"),
-            ] {
-                if text == SharedString::from(k).as_str() {
-                    special = Some(v.as_bytes().to_vec());
-                    break;
-                }
-            }
-            if let Some(data) = special {
-                data
-            } else if ctrl && text.len() == 1 {
-                let c = text.as_bytes()[0];
-                if (b'@'..=b'_').contains(&c.to_ascii_uppercase()) {
-                    vec![c.to_ascii_uppercase() & 0x1f]
-                } else {
-                    text.as_bytes().to_vec()
-                }
-            } else {
-                text.as_bytes().to_vec()
-            }
+        let Some(key) = terminal::Key::from_text(text) else {
+            return;
         };
-        if alt && !data.starts_with(b"\x1b") {
-            data.insert(0, 0x1b)
-        }
-        if !data.is_empty() {
+        let mods = terminal::KeyMods::new(ctrl, alt, shift);
+        if let Some(data) = terminal::encode_key(key, mods, app_cursor) {
             self.send(Command::Input(data));
         }
+    }
+    fn keypad(&self, key: char, mods: terminal::KeyMods) -> bool {
+        let application = self.active.as_ref().and_then(|id| self.sessions.get(id))
+            .is_some_and(|view| !view.ended && view.snapshot.application_keypad);
+        if application {
+            if let Some(data) = terminal::encode_keypad(key, mods, true) {
+                self.send(Command::Input(data));
+                return true;
+            }
+        }
+        false
     }
     fn copy(&self) {
         if let Some(s) = self.active.as_ref().and_then(|id| self.sessions.get(id)) {
@@ -937,12 +1580,45 @@ impl State {
             }
         }
     }
+    fn end_selection(&self) {
+        if !self.settings.copy_on_select {
+            return;
+        }
+        let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get(id)) else {
+            return;
+        };
+        let Some((start, end)) = view.selection.filter(|(a, b)| a != b) else {
+            return;
+        };
+        let text = view.snapshot.selected_text(start, end);
+        if text.is_empty() {
+            return;
+        }
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Err(e) = clipboard.set_text(text) {
+                self.status(e.to_string(), true)
+            }
+        }
+    }
     fn paste(&self) {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if let Ok(text) = clipboard.get_text() {
                 if text.len() > 1024 * 1024 {
                     self.status("粘贴内容不能超过 1 MB", true);
                     return;
+                }
+                let lines = opentermius::settings::paste_line_count(&text);
+                if self.settings.confirm_multiline_paste && lines > 1 {
+                    let confirmed = rfd::MessageDialog::new()
+                        .set_title("粘贴多行内容")
+                        .set_description(format!("剪贴板包含 {lines} 行内容，是否粘贴到终端？"))
+                        .set_buttons(rfd::MessageButtons::YesNo)
+                        .show()
+                        == rfd::MessageDialogResult::Yes;
+                    if !confirmed {
+                        self.status("已取消粘贴", false);
+                        return;
+                    }
                 }
                 let bracketed = self
                     .active
@@ -960,7 +1636,7 @@ impl State {
     }
     fn list_files(&self, path: String) {
         if !self.remote_ready() {
-            self.status("Select a connected host first", true);
+            self.status("请先选择已连接的远程主机", true);
             return;
         }
         if let Some(ui) = self.ui.upgrade() {
@@ -971,9 +1647,11 @@ impl State {
     }
     fn reset_files(&mut self) {
         self.file_path = ".".into();
+        self.remote_entries.clear();
         if let Some(ui) = self.ui.upgrade() {
             ui.set_files(model(Vec::new()));
             ui.set_file_path(".".into());
+            ui.set_remote_selection("".into());
             ui.set_file_busy(false)
         }
     }
@@ -985,35 +1663,25 @@ impl State {
         };
         self.local_request += 1;
         let generation = self.local_request;
+        let show_hidden = self.settings.show_hidden_files;
         let weak = self.ui.clone();
         self.runtime.spawn_blocking(move || {
-            let result = (|| -> anyhow::Result<(PathBuf, Vec<(String, bool, u64, String)>)> {
+            let result = (|| -> anyhow::Result<(PathBuf, Vec<ssh::LocalFile>)> {
                 let path = path.canonicalize()?;
-                anyhow::ensure!(path.is_dir(), "Select a local folder");
-                let mut files = Vec::new();
-                for entry in std::fs::read_dir(&path)?.take(20000) {
-                    let entry = entry?;
-                    let Ok(meta) = entry.metadata() else { continue };
-                    let date = meta
-                        .modified()
-                        .ok()
-                        .map(|time| {
-                            chrono::DateTime::<chrono::Local>::from(time)
-                                .format("%Y-%m-%d %H:%M")
-                                .to_string()
-                        })
-                        .unwrap_or_default();
-                    files.push((
-                        entry.file_name().to_string_lossy().to_string(),
-                        meta.is_dir(),
-                        meta.len(),
-                        date,
-                    ));
+                let mut files = ssh::read_local_dir(&path)?;
+                if !show_hidden {
+                    files.retain(|file| {
+                        if ssh::is_hidden_name(&file.name) { return false; }
+                        #[cfg(windows)]
+                        {
+                            use std::os::windows::fs::MetadataExt;
+                            if file.path.metadata().is_ok_and(|meta| meta.file_attributes() & 0x2 != 0) {
+                                return false;
+                            }
+                        }
+                        true
+                    });
                 }
-                files.sort_by(|a, b| {
-                    b.1.cmp(&a.1)
-                        .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
-                });
                 Ok((path, files))
             })();
             let _ = weak.upgrade_in_event_loop(move |ui| {
@@ -1024,35 +1692,297 @@ impl State {
                     match result {
                         Ok((path, files)) => {
                             s.local_path = path;
+                            s.local_entries = files;
                             let display = s.local_path.to_string_lossy();
                             ui.set_local_path(
                                 display.strip_prefix(r"\\?\").unwrap_or(&display).into(),
                             );
-                            ui.set_local_files(model(
-                                files
-                                    .into_iter()
-                                    .map(|(name, is_dir, size, date)| FileRow {
-                                        name: name.into(),
-                                        is_directory: is_dir,
-                                        size: if is_dir {
-                                            "".into()
-                                        } else {
-                                            format_size(size).into()
-                                        },
-                                        modified: date.into(),
-                                        kind: if is_dir {
-                                            "Folder".into()
-                                        } else {
-                                            "File".into()
-                                        },
-                                    })
-                                    .collect(),
-                            ));
+                            ui.set_local_selection("".into());
+                            s.render_files();
                         }
                         Err(e) => s.status(e.to_string(), true),
                     }
                 });
             });
+        });
+    }
+    fn render_files(&mut self) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        let hidden = ui.get_show_hidden();
+        ssh::sort_remote_files(
+            &mut self.remote_entries,
+            ssh::SortColumn::parse(&ui.get_remote_sort()),
+            ui.get_remote_ascending(),
+        );
+        ssh::sort_local_files(
+            &mut self.local_entries,
+            ssh::SortColumn::parse(&ui.get_local_sort()),
+            ui.get_local_ascending(),
+        );
+        ui.set_files(model(
+            self.remote_entries
+                .iter()
+                .filter(|e| hidden || !ssh::is_hidden_name(&e.name))
+                .map(|e| {
+                    file_row(
+                        &e.name,
+                        e.is_dir,
+                        e.size,
+                        e.modified.parse().unwrap_or(0),
+                        e.permissions,
+                    )
+                })
+                .collect(),
+        ));
+        ui.set_local_files(model(
+            self.local_entries
+                .iter()
+                .filter(|e| hidden || !ssh::is_hidden_name(&e.name))
+                .map(|e| file_row(&e.name, e.is_dir, e.size, e.modified, None))
+                .collect(),
+        ));
+    }
+    fn render_transfers(&self) {
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_transfers(model(
+                self.transfers
+                    .values()
+                    .filter(|(_, row)| row.pending)
+                    .chain(self.transfers.values().rev().filter(|(_, row)| !row.pending))
+                    .map(|(_, row)| row.clone())
+                    .collect(),
+            ));
+        }
+    }
+    fn finish_transfer(&mut self, transfer: u64, message: String, error: bool, cancelled: bool) {
+        if let Some((_, row)) = self.transfers.get_mut(&transfer) {
+            row.pending = false;
+            if !error && !cancelled {
+                row.percent = 100;
+            }
+            row.detail = message.clone().into();
+        }
+        self.render_transfers();
+        self.status(message, error);
+    }
+    fn queue_transfer(&mut self, name: &str, direction: &str, job: impl FnOnce(u64) -> Command) {
+        if !self.remote_ready() {
+            self.status("请先选择已连接的远程主机", true);
+            return;
+        }
+        if self
+            .transfers
+            .values()
+            .filter(|(_, row)| row.pending)
+            .count()
+            >= 8
+        {
+            self.status("传输队列已满（最多 8 项），请等待或取消任务", true);
+            return;
+        }
+        while self.transfers.len() >= 32 {
+            let old = self
+                .transfers
+                .iter()
+                .find(|(_, (_, row))| !row.pending)
+                .map(|(id, _)| *id);
+            if let Some(old) = old {
+                self.transfers.remove(&old);
+            } else {
+                break;
+            }
+        }
+        self.next_transfer += 1;
+        let transfer = self.next_transfer;
+        let id = self.active.clone().unwrap();
+        let row = TransferRow {
+            id: transfer.to_string().into(),
+            name: format!("{direction} · {name}").into(),
+            detail: "排队中".into(),
+            percent: 0,
+            pending: true,
+        };
+        self.transfers.insert(transfer, (id.clone(), row));
+        let result = self.sessions[&id]
+            .transport
+            .as_ref()
+            .unwrap()
+            .commands
+            .try_send(job(transfer));
+        if result.is_err() {
+            self.finish_transfer(transfer, "传输队列繁忙".into(), true, false);
+        }
+        self.render_transfers();
+    }
+    fn upload_path(&mut self, local: PathBuf) {
+        let name = local
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let directory = self.file_path.clone();
+        let folder = local.is_dir();
+        let overwrite = !self.settings.confirm_overwrite;
+        self.queue_transfer(&name, "Upload", |transfer| {
+            if folder {
+                Command::UploadTree {
+                    transfer,
+                    directory,
+                    local,
+                    overwrite,
+                }
+            } else {
+                Command::UploadFile {
+                    transfer,
+                    directory,
+                    local,
+                    overwrite,
+                }
+            }
+        });
+    }
+    fn download_entry(&mut self, name: &str, destination: Option<PathBuf>) {
+        if !ssh::safe_local_component(name) {
+            self.status("远程文件名无法用于本地路径", true);
+            return;
+        }
+        let Some(entry) = self.remote_entries.iter().find(|e| e.name == name) else {
+            return;
+        };
+        let remote = entry.path.clone();
+        let folder = entry.is_dir;
+        let local = destination.unwrap_or_else(|| {
+            if folder {
+                self.local_path.clone()
+            } else {
+                self.local_path.join(name)
+            }
+        });
+        self.queue_transfer(name, "Download", |transfer| {
+            if folder {
+                Command::DownloadTree {
+                    transfer,
+                    remote,
+                    local_dir: local,
+                }
+            } else {
+                Command::DownloadFile {
+                    transfer,
+                    remote,
+                    local,
+                }
+            }
+        });
+    }
+    fn file_operation(&mut self, local: bool, operation: &str, name: &str, value: &str) {
+        let new_name = operation == "mkdir" || operation == "rename";
+        if (operation != "mkdir"
+            && !(if local {
+                ssh::safe_local_component(name)
+            } else {
+                ssh::safe_remote_component(name)
+            }))
+            || (new_name
+                && !(if local {
+                    ssh::safe_local_component(value)
+                } else {
+                    ssh::safe_remote_component(value)
+                }))
+        {
+            self.status("文件名无效", true);
+            return;
+        }
+        if !local {
+            if !self.remote_ready() {
+                self.status("请先连接远程主机", true);
+                return;
+            }
+            let directory = self.file_path.clone();
+            match operation {
+                "mkdir" => self.send(Command::CreateDir {
+                    directory,
+                    name: value.into(),
+                }),
+                "rename" => self.send(Command::Rename {
+                    directory,
+                    from: name.into(),
+                    to: value.into(),
+                }),
+                "delete" => self.send(Command::Delete {
+                    directory,
+                    name: name.into(),
+                    confirmed: false,
+                }),
+                _ => {}
+            }
+            return;
+        }
+        let root = self.local_path.clone();
+        let path = root.join(name);
+        let destination = root.join(value);
+        let operation = operation.to_string();
+        let weak = self.ui.clone();
+        self.runtime.spawn_blocking(move || {
+            if operation == "delete" {
+                let summary = ssh::local_tree_summary(&path);
+                let _ = weak.upgrade_in_event_loop(move |_| {
+                    let summary = match summary {
+                        Ok(summary) => summary,
+                        Err(e) => {
+                            with_state(|s| s.status(e.to_string(), true));
+                            return;
+                        }
+                    };
+                    let confirmed = rfd::MessageDialog::new()
+                        .set_title("确认删除")
+                        .set_description(format!(
+                            "删除 {}？\n{} 个文件，{} 个子文件夹，{}。此操作无法撤销。",
+                            path.display(),
+                            summary.files,
+                            summary.dirs,
+                            format_size(summary.bytes)
+                        ))
+                        .set_buttons(rfd::MessageButtons::YesNo)
+                        .show()
+                        == rfd::MessageDialogResult::Yes;
+                    if confirmed {
+                        with_state(|s| {
+                            let weak = s.ui.clone();
+                            s.runtime.spawn_blocking(move || {
+                                let result = ssh::delete_local_tree(&path);
+                                let _ = weak.upgrade_in_event_loop(move |_| {
+                                    with_state(|s| {
+                                        match result {
+                                            Ok(()) => s.status("已删除", false),
+                                            Err(e) => s.status(e.to_string(), true),
+                                        };
+                                        s.list_local(String::new());
+                                    });
+                                });
+                            });
+                        });
+                    }
+                });
+            } else {
+                let result = (|| -> anyhow::Result<()> {
+                    anyhow::ensure!(!destination.try_exists()?, "目标名称已存在");
+                    match operation.as_str() {
+                        "mkdir" => std::fs::create_dir(destination)?,
+                        "rename" => std::fs::rename(path, destination)?,
+                        _ => anyhow::bail!("不支持的文件操作"),
+                    }
+                    Ok(())
+                })();
+                let _ = weak.upgrade_in_event_loop(move |_| {
+                    with_state(|s| {
+                        match result {
+                            Ok(()) => s.status("文件操作已完成", false),
+                            Err(e) => s.status(e.to_string(), true),
+                        };
+                        s.list_local(String::new());
+                    });
+                });
+            }
         });
     }
     fn select_sftp(&mut self, host_id: &str) {
@@ -1086,11 +2016,45 @@ fn format_size(size: u64) -> String {
     }
 }
 fn safe_filename(name: &str) -> bool {
-    !name.is_empty()
-        && name != "."
-        && name != ".."
-        && !name.contains(['/', '\\', ':'])
-        && !name.chars().any(char::is_control)
+    ssh::safe_local_component(name)
+}
+fn file_row(
+    name: &str,
+    is_dir: bool,
+    size: u64,
+    modified: i64,
+    permissions: Option<u32>,
+) -> FileRow {
+    FileRow {
+        name: name.into(),
+        is_directory: is_dir,
+        size: if is_dir {
+            "".into()
+        } else {
+            format_size(size).into()
+        },
+        modified: chrono::DateTime::from_timestamp(modified, 0)
+            .map(|dt| {
+                dt.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_default()
+            .into(),
+        kind: if is_dir {
+            "Folder".into()
+        } else {
+            std::path::Path::new(name)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("File")
+                .into()
+        },
+        permissions: permissions
+            .map(ssh::format_permissions)
+            .unwrap_or_default()
+            .into(),
+    }
 }
 fn capture(ui: &AppWindow, output: &std::path::Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(output)?;
@@ -1199,10 +2163,15 @@ fn run() -> anyhow::Result<()> {
             }
         }
     });
+    let initial_settings = store
+        .lock()
+        .map(|s| s.data.settings.clone().normalized())
+        .unwrap_or_default();
     STATE.with(|s| {
         *s.borrow_mut() = Some(State {
             ui: ui.as_weak(),
             store,
+            settings: initial_settings,
             runtime,
             events: tx,
             sessions: BTreeMap::new(),
@@ -1215,10 +2184,20 @@ fn run() -> anyhow::Result<()> {
             file_path: ".".into(),
             search: String::new(),
             group_filter: String::new(),
+            tag_filter: String::new(),
             local_path: dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
             local_request: 0,
             pending_sftp: None,
+            remote_entries: Vec::new(),
+            local_entries: Vec::new(),
+            transfers: BTreeMap::new(),
+            next_transfer: 0,
             render_model: Rc::new(VecModel::from(Vec::new())),
+            selecting: false,
+            mouse_button: None,
+            forwards: BTreeMap::new(),
+            forward_errors: BTreeMap::new(),
+            forwarding_timer: slint::Timer::default(),
         })
     });
     ui.on_save_host(|draft| with_state(|s| s.save(draft)).unwrap_or(false));
@@ -1273,15 +2252,52 @@ fn run() -> anyhow::Result<()> {
     });
     ui.on_search_hosts(|query| {
         with_state(|s| {
+            s.group_filter.clear();
             s.search = query.to_lowercase();
             s.hosts()
         });
     });
     ui.on_select_group(|name| {
         with_state(|s| {
+            s.search.clear();
             s.group_filter = name.to_string();
             s.hosts();
         });
+    });
+    ui.on_set_host_view(|value| {
+        with_state(|s| s.set_host_view(&value));
+    });
+    ui.on_set_host_sort(|value| {
+        with_state(|s| s.set_host_sort(&value));
+    });
+    ui.on_set_host_tag_filter(|value| {
+        with_state(|s| s.set_tag_filter(&value));
+    });
+    ui.on_move_host_selection(|delta| {
+        with_state(|s| s.move_selection(delta));
+    });
+    ui.on_duplicate_host(|id| {
+        with_state(|s| s.duplicate_host(&id));
+    });
+    ui.on_copy_host_address(|id| {
+        with_state(|s| s.copy_address(&id));
+    });
+    ui.on_open_host_sftp(|id| {
+        with_state(|s| s.open_host_sftp(&id));
+    });
+    ui.on_rename_group(|old, new| {
+        with_state(|s| s.rename_group(&old, &new));
+    });
+    ui.on_suggest_host_groups(|query| {
+        with_state(|s| {
+            let groups = s.store.lock().map(|store| {
+                hosts::group_suggestions(&store.data.hosts, &query)
+                    .into_iter()
+                    .map(|(name, count)| GroupRow { name: name.into(), count })
+                    .collect()
+            }).unwrap_or_default();
+            model(groups)
+        }).unwrap_or_default()
     });
     ui.on_edit_host(|id| with_state(|s| s.edit(&id)).unwrap_or_default());
     ui.on_delete_host(|id| {
@@ -1302,6 +2318,8 @@ fn run() -> anyhow::Result<()> {
     });
     ui.on_select_session(|id| {
         with_state(|s| {
+            s.selecting = false;
+            s.mouse_button = None;
             s.active = if id.is_empty() {
                 None
             } else {
@@ -1327,6 +2345,31 @@ fn run() -> anyhow::Result<()> {
     ui.on_terminal_key(|text, ctrl, alt, shift| {
         with_state(|s| s.key(&text, ctrl, alt, shift));
     });
+    // Public Slint key events omit the physical key location. Handle the
+    // application keypad before normalization, including NumLock-off keys.
+    {
+        use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
+        let weak = ui.as_weak();
+        let mut modifiers = winit::keyboard::ModifiersState::empty();
+        ui.window().on_winit_window_event(move |_, event| {
+            if let winit::event::WindowEvent::ModifiersChanged(value) = event {
+                modifiers = value.state();
+            }
+            if let winit::event::WindowEvent::KeyboardInput { event, is_synthetic: false, .. } = event {
+                if event.state == winit::event::ElementState::Pressed
+                    && weak.upgrade().is_some_and(|ui| ui.get_terminal_has_focus())
+                {
+                    if let Some(key) = keypad_key(event.physical_key) {
+                        let mods = terminal::KeyMods::new(modifiers.control_key(), modifiers.alt_key(), modifiers.shift_key());
+                        if with_state(|s| s.keypad(key, mods)).unwrap_or(false) {
+                            return EventResult::PreventDefault;
+                        }
+                    }
+                }
+            }
+            EventResult::Propagate
+        });
+    }
     ui.on_terminal_size(|cols, rows| {
         with_state(|s| {
             s.cols = cols.clamp(2, 500) as u16;
@@ -1340,24 +2383,29 @@ fn run() -> anyhow::Result<()> {
     ui.on_terminal_scroll(|delta| {
         with_state(|s| s.send(Command::Scroll(delta)));
     });
+    ui.on_terminal_pointer(|kind, button, row, col, ctrl, alt, shift| {
+        with_state(|s| s.pointer(kind, button, row, col, ctrl, alt, shift));
+    });
+    ui.on_terminal_wheel(|row, col, delta, ctrl, alt, shift| {
+        with_state(|s| s.wheel(row, col, delta, ctrl, alt, shift));
+    });
+    ui.on_terminal_ime(|text| {
+        with_state(|s| s.ime(&text));
+    });
+    ui.on_reconnect_session(|id| {
+        with_state(|s| s.reconnect(&id));
+    });
+    ui.on_duplicate_session(|id| {
+        with_state(|s| s.duplicate(&id));
+    });
     ui.on_select_terminal(|row, col, extend| {
-        with_state(|s| {
-            if let Some(view) = s.active.as_ref().and_then(|id| s.sessions.get_mut(id)) {
-                let p = (
-                    row.clamp(0, view.snapshot.rows.saturating_sub(1) as i32),
-                    col.clamp(0, view.snapshot.cols.saturating_sub(1) as i32),
-                );
-                view.selection = Some(if extend {
-                    (view.selection.map_or(p, |selection| selection.0), p)
-                } else {
-                    (p, p)
-                });
-            }
-            s.display();
-        });
+        with_state(|s| s.select(row, col, extend));
     });
     ui.on_copy_terminal(|| {
         with_state(|s| s.copy());
+    });
+    ui.on_end_terminal_selection(|| {
+        with_state(|s| s.end_selection());
     });
     ui.on_paste_terminal(|| {
         with_state(|s| s.paste());
@@ -1395,40 +2443,25 @@ fn run() -> anyhow::Result<()> {
     ui.on_upload_local(|name| {
         with_state(|s| {
             if !safe_filename(&name) {
-                s.status("Invalid local filename", true);
+                s.status("本地文件名无效", true);
                 return;
             }
             if !s.remote_ready() {
-                s.status("Select a remote host first", true);
+                s.status("请先选择远程主机", true);
                 return;
             }
-            s.send(Command::Upload {
-                directory: s.file_path.clone(),
-                local: s.local_path.join(name.as_str()),
-                overwrite: false,
-            });
+            s.upload_path(s.local_path.join(name.as_str()));
         });
     });
     ui.on_download_to_local(|name| {
         with_state(|s| {
-            if !safe_filename(&name) {
-                s.status("Invalid remote filename", true);
-                return;
-            }
-            s.send(Command::Download {
-                remote: format!("{}/{}", s.file_path.trim_end_matches('/'), name),
-                local: s.local_path.join(name.as_str()),
-            });
+            s.download_entry(&name, None);
         });
     });
     ui.on_upload_file(|| {
         if let Some(local) = rfd::FileDialog::new().set_title("上传文件").pick_file() {
             with_state(|s| {
-                s.send(Command::Upload {
-                    directory: s.file_path.clone(),
-                    local,
-                    overwrite: false,
-                });
+                s.upload_path(local);
             });
         }
     });
@@ -1439,12 +2472,49 @@ fn run() -> anyhow::Result<()> {
             .save_file()
         {
             with_state(|s| {
-                s.send(Command::Download {
-                    remote: format!("{}/{}", s.file_path.trim_end_matches('/'), name),
-                    local,
-                })
+                s.download_entry(&name, Some(local));
             });
         }
+    });
+    ui.on_upload_folder(|| {
+        if let Some(local) = rfd::FileDialog::new().set_title("上传文件夹").pick_folder() {
+            with_state(|s| s.upload_path(local));
+        }
+    });
+    ui.on_file_operation(|local, operation, name, value| {
+        with_state(|s| s.file_operation(local, &operation, &name, &value));
+    });
+    ui.on_update_file_view(|| {
+        with_state(|s| s.render_files());
+    });
+    ui.on_cancel_transfer(|value| {
+        with_state(|s| {
+            let Ok(transfer) = value.parse::<u64>() else {
+                return;
+            };
+            if let Some((id, row)) = s
+                .transfers
+                .get_mut(&transfer)
+                .filter(|(_, row)| row.pending)
+            {
+                if let Some(transport) = s
+                    .sessions
+                    .get(id)
+                    .and_then(|session| session.transport.as_ref())
+                {
+                    if transport
+                        .commands
+                        .try_send(Command::CancelTransfer { transfer })
+                        .is_ok()
+                    {
+                        row.detail = "正在取消…".into();
+                    } else {
+                        s.status("取消请求未发送，请重试", true);
+                    }
+                }
+            }
+            s.render_transfers();
+        });
     });
     ui.on_import_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
@@ -1466,6 +2536,51 @@ fn run() -> anyhow::Result<()> {
                     Err(e) => s.status(e.to_string(), true),
                 }
             });
+        }
+    });
+    ui.on_import_xshell(|| {
+        let default = opentermius::import_xshell::default_sessions_dir();
+        let mut picker = rfd::FileDialog::new().set_title("Import from Xshell — Select Sessions folder");
+        if let Some(path) = &default {
+            picker = picker.set_directory(path);
+        }
+        let choice = default.as_ref().map(|path| {
+            rfd::MessageDialog::new()
+                .set_title("Import from Xshell")
+                .set_description(format!("Import sessions from {}?\nChoose No to select another folder.", path.display()))
+                .set_buttons(rfd::MessageButtons::YesNoCancel)
+                .show()
+        });
+        let path = match choice {
+            Some(rfd::MessageDialogResult::Yes) => default,
+            Some(rfd::MessageDialogResult::Cancel) => return,
+            _ => picker.pick_folder(),
+        };
+        if let Some(path) = path {
+            let scanned = opentermius::import_xshell::scan(&path);
+            let message = with_state(|s| {
+                let result = s.store.lock()
+                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .and_then(|mut store| opentermius::import_xshell::merge(&mut store, scanned));
+                match result {
+                    Ok(summary) => {
+                        s.hosts();
+                        let message = summary.message();
+                        s.status(&message, false);
+                        Some(message)
+                    }
+                    Err(error) => {
+                        s.status(error.to_string(), true);
+                        None
+                    }
+                }
+            }).flatten();
+            if let Some(message) = message {
+                rfd::MessageDialog::new()
+                    .set_title("Import from Xshell")
+                    .set_description(message)
+                    .show();
+            }
         }
     });
     ui.on_export_hosts(|| {
@@ -1491,17 +2606,17 @@ fn run() -> anyhow::Result<()> {
         }
     });
     pages::install(&ui);
-    ui.on_show_settings(|| {
-        with_state(|s| {
-            let path = s
-                .store
-                .lock()
-                .map(|s| s.path.display().to_string())
-                .unwrap_or_default();
-            if let Some(ui)=s.ui.upgrade(){ui.set_settings_text(format!("OpenTermius 0.2.0 · Rust + Slint\n\n本机配置：{path}\n\n凭据由 Windows DPAPI 加密。无产品账号、云同步和遥测。\n支持导入和导出本地主机 JSON；导出文件不含保存的凭据。").into())}
-        });
-    });
     with_state(|s| {
+        let view = s
+            .store
+            .lock()
+            .map(|store| store.data.hosts_view.clone())
+            .unwrap_or_default()
+            .normalized();
+        if let Some(ui) = s.ui.upgrade() {
+            ui.set_host_view_mode(view.mode.into());
+            ui.set_host_sort_mode(view.sort.into());
+        }
         s.hosts();
         s.tabs();
         s.display()
@@ -1527,10 +2642,43 @@ fn run() -> anyhow::Result<()> {
     if smoke && scene == "editor" {
         ui.invoke_new_host();
     }
-    if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
-        ui.invoke_open_section(section.into());
+    if smoke && (scene == "section-terminal" || scene == "section-terminal-menu") {
+        // Deterministic disconnected SSH fixture; no network or saved secrets.
+        with_state(|s| {
+            let mut terminal = Terminal::new(s.rows, s.cols);
+            terminal.feed("\x1b[32mdev@workspace\x1b[0m:~$ echo 'Terminal ready · 中文输入'\r\nTerminal ready · 中文输入\r\n\r\n\x1b[33mSSH session ended.\x1b[0m\r\n".as_bytes());
+            let id = "terminal-smoke".to_string();
+            s.sessions.insert(id.clone(), SessionView {
+                local: false,
+                profile: Profile {
+                    id: "smoke-profile".into(), name: "Development".into(), host: "localhost".into(),
+                    port: 22, username: "dev".into(), auth_type: "password".into(),
+                    private_key_path: String::new(), key_id: String::new(), group: String::new(), encrypted_secret: None,
+                    tags: Vec::new(), last_connected: None, created_at: None,
+                },
+                transport: None, snapshot: terminal.snapshot(), status: "已断开".into(),
+                connected: false, ended: true, selection: None,
+            });
+            s.order.push(id.clone());
+            s.active = Some(id);
+            s.tabs();
+            s.display();
+        });
+        ui.invoke_focus_terminal();
+        if scene == "section-terminal-menu" {
+            ui.set_tab_menu_session("terminal-smoke".into());
+            ui.set_tab_menu_reconnectable(true);
+            ui.set_tab_menu_x(410.0);
+        }
+    } else if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
+        if section == "xshell-import" {
+            ui.invoke_open_section("hosts".into());
+            ui.set_menu_open(true);
+        } else {
+            ui.invoke_open_section(section.into());
+        }
     }
-    if smoke && scene == "sftp" {
+    if smoke && (scene == "sftp" || scene == "section-sftp") {
         with_state(|s| {
             let folder = s.store.lock().unwrap().path.parent().unwrap().join("files");
             let _ = std::fs::create_dir_all(&folder);
@@ -1561,8 +2709,19 @@ fn run() -> anyhow::Result<()> {
                     let Some(ui)=weak.upgrade()else{return Ok(true)};
                     anyhow::ensure!(started.elapsed()<Duration::from_secs(18),"原生界面连接自检超时：{}",ui.get_status_text());
                     if ui.get_prompt_visible(){if ui.get_prompt_is_key(){anyhow::ensure!(ui.get_prompt_message().contains("SHA256:"),"未显示主机指纹");fingerprint=true;ui.invoke_answer_prompt(true,"".into());}else{credentials=true;ui.invoke_answer_prompt(true,"test-password".into());}}
-                    let (connected,echo)=with_state(|s|s.active.as_ref().and_then(|id|s.sessions.get(id)).map(|v|(v.connected,v.snapshot.lines.iter().any(|l|l.contains("native-ui-test")))).unwrap_or_default()).unwrap_or_default();
-                    if stage==0&&connected{ui.invoke_terminal_key("native-ui-test\r".into(),false,false,false);stage=1;}
+                    let (connected,echo)=with_state(|s|s.active.as_ref().and_then(|id|s.sessions.get(id)).map(|v|(v.connected,v.snapshot.lines.iter().any(|l|l.contains("中文native-ui-test")))).unwrap_or_default()).unwrap_or_default();
+                    if stage==0&&connected{
+                        with_state(|s| -> anyhow::Result<()> {
+                            let store = s.store.lock().unwrap();
+                            let host = &store.data.hosts[0];
+                            let stamp = host.last_connected.as_deref().context("缺少最近连接时间")?;
+                            chrono::DateTime::parse_from_rfc3339(stamp)?;
+                            let book = opentermius::logs::LogBook::open(store.path.parent().context("配置目录无效")?)?;
+                            anyhow::ensure!(book.entries().iter().any(|entry| entry.host_id == host.id && entry.status == opentermius::logs::CONNECTED), "成功连接未写入连接历史");
+                            Ok(())
+                        }).unwrap()?;
+                        ui.invoke_focus_terminal();ui.window().dispatch_event(slint::platform::WindowEvent::KeyPressed{text:"中文native-ui-test\r".into()});stage=1;
+                    }
                     if stage==1&&echo{ui.invoke_list_files(".".into());stage=2;}
                     if stage==2&&ui.get_files().row_count()>0{paint_at=std::time::Instant::now();stage=3;}
                     if stage==3&&paint_at.elapsed()>Duration::from_millis(250){
@@ -1596,7 +2755,12 @@ fn run() -> anyhow::Result<()> {
     ui.run()?;
     STATE.with(|slot| {
         if let Some(mut state) = slot.borrow_mut().take() {
-            for (_, mut view) in std::mem::take(&mut state.sessions) {
+            for forward in state.forwards.values() { forward.request_stop(); }
+            for (_, mut forward) in std::mem::take(&mut state.forwards) {
+                state.runtime.block_on(forward.stop());
+            }
+            for (id, mut view) in std::mem::take(&mut state.sessions) {
+                pages::logs::closed(&id);
                 if let Some(transport) = view.transport.take() {
                     let _ = transport.commands.try_send(Command::Disconnect);
                     transport.task.abort();
@@ -1615,5 +2779,204 @@ fn main() {
             .set_level(rfd::MessageLevel::Error)
             .show();
         std::process::exit(1)
+    }
+}
+
+#[cfg(test)]
+mod terminal_ux_tests {
+    use super::*;
+
+    pub(super) fn state() -> State {
+        let (events, _) = mpsc::channel(32);
+        State {
+            ui: slint::Weak::default(),
+            store: Arc::new(Mutex::new(Store { path: PathBuf::new(), data: store::Data::default() })),
+            runtime: tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap(),
+            settings: Settings::default(),
+            events, sessions: BTreeMap::new(), order: Vec::new(), active: None,
+            queue: VecDeque::new(), prompt: None, cols: 80, rows: 24,
+            file_path: String::new(), search: String::new(), group_filter: String::new(),
+            tag_filter: String::new(),
+            local_path: PathBuf::new(), local_request: 0, pending_sftp: None,
+            remote_entries: Vec::new(), local_entries: Vec::new(),
+            transfers: BTreeMap::new(), next_transfer: 0,
+            render_model: Rc::new(VecModel::from(Vec::new())),
+            selecting: false, mouse_button: None,
+            forwards: BTreeMap::new(), forward_errors: BTreeMap::new(),
+            forwarding_timer: slint::Timer::default(),
+        }
+    }
+
+    fn profile() -> Profile {
+        Profile {
+            id: "profile".into(), name: "Test SSH".into(), host: "localhost".into(), port: 2222,
+            username: "tester".into(), auth_type: "password".into(),
+            private_key_path: String::new(), key_id: String::new(), group: "Development".into(), encrypted_secret: None,
+            tags: Vec::new(), last_connected: None, created_at: None,
+        }
+    }
+
+    pub(super) fn session(state: &mut State) -> mpsc::Receiver<Command> {
+        let (commands, rx) = mpsc::channel(32);
+        let task = state.runtime.spawn(async {});
+        state.sessions.insert("old".into(), SessionView {
+            local: false, profile: profile(),
+            transport: Some(ssh::Session { id: "old".into(), commands, task }),
+            snapshot: Terminal::new(24, 80).snapshot(), status: "已连接".into(),
+            connected: true, ended: false, selection: None,
+        });
+        state.order.push("old".into());
+        state.active = Some("old".into());
+        rx
+    }
+
+    fn input(rx: &mut mpsc::Receiver<Command>) -> Vec<u8> {
+        match rx.try_recv().unwrap() {
+            Command::Input(bytes) => bytes,
+            other => panic!("expected input, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn queued_uploads_apply_overwrite_preference_to_files_and_folders() {
+        let mut s = state();
+        let mut rx = session(&mut s);
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("upload.txt");
+        std::fs::write(&file, b"settings upload").unwrap();
+        for confirm in [true, false] {
+            s.settings.confirm_overwrite = confirm;
+            s.upload_path(file.clone());
+            assert!(matches!(rx.try_recv().unwrap(), Command::UploadFile { overwrite, .. } if overwrite == !confirm));
+            s.upload_path(temp.path().to_path_buf());
+            assert!(matches!(rx.try_recv().unwrap(), Command::UploadTree { overwrite, .. } if overwrite == !confirm));
+        }
+        assert_eq!(s.transfers.len(), 4);
+    }
+
+    #[test]
+    fn slint_keys_and_committed_text_reach_transport() {
+        let mut s = state();
+        let mut rx = session(&mut s);
+        for (key, expected) in [
+            (slint::platform::Key::F12, b"\x1b[24~".as_slice()),
+            (slint::platform::Key::Backspace, b"\x7f".as_slice()),
+            (slint::platform::Key::Backtab, b"\x1b[Z".as_slice()),
+        ] {
+            s.key(SharedString::from(key).as_str(), false, false, false);
+            assert_eq!(input(&mut rx), expected);
+        }
+        s.key("中文输入", false, false, false);
+        assert_eq!(input(&mut rx), "中文输入".as_bytes());
+        s.ime("你好，世界");
+        assert_eq!(input(&mut rx), "你好，世界".as_bytes());
+        s.key(" ", true, false, false);
+        assert_eq!(input(&mut rx), [0]);
+        s.sessions.get_mut("old").unwrap().snapshot.application_cursor = true;
+        s.key(SharedString::from(slint::platform::Key::UpArrow).as_str(), false, false, false);
+        assert_eq!(input(&mut rx), b"\x1bOA");
+        s.key(SharedString::from(slint::platform::Key::PageUp).as_str(), true, false, true);
+        assert_eq!(input(&mut rx), b"\x1b[5;6~");
+    }
+
+    #[test]
+    fn physical_keypad_mapping_and_application_dispatch() {
+        use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
+        let mut s = state();
+        let mut rx = session(&mut s);
+        for (code, character, expected) in [
+            (KeyCode::Numpad0, '0', "\x1bOp"), (KeyCode::Numpad1, '1', "\x1bOq"),
+            (KeyCode::Numpad2, '2', "\x1bOr"), (KeyCode::Numpad3, '3', "\x1bOs"),
+            (KeyCode::Numpad4, '4', "\x1bOt"), (KeyCode::Numpad5, '5', "\x1bOu"),
+            (KeyCode::Numpad6, '6', "\x1bOv"), (KeyCode::Numpad7, '7', "\x1bOw"),
+            (KeyCode::Numpad8, '8', "\x1bOx"), (KeyCode::Numpad9, '9', "\x1bOy"),
+            (KeyCode::NumpadDecimal, '.', "\x1bOn"), (KeyCode::NumpadComma, ',', "\x1bOl"),
+            (KeyCode::NumpadAdd, '+', "\x1bOk"), (KeyCode::NumpadSubtract, '-', "\x1bOm"),
+            (KeyCode::NumpadMultiply, '*', "\x1bOj"), (KeyCode::NumpadDivide, '/', "\x1bOo"),
+            (KeyCode::NumpadEqual, '=', "\x1bOX"), (KeyCode::NumpadEnter, '\r', "\x1bOM"),
+        ] {
+            assert_eq!(keypad_key(PhysicalKey::Code(code)), Some(character));
+            s.sessions.get_mut("old").unwrap().snapshot.application_keypad = false;
+            assert!(!s.keypad(character, terminal::KeyMods::default()));
+            s.sessions.get_mut("old").unwrap().snapshot.application_keypad = true;
+            assert!(s.keypad(character, terminal::KeyMods::default()));
+            assert_eq!(input(&mut rx), expected.as_bytes());
+            // Main keyboard digits and Enter retain their normal encoding.
+            let text = if character == '\r' { "\n".to_string() } else { character.to_string() };
+            s.key(&text, false, false, false);
+            assert_eq!(input(&mut rx), character.to_string().as_bytes());
+        }
+        assert_eq!(keypad_key(PhysicalKey::Code(KeyCode::Enter)), None);
+        assert_eq!(keypad_key(PhysicalKey::Code(KeyCode::Digit1)), None);
+    }
+
+    #[test]
+    fn wheel_and_pointer_follow_remote_mouse_modes() {
+        let mut s = state();
+        let mut rx = session(&mut s);
+        s.wheel(0, 0, 3, false, false, false);
+        assert!(matches!(rx.try_recv().unwrap(), Command::Scroll(3)));
+        s.pointer(0, 1, 2, 3, false, false, false);
+        assert!(!s.selecting); // Right-click never begins a text selection.
+        s.pointer(0, 0, 2, 3, false, false, false);
+        s.pointer(2, -1, 2, 8, false, false, false);
+        s.pointer(1, 0, 2, 8, false, false, false);
+        assert_eq!(s.sessions["old"].selection, Some(((2, 3), (2, 8))));
+        let mut t = Terminal::new(24, 80);
+        t.feed(b"\x1b[?1002h\x1b[?1006h");
+        s.sessions.get_mut("old").unwrap().snapshot = t.snapshot();
+        s.pointer(0, 0, 2, 3, true, false, false);
+        assert_eq!(input(&mut rx), b"\x1b[<16;4;3M");
+        s.pointer(2, -1, 3, 4, true, false, false);
+        assert_eq!(input(&mut rx), b"\x1b[<48;5;4M");
+        s.pointer(1, 0, 3, 4, true, false, false);
+        assert_eq!(input(&mut rx), b"\x1b[<16;5;4m");
+        s.wheel(3, 4, -2, false, true, false);
+        assert_eq!(input(&mut rx), b"\x1b[<73;5;4M\x1b[<73;5;4M");
+        s.wheel(3, 4, 2, false, false, true);
+        assert!(matches!(rx.try_recv().unwrap(), Command::Scroll(2)));
+        s.pointer(2, -1, 0, 0, false, false, false);
+        assert!(rx.try_recv().is_err()); // Button-motion mode needs a held button.
+    }
+
+    #[test]
+    fn reconnect_reuses_profile_without_reusing_transport_id() {
+        let mut s = state();
+        let _rx = session(&mut s);
+        s.reconnect("old");
+        assert_eq!(s.active.as_deref(), Some("old")); // Connected/connecting tabs are protected.
+        s.event(Event::Closed { id: "old".into() });
+        assert!(s.sessions["old"].ended);
+        s.key(SharedString::from(slint::platform::Key::Return).as_str(), false, false, false);
+        let new_id = s.active.clone().unwrap();
+        assert_ne!(new_id, "old");
+        assert_eq!(s.sessions.len(), 1);
+        assert_eq!(s.order, [new_id.clone()]);
+        let view = &s.sessions[&new_id];
+        assert_eq!(view.profile.host, "localhost");
+        assert_eq!(view.profile.port, 2222);
+        assert_eq!(view.profile.username, "tester");
+        assert!(!view.ended);
+        assert!(matches!(s.prompt, Some(Prompt::Credential { .. })));
+        s.event(Event::Closed { id: "old".into() });
+        assert!(!s.sessions[&new_id].ended);
+        s.answer(false, String::new());
+        assert!(s.sessions[&new_id].ended);
+    }
+
+    #[test]
+    fn duplicate_session_keeps_original_and_uses_its_profile() {
+        let mut s = state();
+        let _rx = session(&mut s);
+        s.duplicate("old");
+        assert_eq!(s.sessions.len(), 2);
+        let id = s.active.clone().unwrap();
+        assert_ne!(id, "old");
+        assert_eq!(s.sessions[&id].profile.id, s.sessions["old"].profile.id);
+        assert!(s.sessions["old"].connected);
+        s.close(&id);
+        assert_eq!(s.order, ["old"]);
+        assert_eq!(s.active.as_deref(), Some("old"));
+        assert!(s.prompt.is_none());
     }
 }

@@ -23,11 +23,13 @@ OpenTermius 面向 **Windows、macOS 和 Linux** 打造轻量原生终端体验�
 - SFTP 双栏文件浏览、流式上传与下载；上传覆盖需确认，下载不覆盖已有文件。
 - 加密保存密码和密钥口令：Windows DPAPI；macOS Keychain 主密钥 + AES-256-GCM；Linux 本地主密钥 + AES-256-GCM。主机导出不含凭据或信任记录。
 
-## 启动
+## 安装
 
-Windows 便携程序：`native/releases/OpenTermius-0.2.0-windows-x64.exe`，双击运行。构建产物不提交到源码仓库。
+Windows 安装程序：`native/releases/OpenTermius-0.2.0-windows-x64-setup.exe`。双击安装，默认按当前用户安装到 `%LOCALAPPDATA%\Programs\OpenTermius`，无需管理员权限。安装程序提供开始菜单快捷方式，并可选择创建桌面快捷方式；安装或覆盖升级前会检查 OpenTermius 是否正在运行。
 
-配置保存在系统配置目录的 `OpenTermius/opentermius-native.json`。升级时可自动读取旧版本的本地配置，不覆盖已有的新配置。程序目前未配置发布者签名。
+卸载会删除程序文件和快捷方式，但默认保留 `%APPDATA%\OpenTermius` 中的配置。如需一并删除主机、凭据和偏好设置，请在卸载界面勾选“同时删除我的数据”。
+
+配置保存在系统配置目录的 `OpenTermius/opentermius-native.json`。升级时可自动读取旧版本的本地配置，不覆盖已有的新配置。程序目前未配置发布者签名，构建产物不提交到源码仓库。
 
 ## 开发
 
@@ -46,10 +48,22 @@ Linux 需安装 X11/Wayland、fontconfig、xkbcommon 和等宽字体；文件对
 
 macOS 将随机 256 位主密钥保存为默认 Keychain 的 generic password，钥匙串锁定或拒绝访问时保存凭据会失败。Linux 为避免引入额外 Secret Service 依赖，使用配置目录下当前用户拥有、权限为 `0600` 的 `master-key-v1` 文件；配置目录不可由其他用户写入。**Linux 主密钥文件未由系统钥匙串加密**，无法防御已能读取当前用户文件的攻击者。备份配置时应安全备份该文件；丢失主密钥后无法恢复已保存的密码。非 Windows 凭据带 `v1:` 前缀，不支持直接解密其他机器/平台的已有凭据；Windows 原始 DPAPI 格式保持兼容。`--data-dir` 同时隔离便携加密主密钥。
 
-在仓库根目录打包 Windows 便携程序及 SHA-256 清单：
+在仓库根目录打包 Windows 安装程序及 SHA-256 清单：
 
 ```powershell
 ./native/scripts/package.ps1
+```
+
+产物为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 和 `native/releases/checksums.json`，不再生成便携 exe。打包需要 NSIS 3；脚本会从 `-MakensisPath`、`PATH`、标准安装目录或 `%LOCALAPPDATA%\electron-builder\Cache\nsis` 查找 `makensis.exe`。未安装时可执行：
+
+```powershell
+winget install -e --id NSIS.NSIS --accept-source-agreements --accept-package-agreements
+```
+
+安装程序验证会将安装目录设为独立临时目录，静默安装、检查快捷方式和 HKCU 卸载项，再静默卸载并确认用户配置保留：
+
+```powershell
+./native/installer/verify-install.ps1
 ```
 
 在对应宿主系统运行 `bash native/scripts/package-macos.sh` 或 `bash native/scripts/package-linux.sh`，输出到 `native/releases/`。macOS 脚本使用 `sips` + `iconutil` 将已提交的 PNG 转换为 ICNS，生成 `.app` 和 `hdiutil` DMG；缺少图标工具时使用系统默认图标，未签名/公证。Linux 脚本生成含二进制、`.desktop`、PNG 图标及安装说明的 tar.gz，不捆绑系统动态库。两个脚本支持 `CARGO_BUILD_TARGET`、`CARGO_TARGET_DIR` 和 `OPENTERMIUS_TEST_EXECUTABLE`。尚未在对应系统执行打包脚本。
@@ -63,6 +77,12 @@ $env:OPENTERMIUS_SMOKE_OUTPUT = Join-Path (Get-Location) 'test-output/release-li
 cargo test --test transport native_gui_live_selftest -- --ignored --nocapture
 ```
 
+## 自动构建
+
+[Windows installer 工作流](.github/workflows/windows-release.yml) 在推送到 `main`、向 `main` 提交 PR、推送 `v*` 标签时运行，也可在 GitHub Actions 中通过 **Run workflow** 手动触发。工作流使用 Windows runner 和 Rust stable，依次运行锁定依赖的测试、release 构建及 NSIS 打包；需要交互式桌面的 GUI 测试保持忽略。
+
+构建成功后，在该次运行的 **Artifacts** 中下载 `OpenTermius-windows-x64-setup`，内含 `OpenTermius-<version>-windows-x64-setup.exe` 和 `checksums.json`。推送与 `native/Cargo.toml` 版本一致的 `vX.Y.Z` 标签还会自动创建 GitHub Release，附上这两个文件并在发布说明中列出 SHA-256；版本不一致会直接失败。安装程序尚未签名，Windows SmartScreen 可能提示警告，可使用 `Get-FileHash <安装程序路径> -Algorithm SHA256` 核对清单中的哈希值。
+
 ## 设计与实现
 
 界面由 Slint 直接渲染，使用系统字体和项目绘制的 SVG 图标。应用标识源文件为 [assets/logo.svg](assets/logo.svg)，Windows 程序内嵌多尺寸图标及 OpenTermius 版本信息。修改标识后，可使用 ImageMagick 执行 `./scripts/generate-icons.ps1` 重新生成 PNG/ICO；正常构建无需 ImageMagick。
@@ -73,4 +93,4 @@ SSH/SFTP 使用 russh 与 russh-sftp，终端屏幕使用 vt100，异步任务�
 
 ## 开发状态
 
-当前是预览版本。密钥管理、端口转发、代码片段、已知主机管理、日志及完整偏好设置仍在计划中。尚未提供 Mosh、串口、Telnet、FIDO2 或证书认证。终端尚未覆盖全部 xterm 行为、输入法及长期压力场景。
+当前是预览版本，已包含密钥管理、端口转发、代码片段、已知主机、连接日志、偏好设置及恢复码备份。尚未提供 Mosh、串口、Telnet、FIDO2 或证书认证。终端支持输入法，但尚未覆盖全部 xterm 行为及长期压力场景；macOS/Linux 真机验证仍待完成。
