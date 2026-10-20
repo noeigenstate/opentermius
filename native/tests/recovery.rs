@@ -12,6 +12,10 @@ use std::fs;
 fn data() -> Data {
     Data {
         version: 2,
+        hosts_view: opentermius::hosts::HostsView {
+            mode: "list".into(),
+            sort: "last".into(),
+        },
         hosts: vec![Profile {
             id: "host-1".into(),
             name: "Development".into(),
@@ -23,6 +27,9 @@ fn data() -> Data {
             key_id: String::new(),
             group: "Work".into(),
             encrypted_secret: None,
+            tags: vec!["work".into()],
+            last_connected: Some("2026-01-02T03:04:05Z".into()),
+            created_at: Some("2026-01-01T00:00:00Z".into()),
         }],
         keys: vec![KeyEntry {
             id: "key-1".into(),
@@ -78,6 +85,35 @@ fn both_modes_roundtrip_every_section_and_persist() {
             serde_json::to_value(&reopened.data).unwrap(),
             serde_json::to_value(source).unwrap()
         );
+    }
+}
+
+#[test]
+fn restore_merges_or_replaces_hosts_view_preferences() {
+    let source = data();
+    let code = recovery::generate(&source, None, false).unwrap();
+    for populated in [false, true] {
+        for mode in [RestoreMode::Merge, RestoreMode::Replace] {
+            let temp = tempfile::tempdir().unwrap();
+            let mut destination = Store::open(temp.path().join("config.json")).unwrap();
+            if populated {
+                destination.data.hosts = source.hosts.clone();
+            }
+            let local_view = opentermius::hosts::HostsView {
+                mode: "grid".into(),
+                sort: "created".into(),
+            };
+            destination.data.hosts_view = local_view.clone();
+            recovery::restore(&mut destination, &code, None, mode).unwrap();
+            let expected = if mode == RestoreMode::Replace {
+                &source.hosts_view
+            } else {
+                &local_view
+            };
+            assert_eq!(&destination.data.hosts_view, expected);
+            let reopened = Store::open(destination.path.clone()).unwrap();
+            assert_eq!(&reopened.data.hosts_view, expected);
+        }
     }
 }
 

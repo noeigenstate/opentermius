@@ -149,6 +149,9 @@ fn passwords_passphrases_and_key_names_never_enter_profiles_or_persistence() {
         assert_eq!(profile.auth_type, "password");
         assert!(profile.private_key_path.is_empty());
         assert!(profile.encrypted_secret.is_none());
+        assert!(profile.tags.is_empty());
+        assert!(profile.last_connected.is_none());
+        assert!(profile.created_at.is_none());
     }
     let mut store = Store::open(dir.path().join("config.json")).unwrap();
     let summary = import_xshell::merge(&mut store, result).unwrap();
@@ -163,7 +166,13 @@ fn passwords_passphrases_and_key_names_never_enter_profiles_or_persistence() {
     ] {
         assert!(!json.contains(marker));
     }
-    assert_eq!(Store::open(store.path.clone()).unwrap().data.hosts.len(), 4);
+    let reopened = Store::open(store.path.clone()).unwrap();
+    assert_eq!(reopened.data.hosts.len(), 4);
+    for profile in &reopened.data.hosts {
+        assert!(profile.tags.is_empty());
+        assert!(profile.last_connected.is_none());
+        assert!(chrono::DateTime::parse_from_rfc3339(profile.created_at.as_deref().unwrap()).is_ok());
+    }
 }
 
 #[test]
