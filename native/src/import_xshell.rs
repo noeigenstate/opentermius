@@ -204,6 +204,7 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
         username: username.into(),
         auth_type: "password".into(),
         private_key_path: String::new(),
+        key_id: String::new(),
         group,
         encrypted_secret: None,
     };

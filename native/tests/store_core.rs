@@ -13,6 +13,7 @@ fn profile() -> Profile {
         username: "tester".into(),
         auth_type: "password".into(),
         private_key_path: String::new(),
+        key_id: String::new(),
         group: String::new(),
         encrypted_secret: None,
     }

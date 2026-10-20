@@ -185,6 +185,7 @@ async fn ssh_connection_uses_the_configured_handshake_timeout() {
             username: "tester".into(),
             auth_type: "password".into(),
             private_key_path: String::new(),
+            key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
         },

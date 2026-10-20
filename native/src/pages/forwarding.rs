@@ -68,7 +68,7 @@ fn refresh(s: &State) {
 }
 fn start(s: &mut State, id: &str) -> Result<()> {
     ensure!(!busy(s, id), "规则正在运行");
-    let (rule, host, secret, known) = {
+    let (rule, host, secret, key_material, known) = {
         let store = s.store.lock().map_err(|_| anyhow::anyhow!("配置不可用"))?;
         let rule = store
             .data
@@ -90,7 +90,13 @@ fn start(s: &mut State, id: &str) -> Result<()> {
             .get(&store::key(&host.host, host.port))
             .context("请先连接此主机一次并信任主机指纹")?
             .clone();
+        let key_material = if host.auth_type == "key" && !host.key_id.is_empty() {
+            Some(store.key_material(&host.key_id)?)
+        } else {
+            None
+        };
         let secret = match &host.encrypted_secret {
+            _ if key_material.is_some() => Zeroizing::new(String::new()),
             Some(encrypted) => Zeroizing::new(
                 store::unprotect(encrypted)
                     .context("无法解密凭据，请先连接此主机并重新保存凭据")?,
@@ -98,9 +104,9 @@ fn start(s: &mut State, id: &str) -> Result<()> {
             None if host.auth_type == "key" => Zeroizing::new(String::new()),
             None => anyhow::bail!("未保存密码，请先连接此主机一次并保存密码"),
         };
-        (rule, host, secret, known)
+        (rule, host, secret, key_material, known)
     };
-    let running = RunningRule::start(s.runtime.handle(), rule, host, secret, known)?;
+    let running = RunningRule::start(s.runtime.handle(), rule, host, secret, key_material, known)?;
     s.forwards.insert(id.into(), running);
     s.forward_errors.remove(id);
     Ok(())

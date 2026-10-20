@@ -1,10 +1,184 @@
+import { ScrollView, TextEdit } from "std-widgets.slint";
 import { Theme, Action, Input, Field } from "../common.slint";
+
+export struct KeyRow {
+    id: string,
+    label: string,
+    key-type: string,
+    fingerprint: string,
+    public-key: string,
+    created: string,
+}
 
 // Rust reads and drives this page through the global bridge.
 export global KeychainBridge {
+    in property <[KeyRow]> keys;
+    in property <KeyRow> selected;
+    in-out property <string> selected-id;
+    in-out property <string> rename-text;
+    in property <bool> busy;
+    in property <string> message;
+    in property <bool> message-error;
+    in property <bool> passphrase-visible;
+    in property <string> passphrase-error;
+    in-out property <string> passphrase;
+    callback generate(string, int);
+    callback import-key();
+    callback select-key(string);
+    callback rename(string, string);
+    callback delete-key(string);
+    callback copy-public(string);
+    callback save-public(string);
+    callback save-private(string);
+    callback submit-passphrase(string);
+    callback cancel-passphrase();
 }
 
 export component KeychainPage inherits Rectangle {
     background: Theme.base;
-    Text { text: "Keychain"; color: Theme.secondary; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+    property <bool> generate-open: false;
+    property <bool> delete-open: false;
+    property <string> new-label;
+    property <int> new-kind: 0;
+
+    VerticalLayout { spacing: 0px;
+        Rectangle { height: 56px; background: Theme.high;
+            HorizontalLayout { padding-left: 20px; padding-right: 16px; spacing: 10px;
+                Text { text: "Keychain"; color: Theme.text; font-size: 18px; font-weight: 600; vertical-alignment: center; }
+                Text { text: KeychainBridge.keys.length == 1 ? "1 key" : KeychainBridge.keys.length + " keys"; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; background: transparent; }
+                Rectangle { width: 120px; background: transparent;
+                    Action { y: (parent.height - self.height) / 2; width: parent.width; height: 30px; text: "Import key"; has-icon: true; icon: @image-url("../icons/arrow-down.svg"); disabled: KeychainBridge.busy; clicked => { KeychainBridge.import-key(); } }
+                }
+                Rectangle { width: 140px; background: transparent;
+                    Action { y: (parent.height - self.height) / 2; width: parent.width; height: 30px; text: "Generate key"; primary: true; has-icon: true; icon: @image-url("../icons/plus.svg"); disabled: KeychainBridge.busy; clicked => { generate-open = true; } }
+                }
+            }
+        }
+        if KeychainBridge.message != "": Rectangle { height: 30px; background: Theme.base;
+            Text { x: 20px; width: parent.width - 40px; text: KeychainBridge.message; color: KeychainBridge.message-error ? #f25e61 : Theme.secondary; font-size: 12px; vertical-alignment: center; overflow: elide; }
+        }
+        if KeychainBridge.keys.length == 0: Rectangle { vertical-stretch: 1; background: Theme.base;
+            Rectangle { width: Math.min(520px, parent.width - 40px); height: 300px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+                Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; border-width: 1px; border-color: #798c940d; background: #798c941a;
+                    Image { source: @image-url("../icons/keychain.svg"); x: 20px; y: 20px; width: 20px; height: 20px; }
+                }
+                Text { y: 88px; height: 28px; width: parent.width; text: "Add an SSH key"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
+                Text { y: 122px; height: 22px; width: parent.width; text: "Generate a key pair or import an existing private key."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+                Text { y: 146px; height: 22px; width: parent.width; text: "Private keys stay encrypted with Windows DPAPI."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+                HorizontalLayout { y: 202px; width: parent.width; alignment: center; spacing: 8px;
+                    Action { text: "Generate key"; primary: true; width: 150px; height: 36px; border-radius: 10px; disabled: KeychainBridge.busy; clicked => { generate-open = true; } }
+                    Action { text: "Import key"; width: 130px; height: 36px; border-radius: 10px; disabled: KeychainBridge.busy; clicked => { KeychainBridge.import-key(); } }
+                }
+            }
+        }
+        if KeychainBridge.keys.length > 0: HorizontalLayout { vertical-stretch: 1; spacing: 0px;
+            Rectangle { width: 360px; background: Theme.high; border-width: 1px; border-color: Theme.border; clip: true;
+                ScrollView { VerticalLayout { spacing: 0px;
+                    for key in KeychainBridge.keys: Rectangle { height: 70px; background: KeychainBridge.selected-id == key.id ? #2091f61a : transparent;
+                        if KeychainBridge.selected-id == key.id: Rectangle { x: 0px; y: 0px; width: 3px; height: parent.height; background: Theme.accent; }
+                        HorizontalLayout { padding-left: 14px; padding-right: 12px; padding-top: 10px; padding-bottom: 10px; spacing: 10px;
+                            Rectangle { width: 32px; height: 32px; border-radius: 8px; background: #798c941a;
+                                Image { source: @image-url("../icons/keychain.svg"); colorize: Theme.text; x: 8px; y: 8px; width: 16px; height: 16px; }
+                            }
+                            VerticalLayout { spacing: 2px;
+                                Text { text: key.label; color: Theme.text; font-size: 14px; font-weight: 500; overflow: elide; }
+                                Text { text: key.key-type + " · " + key.created; color: Theme.secondary; font-size: 11px; overflow: elide; }
+                                Text { text: key.fingerprint; color: Theme.secondary; font-size: 10px; overflow: elide; }
+                            }
+                        }
+                        TouchArea { clicked => { KeychainBridge.select-key(key.id); } }
+                    }
+                } }
+            }
+            Rectangle { width: 1px; background: Theme.border; }
+            Rectangle { horizontal-stretch: 1; background: Theme.base; clip: true;
+                ScrollView { VerticalLayout { padding: 24px; spacing: 12px;
+                    HorizontalLayout { height: 44px; spacing: 12px;
+                        Rectangle { width: 44px; height: 44px; border-radius: 12px; background: #00527c;
+                            Image { source: @image-url("../icons/keychain.svg"); colorize: white; x: 12px; y: 12px; width: 20px; height: 20px; }
+                        }
+                        VerticalLayout { spacing: 4px;
+                            Text { text: KeychainBridge.selected.label; color: Theme.text; font-size: 20px; font-weight: 600; overflow: elide; }
+                            Text { text: KeychainBridge.selected.key-type + " · Created " + KeychainBridge.selected.created; color: Theme.secondary; font-size: 12px; }
+                        }
+                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                        Action { text: "Delete"; flat: true; clicked => { delete-open = true; } }
+                    }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    Text { text: "Fingerprint"; color: Theme.secondary; font-size: 12px; height: 16px; }
+                    TextInput { height: 22px; text: KeychainBridge.selected.fingerprint; read-only: true; single-line: true; color: Theme.text; font-size: 12px; font-family: "Consolas"; }
+                    Text { text: "Public key"; color: Theme.secondary; font-size: 12px; height: 16px; }
+                    TextEdit { height: KeychainBridge.selected.key-type == "RSA" ? 156px : 76px; text: KeychainBridge.selected.public-key; read-only: true; wrap: word-wrap; font-size: 12px; font-family: "Consolas"; }
+                    HorizontalLayout { spacing: 8px;
+                        Action { text: "Copy public key"; primary: true; clicked => { KeychainBridge.copy-public(KeychainBridge.selected-id); } }
+                        Action { text: "Save public key…"; clicked => { KeychainBridge.save-public(KeychainBridge.selected-id); } }
+                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                    }
+                    Action { text: "Save private key…"; flat: true; secondary: true; left-aligned: true; clicked => { KeychainBridge.save-private(KeychainBridge.selected-id); } }
+                    Rectangle { height: 1px; background: Theme.border; }
+                    Text { text: "Rename"; color: Theme.secondary; font-size: 12px; height: 16px; }
+                    HorizontalLayout { spacing: 8px;
+                        Input { text <=> KeychainBridge.rename-text; horizontal-stretch: 1; }
+                        Action { text: "Save"; disabled: KeychainBridge.rename-text == "" || KeychainBridge.rename-text == KeychainBridge.selected.label; clicked => { KeychainBridge.rename(KeychainBridge.selected-id, KeychainBridge.rename-text); } }
+                    }
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+                } }
+            }
+        }
+    }
+
+    if generate-open: Rectangle { x: 0px; y: 0px; width: parent.width; height: parent.height; background: #14172980;
+        TouchArea { }
+        Rectangle { width: 430px; height: 348px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 12px; border-width: 1px; border-color: Theme.border;
+            VerticalLayout { padding: 24px; spacing: 12px;
+                Text { text: "Generate SSH key"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Text { text: "Private keys are encrypted with Windows DPAPI in local storage."; color: Theme.secondary; font-size: 12px; wrap: word-wrap; }
+                Field { label: "Label"; placeholder: "Key label"; text <=> new-label; auto-focus: true; }
+                Text { text: "Type"; color: Theme.secondary; font-size: 12px; height: 16px; }
+                HorizontalLayout { spacing: 6px;
+                    Action { text: "Ed25519"; primary: new-kind == 0; secondary: new-kind != 0; horizontal-stretch: 1; clicked => { new-kind = 0; } }
+                    Action { text: "RSA 3072"; primary: new-kind == 1; secondary: new-kind != 1; horizontal-stretch: 1; clicked => { new-kind = 1; } }
+                    Action { text: "RSA 4096"; primary: new-kind == 2; secondary: new-kind != 2; horizontal-stretch: 1; clicked => { new-kind = 2; } }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                HorizontalLayout { alignment: end; spacing: 8px;
+                    Action { text: "Cancel"; clicked => { generate-open = false; } }
+                    Action { text: "Generate"; primary: true; disabled: KeychainBridge.busy; clicked => { KeychainBridge.generate(new-label, new-kind); generate-open = false; } }
+                }
+            }
+        }
+    }
+
+    if KeychainBridge.passphrase-visible: Rectangle { x: 0px; y: 0px; width: parent.width; height: parent.height; background: #14172980;
+        TouchArea { }
+        Rectangle { width: 430px; height: 270px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 12px; border-width: 1px; border-color: Theme.border;
+            VerticalLayout { padding: 24px; spacing: 12px;
+                Text { text: "Private key passphrase"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Text { text: "This private key is encrypted. Enter its passphrase to import it into the keychain."; color: Theme.secondary; font-size: 12px; wrap: word-wrap; }
+                Rectangle { height: 44px; background: Theme.base; border-radius: 8px;
+                    Text { x: 12px; width: parent.width - 24px; text: KeychainBridge.passphrase-error; color: #f25e61; font-size: 12px; wrap: word-wrap; vertical-alignment: center; visible: KeychainBridge.passphrase-error != ""; }
+                }
+                Input { text <=> KeychainBridge.passphrase; input-type: password; placeholder-text: "Passphrase"; init => { self.focus(); } accepted => { KeychainBridge.submit-passphrase(KeychainBridge.passphrase); } }
+                HorizontalLayout { alignment: end; spacing: 8px;
+                    Action { text: "Cancel"; clicked => { KeychainBridge.cancel-passphrase(); } }
+                    Action { text: "Import"; primary: true; disabled: KeychainBridge.busy; clicked => { KeychainBridge.submit-passphrase(KeychainBridge.passphrase); } }
+                }
+            }
+        }
+    }
+
+    if delete-open: Rectangle { x: 0px; y: 0px; width: parent.width; height: parent.height; background: #14172980;
+        TouchArea { }
+        Rectangle { width: 420px; height: 230px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 12px; border-width: 1px; border-color: Theme.border;
+            VerticalLayout { padding: 24px; spacing: 14px;
+                Text { text: "Delete key"; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Text { text: "Delete “" + KeychainBridge.selected.label + "”? This cannot be undone. Hosts using this key must be changed first."; color: Theme.secondary; font-size: 12px; wrap: word-wrap; vertical-stretch: 1; }
+                HorizontalLayout { alignment: end; spacing: 8px;
+                    Action { text: "Cancel"; clicked => { delete-open = false; } }
+                    Action { text: "Delete"; primary: true; clicked => { delete-open = false; KeychainBridge.delete-key(KeychainBridge.selected-id); } }
+                }
+            }
+        }
+    }
 }

@@ -29,7 +29,7 @@ export struct SelectionRun { row: int, col: int, width: int }
 export struct FileRow { name: string, is-directory: bool, size: string, modified: string, kind: string, permissions: string }
 export struct TransferRow { id: string, name: string, detail: string, percent: int, pending: bool }
 export struct GroupRow { name: string, count: int }
-export struct HostDraft { id: string, name: string, host: string, port: string, username: string, group: string, auth-index: int, key-path: string, secret: string, remember: bool }
+export struct HostDraft { id: string, name: string, host: string, port: string, username: string, group: string, auth-index: int, key-path: string, key-id: string, secret: string, remember: bool }
 
 component FileTableRow inherits Rectangle {
     in property <FileRow> file;
@@ -675,11 +675,35 @@ export component AppWindow inherits Window {
                             Rectangle { height: 1px; background: #798c941a; }
                             Text { text: "Credentials"; color: Theme.text; font-size: 14px; font-weight: 500; height: 20px; }
                             Input { placeholder-text: "Username"; text <=> root.draft.username; has-leading-icon: true; leading-icon: @image-url("icons/user.svg"); }
-                            Input { placeholder-text: root.draft.auth-index == 1 ? "Passphrase" : "Password"; input-type: InputType.password; text <=> root.draft.secret; has-leading-icon: true; leading-icon: @image-url("icons/password.svg"); }
-                            Action { text: "Key, Certificate, FIDO2"; has-icon: true; icon: @image-url("icons/plus.svg"); flat: true; secondary: true; text-size: 12px; left-aligned: true; clicked => { root.draft.key-path = root.pick-key(); if root.draft.key-path != "" { root.draft.auth-index = 1; } } }
+                            HorizontalLayout { spacing: 8px;
+                                Action { text: "Password"; primary: root.draft.auth-index == 0; horizontal-stretch: 1; clicked => { root.draft.auth-index = 0; root.draft.key-id = ""; } }
+                                Action { text: "Key"; primary: root.draft.auth-index == 1; horizontal-stretch: 1; clicked => { root.draft.auth-index = 1; } }
+                            }
+                            if root.draft.key-id == "": Input { placeholder-text: root.draft.auth-index == 1 ? "Passphrase" : "Password"; input-type: InputType.password; text <=> root.draft.secret; has-leading-icon: true; leading-icon: @image-url("icons/password.svg"); }
                             if root.draft.auth-index == 1: VerticalLayout { spacing: 8px;
-                                Field { label: "Private key file"; text <=> root.draft.key-path; }
-                                Action { text: "Choose file…"; clicked => { root.draft.key-path = root.pick-key(); } }
+                                if KeychainBridge.keys.length > 0: VerticalLayout { spacing: 4px;
+                                    Text { text: "Keychain"; color: Theme.secondary; font-size: 12px; height: 16px; }
+                                    Rectangle { height: Math.min(KeychainBridge.keys.length, 3) * 38px; background: Theme.base; border-radius: 8px; border-width: 1px; border-color: Theme.border;
+                                        ScrollView { VerticalLayout { for key in KeychainBridge.keys: Rectangle { height: 38px; background: root.draft.key-id == key.id ? #2091f61a : transparent;
+                                            HorizontalLayout { padding-left: 8px; padding-right: 8px; spacing: 8px;
+                                                Image { source: @image-url("icons/keychain.svg"); colorize: root.draft.key-id == key.id ? Theme.accent : Theme.secondary; width: 15px; height: 15px; }
+                                                VerticalLayout { spacing: 1px;
+                                                    Text { text: key.label; color: Theme.text; font-size: 13px; overflow: elide; }
+                                                    Text { text: key.fingerprint; color: Theme.secondary; font-size: 10px; overflow: elide; }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; }
+                                                if root.draft.key-id == key.id: Text { text: "✓"; color: Theme.accent; vertical-alignment: center; }
+                                            }
+                                            TouchArea { clicked => { root.draft.key-id = key.id; root.draft.key-path = ""; } }
+                                        } } }
+                                    }
+                                }
+                                if KeychainBridge.keys.length == 0: Text { text: "No keys in Keychain. Add one in the Keychain section."; color: Theme.secondary; font-size: 11px; wrap: word-wrap; }
+                                if root.draft.key-id == "": VerticalLayout { spacing: 8px;
+                                    Field { label: "Private key file"; text <=> root.draft.key-path; }
+                                    Action { text: "Choose file…"; clicked => { root.draft.key-path = root.pick-key(); } }
+                                }
+                                if root.draft.key-id != "": Action { text: "Use a key file instead"; flat: true; secondary: true; clicked => { root.draft.key-id = ""; } }
                             }
                         }
                     }

@@ -246,6 +246,35 @@ pub fn spawn_with_options(
     events: mpsc::Sender<Event>,
     options: ConnectOptions,
 ) -> Session {
+    spawn_with_key_material_and_options(rt, id, profile, secret, None, known_key, events, options)
+}
+
+/// Authenticate using decrypted keychain material, with default transport preferences.
+pub fn spawn_with_key_material(
+    rt: &Handle,
+    id: String,
+    profile: Profile,
+    secret: String,
+    key_material: Option<crate::keychain::KeyMaterial>,
+    known_key: Option<String>,
+    events: mpsc::Sender<Event>,
+) -> Session {
+    spawn_with_key_material_and_options(
+        rt, id, profile, secret, key_material, known_key, events, ConnectOptions::default(),
+    )
+}
+
+/// Apply transport preferences to either file-path or keychain authentication.
+pub fn spawn_with_key_material_and_options(
+    rt: &Handle,
+    id: String,
+    profile: Profile,
+    secret: String,
+    key_material: Option<crate::keychain::KeyMaterial>,
+    known_key: Option<String>,
+    events: mpsc::Sender<Event>,
+    options: ConnectOptions,
+) -> Session {
     let (commands, rx) = mpsc::channel(64);
     let session_id = id.clone();
     let task = rt.spawn(async move {
@@ -253,6 +282,7 @@ pub fn spawn_with_options(
             &id,
             profile,
             Zeroizing::new(secret),
+            key_material,
             known_key,
             events.clone(),
             rx,
@@ -346,6 +376,7 @@ async fn connect(
     id: &str,
     p: &Profile,
     secret: &str,
+    key_material: Option<crate::keychain::KeyMaterial>,
     known: Option<String>,
     events: &mpsc::Sender<Event>,
     cancelled: watch::Receiver<bool>,
@@ -354,6 +385,10 @@ async fn connect(
 ) -> Result<client::Handle<Client>> {
     let keepalive_interval = (options.keepalive_seconds > 0)
         .then(|| Duration::from_secs(u64::from(options.keepalive_seconds)));
+    ensure!(
+        p.auth_type != "key" || p.key_id.is_empty() || key_material.is_some(),
+        "Keychain 密钥材料缺失"
+    );
     let config = Arc::new(client::Config {
         keepalive_interval,
         keepalive_max: 3,
@@ -378,25 +413,31 @@ async fn connect(
     .await
     .context("SSH 连接超时")??;
     let authenticated = if p.auth_type == "key" {
-        let path = p.private_key_path.clone();
-        let passphrase = Zeroizing::new(secret.to_owned());
-        let key = tokio::task::spawn_blocking(move || -> Result<_> {
-            ensure!(
-                std::fs::metadata(&path)?.len() <= 1024 * 1024,
-                "私钥不能超过 1 MB"
-            );
-            let text = Zeroizing::new(std::fs::read_to_string(&path).context("读取私钥失败")?);
-            Ok(russh::keys::decode_secret_key(
-                &text,
-                if passphrase.is_empty() {
-                    None
-                } else {
-                    Some(passphrase.as_str())
-                },
-            )
-            .context("私钥或口令无效")?)
-        })
-        .await??;
+        let key = if let Some(material) = key_material {
+            tokio::task::spawn_blocking(move || material.into_private_key())
+                .await
+                .context("私钥解密任务失败")??
+        } else {
+            let path = p.private_key_path.clone();
+            let passphrase = Zeroizing::new(secret.to_owned());
+            tokio::task::spawn_blocking(move || -> Result<_> {
+                ensure!(
+                    std::fs::metadata(&path)?.len() <= 1024 * 1024,
+                    "私钥不能超过 1 MB"
+                );
+                let text = Zeroizing::new(std::fs::read_to_string(&path).context("读取私钥失败")?);
+                Ok(russh::keys::decode_secret_key(
+                    &text,
+                    if passphrase.is_empty() {
+                        None
+                    } else {
+                        Some(passphrase.as_str())
+                    },
+                )
+                .context("私钥或口令无效")?)
+            })
+            .await??
+        };
         let hash = timeout(Duration::from_secs(30), ssh.best_supported_rsa_hash())
             .await
             .context("密钥协商超时")??
@@ -476,13 +517,17 @@ pub(crate) struct ForwardTarget {
 pub(crate) async fn connect_forwarding(
     p: &Profile,
     secret: &str,
+    key_material: Option<crate::keychain::KeyMaterial>,
     known: String,
     cancelled: watch::Receiver<bool>,
     target: Option<ForwardTarget>,
 ) -> Result<client::Handle<Client>> {
     ensure!(!known.is_empty(), "请先连接此主机一次并信任主机指纹");
     let (events, mut rx) = mpsc::channel(8);
-    let connecting = connect(&p.id, p, secret, Some(known), &events, cancelled, ConnectOptions::default(), target);
+    let connecting = connect(
+        &p.id, p, secret, key_material, Some(known), &events, cancelled,
+        ConnectOptions::default(), target,
+    );
     tokio::pin!(connecting);
     loop {
         tokio::select! {
@@ -520,6 +565,7 @@ async fn run(
     id: &str,
     p: Profile,
     secret: Zeroizing<String>,
+    key_material: Option<crate::keychain::KeyMaterial>,
     known: Option<String>,
     events: mpsc::Sender<Event>,
     mut commands: mpsc::Receiver<Command>,
@@ -528,7 +574,9 @@ async fn run(
     let (cancel_tx, cancel_rx) = watch::channel(false);
     let _cancellation = CancelOnDrop(cancel_tx);
     let ssh = {
-        let connecting = connect(id, &p, &secret, known, &events, cancel_rx, options, None);
+        let connecting = connect(
+            id, &p, &secret, key_material, known, &events, cancel_rx, options, None,
+        );
         tokio::pin!(connecting);
         loop {
             tokio::select! {
