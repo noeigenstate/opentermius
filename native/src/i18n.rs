@@ -459,6 +459,9 @@ mod tests {
 
     #[test]
     fn rendered_messages_refresh_in_both_directions_without_changing_user_text() {
+        let outside_root = "Local path is outside the selected folder";
+        assert_eq!(translate_to(outside_root, true), "本地路径不在所选文件夹内");
+        assert_eq!(translate_to("本地路径不在所选文件夹内", false), outside_root);
         assert_eq!(translate_to("Connected", true), "已连接");
         assert_eq!(translate_to("已连接", false), "Connected");
         assert_eq!(translate_to("已导入 12 台主机", false), "Imported 12 hosts");

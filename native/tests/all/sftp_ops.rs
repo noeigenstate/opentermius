@@ -498,6 +498,223 @@ impl Fixture {
     }
 }
 
+struct DirectoryLink(std::path::PathBuf);
+impl DirectoryLink {
+    fn new(link: std::path::PathBuf, target: &std::path::Path) -> Self {
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, &link).unwrap();
+        #[cfg(windows)]
+        {
+            let result = std::process::Command::new("cmd")
+                .args(["/d", "/c", "mklink", "/J"])
+                .arg(&link)
+                .arg(target)
+                .output()
+                .unwrap();
+            assert!(result.status.success(), "failed to create test junction");
+        }
+        Self(link)
+    }
+}
+impl Drop for DirectoryLink {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        let _ = std::fs::remove_dir(&self.0);
+        #[cfg(unix)]
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn chosen_root_through_linked_ancestor_supports_all_transfer_entries() {
+    let mut f = Fixture::new().await;
+    let dir = tempfile::tempdir().unwrap();
+    let real = dir.path().join("real");
+    std::fs::create_dir_all(real.join("chosen/tree/nested/empty")).unwrap();
+    std::fs::write(real.join("chosen/file.txt"), b"single").unwrap();
+    std::fs::write(real.join("chosen/tree/nested/data.bin"), b"recursive").unwrap();
+    let alias = DirectoryLink::new(dir.path().join("alias"), &real);
+    let root = alias.0.join("chosen");
+    assert_eq!(
+        ssh::canonical_local_root(&root).unwrap(),
+        real.join("chosen").canonicalize().unwrap()
+    );
+    assert_eq!(ssh::read_local_dir(&root).unwrap().len(), 2);
+    for legacy in [true, false] {
+        let upload = if legacy {
+            Command::Upload {
+                local_root: root.clone(),
+                directory: "/".into(),
+                local: root.join("file.txt"),
+                overwrite: true,
+            }
+        } else {
+            Command::UploadFile {
+                local_root: root.clone(),
+                transfer: 1,
+                directory: "/".into(),
+                local: root.join("file.txt"),
+                overwrite: true,
+            }
+        };
+        f.send(upload).await;
+        if legacy {
+            f.message(false).await;
+        } else {
+            f.finished(1, false, false).await;
+        }
+        let name = if legacy { "legacy.txt" } else { "saved.txt" };
+        let download = if legacy {
+            Command::Download {
+                local_root: root.clone(),
+                remote: "/file.txt".into(),
+                local: root.join(name),
+            }
+        } else {
+            Command::DownloadFile {
+                local_root: root.clone(),
+                transfer: 2,
+                remote: "/file.txt".into(),
+                local: root.join(name),
+            }
+        };
+        f.send(download).await;
+        if legacy {
+            f.message(false).await;
+        } else {
+            f.finished(2, false, false).await;
+        }
+        assert_eq!(
+            std::fs::read(real.join("chosen").join(name)).unwrap(),
+            b"single"
+        );
+    }
+    f.send(Command::UploadTree {
+        local_root: root.clone(),
+        transfer: 3,
+        directory: "/".into(),
+        local: root.join("tree"),
+        overwrite: false,
+    })
+    .await;
+    f.finished(3, false, false).await;
+    std::fs::create_dir(root.join("downloads")).unwrap();
+    f.send(Command::DownloadTree {
+        local_root: root.clone(),
+        transfer: 4,
+        remote: "/tree".into(),
+        local_dir: root.join("downloads"),
+    })
+    .await;
+    f.finished(4, false, false).await;
+    assert_eq!(
+        std::fs::read(root.join("downloads/tree/nested/data.bin")).unwrap(),
+        b"recursive"
+    );
+    assert!(root.join("downloads/tree/nested/empty").is_dir());
+    // A directly chosen alias is also a valid boundary.
+    f.send(Command::DownloadFile {
+        local_root: alias.0.clone(),
+        transfer: 5,
+        remote: "/file.txt".into(),
+        local: alias.0.join("direct.txt"),
+    })
+    .await;
+    f.finished(5, false, false).await;
+    assert_eq!(std::fs::read(real.join("direct.txt")).unwrap(), b"single");
+    f.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn links_below_chosen_root_remain_blocked_for_uploads_and_downloads() {
+    let mut f = Fixture::new().await;
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(outside.path().join("secret.txt"), b"outside").unwrap();
+    let link = DirectoryLink::new(dir.path().join("link"), outside.path());
+    for (index, command) in [
+        Command::UploadFile {
+            local_root: dir.path().into(),
+            transfer: 1,
+            directory: "/".into(),
+            local: link.0.join("secret.txt"),
+            overwrite: true,
+        },
+        Command::UploadTree {
+            local_root: dir.path().into(),
+            transfer: 2,
+            directory: "/".into(),
+            local: link.0.clone(),
+            overwrite: true,
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        f.send(command).await;
+        assert!(
+            f.finished(index as u64 + 1, true, false)
+                .await
+                .contains("links cannot be followed")
+        );
+    }
+    assert_eq!(
+        f.state.nodes.lock().unwrap().len(),
+        1,
+        "rejected uploads created remote entries"
+    );
+    {
+        let mut nodes = f.state.nodes.lock().unwrap();
+        nodes.insert("/tree".into(), Node::Dir);
+        nodes.insert("/tree/file.txt".into(), Node::File(b"download".to_vec()));
+    }
+    f.send(Command::DownloadFile {
+        local_root: dir.path().into(),
+        transfer: 3,
+        remote: "/tree/file.txt".into(),
+        local: link.0.join("saved.txt"),
+    })
+    .await;
+    assert!(f.finished(3, true, false).await.contains("links cannot be followed"));
+    let tree_link = DirectoryLink::new(dir.path().join("tree"), outside.path());
+    f.send(Command::DownloadTree {
+        local_root: dir.path().into(),
+        transfer: 4,
+        remote: "/tree".into(),
+        local_dir: dir.path().into(),
+    })
+    .await;
+    assert!(f.finished(4, true, false).await.contains("links cannot be followed"));
+    assert!(!tree_link.0.join("file.txt").exists());
+    assert_eq!(std::fs::read_dir(outside.path()).unwrap().count(), 1);
+    assert_eq!(
+        std::fs::read(outside.path().join("secret.txt")).unwrap(),
+        b"outside"
+    );
+    std::fs::write(dir.path().join("safe.txt"), b"inside").unwrap();
+    f.send(Command::UploadTree {
+        local_root: dir.path().into(),
+        transfer: 5,
+        directory: "/".into(),
+        local: dir.path().into(),
+        overwrite: false,
+    })
+    .await;
+    f.finished(5, false, false).await;
+    {
+        let nodes = f.state.nodes.lock().unwrap();
+        let prefix = format!("/{}", dir.path().file_name().unwrap().to_str().unwrap());
+        assert!(nodes.contains_key(&format!("{prefix}/safe.txt")));
+        assert!(
+            !nodes
+                .keys()
+                .any(|path| path.starts_with(&format!("{prefix}/link"))
+                    || path.starts_with(&format!("{prefix}/tree")))
+        );
+    }
+    f.close().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mkdir_rename_remove_and_confirmed_recursive_rmdir() {
     let mut f = Fixture::new().await;
@@ -597,6 +814,7 @@ async fn recursive_round_trip_overwrite_prompt_and_download_no_clobber() {
     std::fs::write(source.join("nested/data.bin"), &data).unwrap();
     std::fs::write(source.join(".hidden"), b"hidden").unwrap();
     f.send(Command::UploadTree {
+        local_root: dir.path().to_path_buf(),
         transfer: 1,
         directory: "/".into(),
         local: source.clone(),
@@ -639,6 +857,7 @@ async fn recursive_round_trip_overwrite_prompt_and_download_no_clobber() {
             .contains_key("/tree/nested/empty")
     );
     f.send(Command::UploadTree {
+        local_root: dir.path().to_path_buf(),
         transfer: 2,
         directory: "/".into(),
         local: source.clone(),
@@ -657,6 +876,7 @@ async fn recursive_round_trip_overwrite_prompt_and_download_no_clobber() {
     }
     std::fs::write(source.join(".hidden"), b"changed").unwrap();
     f.send(Command::UploadTree {
+        local_root: dir.path().to_path_buf(),
         transfer: 2,
         directory: "/".into(),
         local: source,
@@ -667,6 +887,7 @@ async fn recursive_round_trip_overwrite_prompt_and_download_no_clobber() {
     let download = dir.path().join("downloads");
     std::fs::create_dir(&download).unwrap();
     f.send(Command::DownloadTree {
+        local_root: dir.path().to_path_buf(),
         transfer: 3,
         remote: "/tree".into(),
         local_dir: download.clone(),
@@ -684,6 +905,7 @@ async fn recursive_round_trip_overwrite_prompt_and_download_no_clobber() {
     assert!(download.join("tree/nested/empty").is_dir());
     std::fs::write(download.join("tree/.hidden"), b"preserve").unwrap();
     f.send(Command::DownloadTree {
+        local_root: dir.path().to_path_buf(),
         transfer: 4,
         remote: "/tree".into(),
         local_dir: download.clone(),
@@ -704,6 +926,7 @@ async fn single_file_transfers_ask_before_overwrite_and_download_never_replaces(
     let source = dir.path().join("upload.bin");
     std::fs::write(&source, b"first version").unwrap();
     f.send(Command::UploadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 1,
         directory: "/".into(),
         local: source.clone(),
@@ -713,6 +936,7 @@ async fn single_file_transfers_ask_before_overwrite_and_download_never_replaces(
     f.finished(1, false, false).await;
     std::fs::write(&source, b"second version").unwrap();
     f.send(Command::UploadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 2,
         directory: "/".into(),
         local: source.clone(),
@@ -737,6 +961,7 @@ async fn single_file_transfers_ask_before_overwrite_and_download_never_replaces(
         assert_eq!(data, b"first version");
     }
     f.send(Command::UploadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 2,
         directory: "/".into(),
         local: source,
@@ -746,6 +971,7 @@ async fn single_file_transfers_ask_before_overwrite_and_download_never_replaces(
     f.finished(2, false, false).await;
     let destination = dir.path().join("saved.bin");
     f.send(Command::DownloadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 3,
         remote: "/upload.bin".into(),
         local: destination.clone(),
@@ -755,6 +981,7 @@ async fn single_file_transfers_ask_before_overwrite_and_download_never_replaces(
     assert_eq!(std::fs::read(&destination).unwrap(), b"second version");
     std::fs::write(&destination, b"keep local").unwrap();
     f.send(Command::DownloadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 4,
         remote: "/upload.bin".into(),
         local: destination.clone(),
@@ -780,12 +1007,14 @@ async fn cancel_active_download_removes_partial_and_cancel_queued_upload_has_no_
     let upload = dir.path().join("queued.txt");
     std::fs::write(&upload, b"never upload").unwrap();
     f.send(Command::DownloadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 1,
         remote: "/large.bin".into(),
         local: local.clone(),
     })
     .await;
     f.send(Command::UploadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 2,
         directory: "/".into(),
         local: upload,
@@ -855,13 +1084,17 @@ async fn unsafe_server_names_never_create_local_files() {
     {
         *f.state.bad_name.lock().unwrap() = Some(name.to_string());
         f.send(Command::DownloadTree {
+            local_root: dir.path().to_path_buf(),
             transfer: index as u64 + 1,
             remote: "/unsafe".into(),
             local_dir: dir.path().into(),
         })
         .await;
         let message = f.finished(index as u64 + 1, true, false).await;
-        assert!(message.contains("file name"), "unexpected rejection: {message}");
+        assert!(
+            message.contains("file name"),
+            "unexpected rejection: {message}"
+        );
         assert_eq!(
             std::fs::read_dir(dir.path()).unwrap().count(),
             0,
@@ -923,6 +1156,7 @@ async fn bounded_queue_reports_rejections_and_all_accepted_jobs_can_be_cancelled
         .insert("/large.bin".into(), Node::File(vec![7; 8 * 1024 * 1024]));
     let dir = tempfile::tempdir().unwrap();
     f.send(Command::DownloadFile {
+        local_root: dir.path().to_path_buf(),
         transfer: 1,
         remote: "/large.bin".into(),
         local: dir.path().join("1.bin"),
@@ -935,6 +1169,7 @@ async fn bounded_queue_reports_rejections_and_all_accepted_jobs_can_be_cancelled
     }
     for transfer in 2..=12 {
         f.send(Command::DownloadFile {
+            local_root: dir.path().to_path_buf(),
             transfer,
             remote: "/large.bin".into(),
             local: dir.path().join(format!("{transfer}.bin")),

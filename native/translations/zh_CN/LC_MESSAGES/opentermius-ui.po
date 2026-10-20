@@ -5,6 +5,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
+msgid "Local path is outside the selected folder"
+msgstr "本地路径不在所选文件夹内"
+
 msgid "{minutes}m"
 msgstr "{minutes}分"
 

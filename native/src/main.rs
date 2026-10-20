@@ -1335,6 +1335,7 @@ impl State {
                 }
             }
             Event::OverwriteRequired {
+                local_root,
                 id,
                 directory,
                 local,
@@ -1355,12 +1356,14 @@ impl State {
                     if let Some(transport) = self.sessions.get(&id).and_then(|s| s.transport.as_ref()) {
                         let command = if transfer == 0 {
                             Command::Upload {
+                                local_root,
                                 directory,
                                 local,
                                 overwrite: true,
                             }
                         } else if folder {
                             Command::UploadTree {
+                                local_root,
                                 transfer,
                                 directory,
                                 local,
@@ -1368,6 +1371,7 @@ impl State {
                             }
                         } else {
                             Command::UploadFile {
+                                local_root,
                                 transfer,
                                 directory,
                                 local,
@@ -1664,7 +1668,7 @@ impl State {
         let weak = self.ui.clone();
         self.runtime.spawn_blocking(move || {
             let result = (|| -> anyhow::Result<(PathBuf, Vec<ssh::LocalFile>)> {
-                let path = path.canonicalize()?;
+                let path = ssh::canonical_local_root(&path)?;
                 let mut files = ssh::read_local_dir(&path)?;
                 if !show_hidden {
                     files.retain(|file| {
@@ -1690,10 +1694,7 @@ impl State {
                         Ok((path, files)) => {
                             s.local_path = path;
                             s.local_entries = files;
-                            let display = s.local_path.to_string_lossy();
-                            ui.set_local_path(
-                                display.strip_prefix(r"\\?\").unwrap_or(&display).into(),
-                            );
+                            ui.set_local_path(ssh::display_local_path(&s.local_path).into());
                             ui.set_local_selection("".into());
                             s.render_files();
                         }
@@ -1812,6 +1813,18 @@ impl State {
         self.render_transfers();
     }
     fn upload_path(&mut self, local: PathBuf) {
+        let local_root = match local.parent().map(ssh::canonical_local_root) {
+            Some(Ok(root)) => root,
+            Some(Err(error)) => {
+                self.status(error.to_string(), true);
+                return;
+            }
+            None => {
+                self.status(crate::i18n::t("Invalid local file path"), true);
+                return;
+            }
+        };
+        let local = local_root.join(local.file_name().unwrap_or_default());
         let name = local
             .file_name()
             .unwrap_or_default()
@@ -1823,6 +1836,7 @@ impl State {
         self.queue_transfer(&name, crate::i18n::t("Upload"), |transfer| {
             if folder {
                 Command::UploadTree {
+                    local_root,
                     transfer,
                     directory,
                     local,
@@ -1830,6 +1844,7 @@ impl State {
                 }
             } else {
                 Command::UploadFile {
+                    local_root,
                     transfer,
                     directory,
                     local,
@@ -1855,15 +1870,30 @@ impl State {
                 self.local_path.join(name)
             }
         });
+        let chosen_root = if folder { local.as_path() } else { local.parent().unwrap_or(&local) };
+        let local_root = match ssh::canonical_local_root(chosen_root) {
+            Ok(root) => root,
+            Err(error) => {
+                self.status(error.to_string(), true);
+                return;
+            }
+        };
+        let local = if folder {
+            local_root.clone()
+        } else {
+            local_root.join(local.file_name().unwrap_or_default())
+        };
         self.queue_transfer(name, crate::i18n::t("Download"), |transfer| {
             if folder {
                 Command::DownloadTree {
+                    local_root,
                     transfer,
                     remote,
                     local_dir: local,
                 }
             } else {
                 Command::DownloadFile {
+                    local_root,
                     transfer,
                     remote,
                     local,
@@ -2173,6 +2203,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         .lock()
         .map(|s| s.data.settings.clone().normalized())
         .unwrap_or_default();
+    let initial_local_path = ssh::canonical_local_root(&dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))?;
     STATE.with(|s| {
         *s.borrow_mut() = Some(State {
             ui: ui.as_weak(),
@@ -2191,7 +2222,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             search: String::new(),
             group_filter: String::new(),
             tag_filter: String::new(),
-            local_path: dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
+            local_path: initial_local_path,
             local_request: 0,
             pending_sftp: None,
             remote_entries: Vec::new(),
@@ -2484,7 +2515,10 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_upload_folder(|| {
         if let Some(local) = rfd::FileDialog::new().set_title(crate::i18n::t("Upload folder")).pick_folder() {
-            with_state(|s| s.upload_path(local));
+            with_state(|s| match ssh::canonical_local_root(&local) {
+                Ok(local) => s.upload_path(local),
+                Err(error) => s.status(error.to_string(), true),
+            });
         }
     });
     ui.on_file_operation(|local, operation, name, value| {

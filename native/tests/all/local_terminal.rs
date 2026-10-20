@@ -87,7 +87,7 @@ async fn start() -> (Session, mpsc::Receiver<Event>, u32) {
     #[cfg(windows)]
     let pid_command = b"Write-Output ('LOCAL_PID:'+$PID)\r".to_vec();
     #[cfg(unix)]
-    let pid_command = b"printf 'LOCAL_PID:%s\\n' \"$$\"\r".to_vec();
+    let pid_command = b"printf '\\nLOCAL_PID:%s\\n' \"$$\"\r".to_vec();
     session
         .commands
         .send(Command::Input(pid_command))
@@ -121,7 +121,7 @@ async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
     #[cfg(windows)]
     let unicode_command = b"Write-Output ('UNICODE:'+[char]0x4f60+[char]0x597d)\r".to_vec();
     #[cfg(unix)]
-    let unicode_command = "printf 'UNICODE:%s\\nLOCAL_TERM:%s\\n' '你好' \"$TERM\"\r"
+    let unicode_command = "printf '\\nUNICODE:%s\\nLOCAL_TERM:%s\\n' '你好' \"$TERM\"\r"
         .as_bytes()
         .to_vec();
     session
@@ -130,7 +130,7 @@ async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
         .await
         .unwrap();
     screen(&mut rx, |s| {
-        s.lines.iter().any(|line| line.contains("UNICODE:你好"))
+        s.lines.iter().any(|line| line.trim() == "UNICODE:你好")
             && (cfg!(windows)
                 || s.lines
                     .iter()
@@ -146,19 +146,24 @@ async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
     #[cfg(windows)]
     let size_command = b"Write-Output ('LOCAL_SIZE:'+$Host.UI.RawUI.WindowSize.Width+','+$Host.UI.RawUI.WindowSize.Height)\r".to_vec();
     #[cfg(unix)]
-    let size_command = b"printf 'LOCAL_SIZE:'; stty size\r".to_vec();
+    // BSD stty may pad its columns. Normalize whitespace and avoid depending
+    // on a prompt, input echo, or a platform-specific shell banner.
+    let size_command = b"printf '\\nLOCAL_SIZE:'; stty size\r".to_vec();
     session
         .commands
         .send(Command::Input(size_command))
         .await
         .unwrap();
     screen(&mut rx, |s| {
-        let expected = if cfg!(windows) {
-            "LOCAL_SIZE:80,24"
-        } else {
-            "LOCAL_SIZE:24 80"
-        };
-        s.lines.iter().any(|line| line.trim() == expected)
+        s.lines.iter().any(|line| {
+            if cfg!(windows) {
+                line.trim() == "LOCAL_SIZE:80,24"
+            } else {
+                line.trim()
+                    .strip_prefix("LOCAL_SIZE:")
+                    .is_some_and(|size| size.split_whitespace().eq(["24", "80"]))
+            }
+        })
     })
     .await;
     session

@@ -431,6 +431,7 @@ async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
     session
         .commands
         .send(Command::Upload {
+            local_root: dir.path().to_path_buf(),
             directory: "/".into(),
             local: local.clone(),
             overwrite: false,
@@ -447,6 +448,7 @@ async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
     session
         .commands
         .send(Command::Upload {
+            local_root: dir.path().to_path_buf(),
             directory: "/".into(),
             local: local.clone(),
             overwrite: false,
@@ -455,7 +457,7 @@ async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
         .unwrap();
     loop {
         if let Event::OverwriteRequired { local: actual, .. } = next(&mut rx).await {
-            assert_eq!(actual, local);
+            assert_eq!(actual, local.canonicalize().unwrap());
             break;
         }
     }
@@ -475,6 +477,7 @@ async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
     session
         .commands
         .send(Command::Download {
+            local_root: dir.path().to_path_buf(),
             remote: "/sample.bin".into(),
             local: saved.clone(),
         })
@@ -490,6 +493,7 @@ async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
     session
         .commands
         .send(Command::Download {
+            local_root: dir.path().to_path_buf(),
             remote: "/sample.bin".into(),
             local: saved.clone(),
         })

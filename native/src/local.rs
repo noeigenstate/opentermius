@@ -165,7 +165,10 @@ fn supervise(
         command.arg("-NoProfile");
     }
     #[cfg(unix)]
-    command.arg("-l");
+    {
+        command.arg("-l");
+        command.arg("-i");
+    }
     command.env("TERM", "xterm-256color");
     let mut child = ChildGuard(
         pair.slave
@@ -242,14 +245,23 @@ fn supervise(
                 Ok(control) => match control {
                     Control::Disconnect => break,
                     Control::Resize { cols, rows } => {
-                        if let Err(error) = master.resize(PtySize {
+                        match master.resize(PtySize {
                             cols,
                             rows,
                             pixel_width: 0,
                             pixel_height: 0,
                         }) {
-                            if let Ok(mut state) = screen.lock() {
-                                state.fail(error);
+                            Ok(()) => {
+                                let mut state = screen
+                                    .lock()
+                                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;
+                                state.terminal.resize(rows, cols);
+                                state.dirty = true;
+                            }
+                            Err(error) => {
+                                if let Ok(mut state) = screen.lock() {
+                                    state.fail(error);
+                                }
                             }
                         }
                     }
@@ -342,7 +354,6 @@ async fn run(
                 Some(Command::Resize{cols,rows})=>{
                     let(cols,rows)=(cols.clamp(2,500),rows.clamp(2,300));
                     owner.control.send(Control::Resize{cols,rows}).await.context(crate::i18n::t("Local terminal closed"))?;
-                    let mut state=screen.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;state.terminal.resize(rows,cols);state.dirty=true;
                 }
                 Some(Command::Scroll(delta))=>{let mut state=screen.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;state.terminal.scroll(delta);state.dirty=true;},
                 Some(_)=>{events.send(Event::Transfer{id:id.into(),message:crate::i18n::t("Local terminals do not support SFTP. Connect to an SSH host to manage files").into(),error:true}).await.context(crate::i18n::t("Window closed"))?;}

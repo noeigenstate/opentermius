@@ -1,5 +1,6 @@
 // English source text is the stable translation key.
 pub(super) const MESSAGES: &[(&str, &str)] = &[
+    ("Local path is outside the selected folder", "本地路径不在所选文件夹内"),
     ("Remote", "远程"),
     ("Dynamic", "动态"),
     ("{minutes}m", "{minutes}分"),
