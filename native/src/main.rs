@@ -1461,6 +1461,51 @@ fn run() -> anyhow::Result<()> {
             });
         }
     });
+    ui.on_import_xshell(|| {
+        let default = opentermius::import_xshell::default_sessions_dir();
+        let mut picker = rfd::FileDialog::new().set_title("Import from Xshell — Select Sessions folder");
+        if let Some(path) = &default {
+            picker = picker.set_directory(path);
+        }
+        let choice = default.as_ref().map(|path| {
+            rfd::MessageDialog::new()
+                .set_title("Import from Xshell")
+                .set_description(format!("Import sessions from {}?\nChoose No to select another folder.", path.display()))
+                .set_buttons(rfd::MessageButtons::YesNoCancel)
+                .show()
+        });
+        let path = match choice {
+            Some(rfd::MessageDialogResult::Yes) => default,
+            Some(rfd::MessageDialogResult::Cancel) => return,
+            _ => picker.pick_folder(),
+        };
+        if let Some(path) = path {
+            let scanned = opentermius::import_xshell::scan(&path);
+            let message = with_state(|s| {
+                let result = s.store.lock()
+                    .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                    .and_then(|mut store| opentermius::import_xshell::merge(&mut store, scanned));
+                match result {
+                    Ok(summary) => {
+                        s.hosts();
+                        let message = summary.message();
+                        s.status(&message, false);
+                        Some(message)
+                    }
+                    Err(error) => {
+                        s.status(error.to_string(), true);
+                        None
+                    }
+                }
+            }).flatten();
+            if let Some(message) = message {
+                rfd::MessageDialog::new()
+                    .set_title("Import from Xshell")
+                    .set_description(message)
+                    .show();
+            }
+        }
+    });
     ui.on_export_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
             .set_title("导出主机（不含凭据）")
@@ -1521,7 +1566,12 @@ fn run() -> anyhow::Result<()> {
         ui.invoke_new_host();
     }
     if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
-        ui.invoke_open_section(section.into());
+        if section == "xshell-import" {
+            ui.invoke_open_section("hosts".into());
+            ui.set_menu_open(true);
+        } else {
+            ui.invoke_open_section(section.into());
+        }
     }
     if smoke && scene == "sftp" {
         with_state(|s| {

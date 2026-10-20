@@ -84,7 +84,7 @@ export component AppWindow inherits Window {
     property <bool> creating-host: false;
     property <bool> editor-menu-open: false;
     property <bool> settings-open: false;
-    property <bool> menu-open: false;
+    in-out property <bool> menu-open: false;
     property <bool> host-picker-open: false;
     property <HostDraft> draft;
     property <string> search;
@@ -117,6 +117,7 @@ export component AppWindow inherits Window {
     callback upload-file;
     callback download-file(string);
     callback import-hosts;
+    callback import-xshell;
     callback export-hosts;
     callback search-hosts(string);
     callback select-group(string);
@@ -482,9 +483,10 @@ export component AppWindow inherits Window {
             }
         }
     }
-    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 151px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 191px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
         VerticalLayout { padding: 8px; spacing: 4px;
             NavItem { text: "Import hosts"; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
+            NavItem { text: "Import from Xshell"; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-xshell(); } }
             NavItem { text: "Export hosts"; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
             NavItem { text: "Settings"; icon: @image-url("icons/settings.svg"); clicked => { root.menu-open = false; root.open-section("settings"); } }
         }
