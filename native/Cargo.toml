@@ -38,6 +38,24 @@ winresource = "0.1"
 [dev-dependencies]
 tempfile = "3"
 
+[profile.dev]
+# Keep line tables for backtraces/debugging but drop full type/variable debuginfo:
+# less metadata to generate, copy, and link on every incremental rebuild.
+debug = "line-tables-only"
+
+# Dependencies are not rebuilt during normal incremental work, and their full
+# debuginfo only bloats link inputs. Keep our own crate at the defaults.
+[profile.dev.package."*"]
+debug = false
+
+# Local release-like builds: fast to compile, not for shipping.
+# The shipping [profile.release] below stays unchanged.
+[profile.release-fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
