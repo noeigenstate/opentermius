@@ -9,7 +9,7 @@ import { SettingsBridge, SettingsPage } from "pages/settings.slint";
 export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge }
 
 export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
-export struct TabRow { id: string, title: string, status: string }
+export struct TabRow { id: string, title: string, status: string, disconnected: bool, local: bool }
 export struct TerminalRun { text: string, row: int, col: int, width: int, fg: color, bg: color, bold: bool, underline: bool }
 export struct SelectionRun { row: int, col: int, width: int }
 export struct FileRow { name: string, is-directory: bool, size: string, modified: string, kind: string }
@@ -50,12 +50,17 @@ export component AppWindow inherits Window {
     in property <bool> remote-connected;
     in property <bool> local-session;
     in property <bool> terminal-visible;
+    in property <bool> reconnect-hint: false;
+    out property <bool> terminal-has-focus: terminal-focus.has-focus && !root.hosts-page && !root.sftp-page && !root.prompt-visible;
     in property <string> status-text;
     in property <bool> status-error;
     in property <[FileRow]> files;
     in property <[FileRow]> local-files;
     in property <string> local-path;
     in-out property <bool> sftp-page: false;
+    in-out property <string> tab-menu-session: "";
+    in-out property <bool> tab-menu-reconnectable: false;
+    in-out property <length> tab-menu-x: 0px;
     in property <string> file-path;
     in-out property <bool> files-open;
     in property <bool> file-busy;
@@ -101,6 +106,11 @@ export component AppWindow inherits Window {
     callback terminal-key(string, bool, bool, bool);
     callback terminal-size(int, int);
     callback terminal-scroll(int);
+    callback terminal-pointer(int, int, int, int, bool, bool, bool);
+    callback terminal-wheel(int, int, int, bool, bool, bool);
+    callback terminal-ime(string);
+    callback reconnect-session(string);
+    callback duplicate-session(string);
     callback copy-terminal;
     callback paste-terminal;
     callback list-files(string);
@@ -148,6 +158,7 @@ export component AppWindow inherits Window {
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
     public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = true; root.section = name; } }
+    public function focus-terminal() { terminal-focus.focus(); }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
     terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
     VerticalLayout { spacing: 0px;
@@ -176,14 +187,27 @@ export component AppWindow inherits Window {
                     TouchArea { clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = true; root.open-sftp(); } } }
                 }
                 Text { text: "+"; width: 30px; color: #8d91a5; font-size: 24px; vertical-alignment: center; horizontal-alignment: center; }
-                for tab in root.tabs: Rectangle { width: 170px; height: 32px; y: 7px; border-radius: 6px;
+                for tab[index] in root.tabs: Rectangle { width: 200px; height: 32px; y: 7px; border-radius: 6px;
                     background: !root.hosts-page && root.active-session == tab.id ? #3e4257 : #32364a;
                     HorizontalLayout { padding-left: 10px; padding-right: 5px; spacing: 6px;
-                        Image { source: @image-url("icons/terminal.svg"); colorize: tab.status == "connected" ? #21b568 : Theme.secondary; width: 17px; height: 17px; }
-                        Text { text: tab.title; color: white; overflow: elide; vertical-alignment: center; }
-                        Action { text: "×"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.close-session(tab.id); } }
+                        Image { source: @image-url("icons/terminal.svg"); colorize: tab.disconnected ? #f0ac77 : tab.status == "connected" ? #21b568 : Theme.secondary; width: 17px; height: 17px; }
+                        VerticalLayout { spacing: 0px;
+                            Text { text: tab.title; color: white; overflow: elide; vertical-alignment: center; font-size: 12px; }
+                            if tab.disconnected: Text { text: "Disconnected"; color: #f0ac77; font-size: 10px; height: 12px; }
+                        }
+                        Rectangle { width: 24px; background: tab-menu-touch.has-hover ? #ffffff1a : transparent; border-radius: 5px;
+                            Image { source: @image-url("icons/more.svg"); colorize: #d7d9e5; width: 14px; height: 14px; x: 5px; y: (parent.height - 14px) / 2; }
+                            tab-menu-touch := TouchArea { clicked => { root.tab-menu-session = tab.id; root.tab-menu-reconnectable = tab.disconnected && !tab.local; root.tab-menu-x = Math.min(400px + index * 205px, root.width - 190px); } }
+                        }
+                        Rectangle { width: 24px; background: tab-close-touch.has-hover ? #ffffff1a : transparent; border-radius: 5px;
+                            Image { source: @image-url("icons/close.svg"); colorize: #d7d9e5; width: 14px; height: 14px; x: 5px; y: (parent.height - 14px) / 2; }
+                            tab-close-touch := TouchArea { clicked => { root.close-session(tab.id); } }
+                        }
                     }
-                    TouchArea { width: parent.width - 30px; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
+                    TouchArea { width: parent.width - 60px;
+                        clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } }
+                        pointer-event(event) => { if event.kind == PointerEventKind.down && event.button == PointerEventButton.right { root.tab-menu-session = tab.id; root.tab-menu-reconnectable = tab.disconnected && !tab.local; root.tab-menu-x = Math.min(400px + index * 205px, root.width - 190px); } }
+                    }
                 }
                 Rectangle { horizontal-stretch: 1; background: transparent;
                     TouchArea { pointer-event(event) => { if event.kind == PointerEventKind.down { root.window-drag(); } } }
@@ -341,18 +365,32 @@ export component AppWindow inherits Window {
                             }
                             for selection in root.selection-runs: Rectangle { x: 10px + selection.col * root.cell-advance; y: 8px + selection.row * 18px; width: selection.width * root.cell-advance; height: 18px; background: #2091f640; }
                             if root.cursor-visible && root.terminal-visible: Rectangle { x: 10px + root.cursor-col * root.cell-advance; y: 8px + root.cursor-row * 18px; width: root.cell-advance; height: 18px; background: #ffffff80; }
-                            terminal-focus := FocusScope {
+                            // TextInput enables the native IME. Ordinary keys are consumed below;
+                            // composition commits bypass key-pressed and arrive through edited.
+                            terminal-focus := TextInput {
+                                x: 10px + root.cursor-col * root.cell-advance; y: 8px + root.cursor-row * 18px;
+                                width: Math.max(1px, parent.width - self.x); height: 18px;
+                                font-family: "Consolas"; font-size: 14px; single-line: true; opacity: 0;
+                                edited => { if self.text != "" { root.terminal-ime(self.text); self.text = ""; } }
                                 key-pressed(event) => {
-                                    if event.modifiers.control && event.modifiers.shift && (event.text == "C" || event.text == "c") { root.copy-terminal(); }
-                                    else if event.modifiers.control && event.modifiers.shift && (event.text == "V" || event.text == "v") { root.paste-terminal(); }
-                                    else { root.terminal-key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift); }
+                                    root.terminal-key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift);
                                     accept
                                 }
+                                key-released(event) => { accept }
                             }
                             TouchArea {
-                                pointer-event(event) => { if event.kind == PointerEventKind.down { terminal-focus.focus(); root.select-terminal(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), false); } }
-                                moved => { if self.pressed { root.select-terminal(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), true); } }
-                                scroll-event(event) => { root.terminal-scroll(Math.round(event.delta-y / 18px)); accept }
+                                pointer-event(event) => {
+                                    if event.kind == PointerEventKind.down { terminal-focus.focus(); }
+                                    root.terminal-pointer(event.kind == PointerEventKind.down ? 0 : event.kind == PointerEventKind.up ? 1 : event.kind == PointerEventKind.move ? 2 : 3,
+                                        event.button == PointerEventButton.left ? 0 : event.button == PointerEventButton.right ? 1 : event.button == PointerEventButton.middle ? 2 : -1,
+                                        Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance),
+                                        event.modifiers.control, event.modifiers.alt, event.modifiers.shift);
+                                }
+                                scroll-event(event) => { root.terminal-wheel(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), Math.round(event.delta-y / 18px), event.modifiers.control, event.modifiers.alt, event.modifiers.shift); accept }
+                            }
+                            if root.reconnect-hint: Rectangle { x: 16px; y: parent.height - 56px; width: Math.min(420px, parent.width - 32px); height: 40px; background: #32364a; border-radius: 6px;
+                                Text { text: "Press Enter to reconnect"; color: #f0ac77; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                                TouchArea { clicked => { root.reconnect-session(root.active-session); terminal-focus.focus(); } }
                             }
                         }
                         if root.files-open: Rectangle { width: 340px; background: Theme.base;
@@ -562,6 +600,16 @@ export component AppWindow inherits Window {
                 Text { text: "Settings"; color: Theme.text; font-size: 20px; }
                 Text { text: root.settings-text; color: Theme.text; wrap: word-wrap; vertical-stretch: 1; }
                 HorizontalLayout { alignment: end; Action { text: "Close"; clicked => { root.settings-open = false; } } }
+            }
+        }
+    }
+    if root.tab-menu-session != "": Rectangle {
+        TouchArea { clicked => { root.tab-menu-session = ""; terminal-focus.focus(); } }
+        Rectangle { x: root.tab-menu-x; y: 45px; width: 180px; height: 120px; background: Theme.highest; border-radius: 8px; border-width: 1px; border-color: Theme.border;
+            VerticalLayout { padding: 8px; spacing: 5px;
+                Action { text: "Reconnect"; flat: true; left-aligned: true; disabled: !root.tab-menu-reconnectable; clicked => { root.reconnect-session(root.tab-menu-session); root.tab-menu-session = ""; } }
+                Action { text: "Duplicate session"; flat: true; left-aligned: true; clicked => { root.duplicate-session(root.tab-menu-session); root.tab-menu-session = ""; } }
+                Action { text: "Close"; flat: true; left-aligned: true; clicked => { root.close-session(root.tab-menu-session); root.tab-menu-session = ""; terminal-focus.focus(); } }
             }
         }
     }
