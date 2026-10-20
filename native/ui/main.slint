@@ -69,7 +69,7 @@ component FileTableRow inherits Rectangle {
             visible: index < 3 || root.remote;
             x: parent.width * root.starts[index + 1];
             width: parent.width * (index + 1 < root.cols.length ? root.cols[index + 1] : 0); height: parent.height;
-            Text { x: 12px; width: Math.max(0px, parent.width - 20px); height: parent.height; text: value; color: Theme.secondary; font-size: index == 3 ? 12px : 13px; font-family: index == 3 ? "Consolas" : "sans-serif"; overflow: elide; vertical-alignment: center; }
+            Text { x: 12px; width: Math.max(0px, parent.width - 20px); height: parent.height; text: value; color: Theme.secondary; font-size: index == 3 ? 12px : 13px; font-family: index == 3 ? Theme.mono-font : Theme.ui-font; overflow: elide; vertical-alignment: center; }
         }
         Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: Theme.divider; }
     }
@@ -79,12 +79,12 @@ export component AppWindow inherits Window {
     no-frame: true;
     title: "OpenTermius"; preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
     icon: @image-url("../../assets/icon.png");
-    background: Theme.base; default-font-family: "sans-serif"; default-font-size: Theme.font-body;
+    background: Theme.base; default-font-family: Theme.ui-font; default-font-size: Theme.font-body;
     in property <[HostRow]> hosts;
     in property <[GroupRow]> groups;
     in property <[TabRow]> tabs;
     in property <[TerminalRun]> terminal-runs;
-    in property <string> terminal-font: "Consolas";
+    in property <string> terminal-font: Theme.mono-font;
     in property <[SelectionRun]> selection-runs;
     in property <int> cursor-row;
     in property <int> cursor-col;

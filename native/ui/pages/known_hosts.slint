@@ -40,7 +40,7 @@ component KnownHostItem inherits Rectangle {
         Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: "\{root.entry.port}"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
     }
     Rectangle { x: root.table-width * root.offsets[2]; y: 0px; width: root.table-width * root.cols[2]; height: parent.height;
-        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.fingerprint; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
+        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.fingerprint; color: Theme.secondary; font-family: Theme.mono-font; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
     }
     Rectangle { x: root.table-width * root.offsets[3]; y: 0px; width: root.table-width * root.cols[3]; height: parent.height;
         Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.usage; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
@@ -120,6 +120,6 @@ export component KnownHostsPage inherits Rectangle {
         confirm-text: "Remove"; confirm-kind: "danger";
         confirm => { root.confirm-visible = false; KnownHostsBridge.remove-host(root.pending-host, root.pending-port); }
         Text { text: "\{root.pending-host}:\{root.pending-port}"; color: Theme.text; font-size: Theme.font-body; font-weight: 500; wrap: word-wrap; }
-        Text { text: root.pending-fingerprint; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-mono; wrap: char-wrap; }
+        Text { text: root.pending-fingerprint; color: Theme.secondary; font-family: Theme.mono-font; font-size: Theme.font-mono; wrap: char-wrap; }
     }
 }

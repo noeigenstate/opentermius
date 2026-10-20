@@ -85,7 +85,7 @@ export component ForwardingPage inherits Rectangle {
                                                 Rectangle { width: table.name-width;
                                                     VerticalLayout { padding-left: Theme.space-16; padding-right: Theme.space-12; alignment: center; spacing: Theme.space-4;
                                                         Text { text: rule.label; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
-                                                        if !table.wide: Text { text: rule.route; color: Theme.secondary; font-size: Theme.font-mono; font-family: "Consolas"; overflow: elide; }
+                                                        if !table.wide: Text { text: rule.route; color: Theme.secondary; font-size: Theme.font-mono; font-family: Theme.mono-font; overflow: elide; }
                                                         Caption { text: rule.status + " / " + rule.connections + " connections"; color: rule.error ? Theme.danger : Theme.secondary; overflow: elide; }
                                                     }
                                                 }
@@ -93,7 +93,7 @@ export component ForwardingPage inherits Rectangle {
                                                     Badge { x: 0px; y: (parent.height - self.height) / 2; text: root.rule-kind(rule); kind: "accent"; }
                                                 }
                                                 if table.wide: Rectangle { horizontal-stretch: 1;
-                                                    Text { x: 0px; width: parent.width - Theme.space-12; height: parent.height; text: rule.route; color: Theme.text; font-size: Theme.font-mono; font-family: "Consolas"; vertical-alignment: center; overflow: elide; }
+                                                    Text { x: 0px; width: parent.width - Theme.space-12; height: parent.height; text: rule.route; color: Theme.text; font-size: Theme.font-mono; font-family: Theme.mono-font; vertical-alignment: center; overflow: elide; }
                                                 }
                                                 Rectangle { width: table.action-width;
                                                     VerticalLayout { alignment: center; spacing: Theme.space-8; padding-right: Theme.space-12;

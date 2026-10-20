@@ -40,7 +40,7 @@ component SnippetItem inherits Rectangle {
     HorizontalLayout { padding-left: Theme.space-12; padding-right: Theme.space-12; spacing: Theme.space-12; cross-axis-alignment: center;
         VerticalLayout { horizontal-stretch: 1; spacing: Theme.space-4;
             Text { text: root.snippet.name; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
-            Text { text: root.snippet.preview; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; overflow: elide; }
+            Text { text: root.snippet.preview; color: Theme.secondary; font-family: Theme.mono-font; font-size: Theme.font-caption; overflow: elide; }
         }
         IconButton {
             button-size: Theme.button-s;

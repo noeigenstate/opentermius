@@ -39,11 +39,11 @@ component LogTableRow inherits Rectangle {
     Rectangle { x: root.table-width * root.offsets[0]; y: 0px; width: root.table-width * root.cols[0]; height: parent.height;
         VerticalLayout { padding-left: Theme.space-16; padding-right: Theme.space-8; alignment: center; spacing: Theme.space-4;
             Text { text: root.entry.label; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
-            Text { text: root.entry.address; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; overflow: elide; }
+            Text { text: root.entry.address; color: Theme.secondary; font-family: Theme.mono-font; font-size: Theme.font-caption; overflow: elide; }
         }
     }
     Rectangle { x: root.table-width * root.offsets[1]; y: 0px; width: root.table-width * root.cols[1]; height: parent.height;
-        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.started; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
+        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.started; color: Theme.secondary; font-family: Theme.mono-font; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
     }
     Rectangle { x: root.table-width * root.offsets[2]; y: 0px; width: root.table-width * root.cols[2]; height: parent.height;
         Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.duration; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
