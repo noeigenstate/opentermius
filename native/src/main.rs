@@ -70,6 +70,9 @@ struct State {
     local_request: u64,
     pending_sftp: Option<String>,
     render_model: Rc<VecModel<TerminalRun>>,
+    forwards: BTreeMap<String, opentermius::forwarding::RunningRule>,
+    forward_errors: BTreeMap<String, String>,
+    forwarding_timer: slint::Timer,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -1206,6 +1209,9 @@ fn run() -> anyhow::Result<()> {
             local_request: 0,
             pending_sftp: None,
             render_model: Rc::new(VecModel::from(Vec::new())),
+            forwards: BTreeMap::new(),
+            forward_errors: BTreeMap::new(),
+            forwarding_timer: slint::Timer::default(),
         })
     });
     ui.on_save_host(|draft| with_state(|s| s.save(draft)).unwrap_or(false));
@@ -1582,6 +1588,10 @@ fn run() -> anyhow::Result<()> {
     ui.run()?;
     STATE.with(|slot| {
         if let Some(mut state) = slot.borrow_mut().take() {
+            for forward in state.forwards.values() { forward.request_stop(); }
+            for (_, mut forward) in std::mem::take(&mut state.forwards) {
+                state.runtime.block_on(forward.stop());
+            }
             for (_, mut view) in std::mem::take(&mut state.sessions) {
                 if let Some(transport) = view.transport.take() {
                     let _ = transport.commands.try_send(Command::Disconnect);
