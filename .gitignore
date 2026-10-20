@@ -8,3 +8,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Agent working files
+TASK.md
+native/build.log
