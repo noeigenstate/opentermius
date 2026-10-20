@@ -21,6 +21,7 @@ use tokio::sync::{mpsc, oneshot};
 use zeroize::Zeroize;
 slint::include_modules!();
 mod pages;
+mod rendering;
 
 struct SessionView {
     local: bool,
@@ -2069,17 +2070,30 @@ fn capture(ui: &AppWindow, output: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run() -> anyhow::Result<()> {
+fn run(renderer: rendering::Renderer, started: std::time::Instant, first_frame: Rc<std::cell::Cell<Option<f64>>>) -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    let output = args.iter().any(|a| a == "--smoke-test" || a == "--benchmark").then(|| {
+        args.iter().find_map(|a| a.strip_prefix("--output=")).map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("test-output"))
+    });
+    let actual_renderer = Rc::new(std::cell::Cell::new(renderer));
     slint::BackendSelector::new()
         .backend_name("winit".into())
-        .renderer_name("software".into())
-        .select()?;
-    let ui = AppWindow::new()?;
-    #[cfg(target_os = "macos")]
-    ui.set_terminal_font("Menlo".into());
-    #[cfg(target_os = "linux")]
-    ui.set_terminal_font("DejaVu Sans Mono".into());
-    let args: Vec<String> = std::env::args().collect();
+        .renderer_name(renderer.slint_name().into())
+        .with_winit_window_attributes_hook(rendering::window_attributes)
+        .with_winit_custom_application_handler(rendering::WindowPolish::new(started, actual_renderer.clone(), output, first_frame.clone()))
+        .select().context(rendering::PlatformFailure)?;
+    let fonts = rendering::configure_fonts();
+    let ui = AppWindow::new().context(rendering::PlatformFailure)?;
+    // Slint's Windows GL probe may already have selected software internally.
+    let renderer = if renderer != rendering::Renderer::Software && matches!(
+        ui.window().set_rendering_notifier(|_, _| {}),
+        Err(slint::SetRenderingNotifierError::Unsupported)
+    ) { rendering::Renderer::Software } else { renderer };
+    actual_renderer.set(renderer);
+    ui.global::<Theme>().set_ui_font(fonts.0.into());
+    ui.global::<Theme>().set_mono_font(fonts.1.into());
+    ui.set_terminal_font(fonts.1.into());
     let smoke = args.iter().any(|a| a == "--smoke-test");
     let benchmark = args.iter().any(|a| a == "--benchmark");
     let scene = args
@@ -2624,6 +2638,7 @@ fn run() -> anyhow::Result<()> {
     if smoke && (scene == "hosts" || smoke_port.is_some()) {
         anyhow::ensure!(
             ui.invoke_save_host(HostDraft {
+                id: "smoke-profile".into(),
                 name: "本机验证服务器".into(),
                 host: "127.0.0.1".into(),
                 port: smoke_port.unwrap_or(22).to_string().into(),
@@ -2733,9 +2748,8 @@ fn run() -> anyhow::Result<()> {
                         with_state(|s|->anyhow::Result<()>{let store=s.store.lock().unwrap();let p=&store.data.hosts[0];anyhow::ensure!(store::unprotect(p.encrypted_secret.as_deref().context("缺少加密凭据")?)?=="test-password","系统凭据未正确解密");anyhow::ensure!(!std::fs::read_to_string(&store.path)?.contains("test-password"),"凭据被明文保存");anyhow::ensure!(Store::open(store.path.clone())?.data.hosts.len()==1,"重开配置失败");Ok(())}).unwrap()?;
                         ui.invoke_search_hosts("absent-search".into());anyhow::ensure!(ui.get_hosts().row_count()==0,"主机搜索失败");ui.invoke_search_hosts("".into());
                         anyhow::ensure!(credentials&&fingerprint,"未覆盖凭据和主机密钥弹窗");
-                        #[cfg(windows)]
-                        anyhow::ensure!((ui.get_cell_width()-7.6972656).abs()<0.05,"Terminal cell metric does not match Consolas 14px");
-                        std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup",if cfg!(windows){"Windows DPAPI"}else{"AES-256-GCM"},"no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":std::process::id()}).to_string())?;
+                        anyhow::ensure!(ui.get_cell_width().is_finite() && ui.get_cell_width() > 0.0 && ui.get_cell_height().is_finite() && ui.get_cell_height() > 0.0,"Terminal cell metric must be measured from the selected font");
+                        std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup",if cfg!(windows){"Windows DPAPI"}else{"AES-256-GCM"},"no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;
                         return Ok(true)
                     }
                     Ok(false)
@@ -2745,14 +2759,14 @@ fn run() -> anyhow::Result<()> {
         } else {
             timer.start(slint::TimerMode::SingleShot,Duration::from_millis(800),move||{
                 if let Some(ui)=weak.upgrade(){
-                    let result=(||->anyhow::Result<()>{capture(&ui,&output)?;std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","backend":"winit-software","scene":scene,"cellWidth":ui.get_cell_width(),"pid":std::process::id()}).to_string())?;Ok(())})();
+                    let result=(||->anyhow::Result<()>{capture(&ui,&output)?;std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"scene":scene,"cellWidth":ui.get_cell_width(),"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;Ok(())})();
                     if let Err(error)=result{let _=std::fs::write(output.join("error.txt"),error.to_string());}
                 }
                 if smoke{let _=slint::quit_event_loop();}
             });
         }
     }
-    ui.run()?;
+    let platform_result = ui.run().context(rendering::PlatformFailure);
     STATE.with(|slot| {
         if let Some(mut state) = slot.borrow_mut().take() {
             for forward in state.forwards.values() { forward.request_stop(); }
@@ -2769,16 +2783,44 @@ fn run() -> anyhow::Result<()> {
             state.runtime.shutdown_timeout(Duration::from_secs(1));
         }
     });
-    Ok(())
+    platform_result
 }
 fn main() {
-    if let Err(e) = run() {
-        rfd::MessageDialog::new()
-            .set_title("OpenTermius 启动失败")
-            .set_description(e.to_string())
-            .set_level(rfd::MessageLevel::Error)
-            .show();
-        std::process::exit(1)
+    let started = std::time::Instant::now();
+    let args: Vec<String> = std::env::args().collect();
+    let result = (|| -> anyhow::Result<i32> {
+        let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref())?;
+        let renderer = if requested.available() { requested } else {
+            eprintln!("当前构建未包含 {} 渲染器，回退软件渲染", requested.name());
+            rendering::Renderer::Software
+        };
+        let first_frame = Rc::new(std::cell::Cell::new(None));
+        match run(renderer, started, first_frame.clone()) {
+            Ok(()) => Ok(0),
+            Err(error) if rendering::should_retry(renderer, first_frame.get(), &error) => {
+                eprintln!("GPU 窗口初始化失败，回退软件渲染：{error:#}");
+                rendering::retry_software()
+            }
+            Err(error) => Err(error),
+        }
+    })();
+    match result {
+        Ok(code) => std::process::exit(code),
+        Err(error) => {
+            if args.iter().any(|a| a == "--smoke-test" || a == "--benchmark") {
+                let output = args.iter().find_map(|a| a.strip_prefix("--output=")).unwrap_or("test-output");
+                let _ = std::fs::create_dir_all(output);
+                let _ = std::fs::write(PathBuf::from(output).join("error.txt"), format!("{error:#}"));
+                eprintln!("OpenTermius 启动失败：{error:#}");
+            } else {
+                rfd::MessageDialog::new()
+                    .set_title("OpenTermius 启动失败")
+                    .set_description(format!("{error:#}"))
+                    .set_level(rfd::MessageLevel::Error)
+                    .show();
+            }
+            std::process::exit(1)
+        }
     }
 }
 

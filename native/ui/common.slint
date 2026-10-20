@@ -129,7 +129,9 @@ export global Theme {
     out property <length> table-row-height: 40px;
     out property <length> dialog-footer-height: 76px;
 
-    // --- Typography (spec 1.2), sizes only; weights are 400/500/600/700 ----
+    // --- Typography (spec 1.2), platform families; weights are 400/500/600/700 ----
+    in-out property <string> ui-font: "sans-serif";
+    in-out property <string> mono-font: "monospace";
     out property <length> font-micro: 11px;
     out property <length> font-caption: 12px;
     out property <length> font-mono: 13px;

@@ -57,12 +57,12 @@ export component AppWindow inherits Window {
     no-frame: true;
     title: "OpenTermius"; preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
     icon: @image-url("../../assets/icon.png");
-    background: Theme.base; default-font-family: "sans-serif"; default-font-size: 14px;
+    background: Theme.base; default-font-family: Theme.ui-font; default-font-size: 14px;
     in property <[HostRow]> hosts;
     in property <[GroupRow]> groups;
     in property <[TabRow]> tabs;
     in property <[TerminalRun]> terminal-runs;
-    in property <string> terminal-font: "Consolas";
+    in property <string> terminal-font: Theme.mono-font;
     in property <[SelectionRun]> selection-runs;
     in property <int> cursor-row;
     in property <int> cursor-col;
