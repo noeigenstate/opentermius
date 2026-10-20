@@ -232,13 +232,13 @@ pub fn duplicate_name<'a>(base: &str, existing: impl IntoIterator<Item = &'a str
     let existing: Vec<String> = existing.into_iter().map(str::to_lowercase).collect();
     let taken = |candidate: &str| existing.iter().any(|name| name == candidate);
     let base = base.trim();
-    let base = if base.is_empty() { "Host" } else { base };
-    let first = label(base, " (copy)");
+    let base = if base.is_empty() { crate::i18n::t("Host") } else { base };
+    let first = label(base, crate::i18n::t(" (copy)"));
     if !taken(&first.to_lowercase()) {
         return first;
     }
     for number in 2..=existing.len() + 2 {
-        let candidate = label(base, &format!(" (copy {number})"));
+        let candidate = label(base, &crate::tf!(" (copy {number})", "number" => format!("{}", number)));
         if !taken(&candidate.to_lowercase()) {
             return candidate;
         }
@@ -293,10 +293,7 @@ pub fn now_rfc3339() -> String {
 /// Records a successful connection. Returns `false` when the profile is not
 /// stored (for example a quick-connect session).
 pub fn mark_connected(store: &mut Store, id: &str, now: &str) -> Result<bool> {
-    ensure!(
-        chrono::DateTime::parse_from_rfc3339(now).is_ok(),
-        "连接时间格式无效"
-    );
+    ensure!(chrono::DateTime::parse_from_rfc3339(now).is_ok(), "{}", crate::i18n::t("Invalid connection timestamp"));
     let Some(index) = store.data.hosts.iter().position(|profile| profile.id == id) else {
         return Ok(false);
     };
@@ -318,7 +315,7 @@ pub fn duplicate_profile(store: &mut Store, id: &str) -> Result<String> {
         .iter()
         .find(|profile| profile.id == id)
         .cloned()
-        .context("主机不存在")?;
+        .context(crate::i18n::t("Host not found"))?;
     let new_id = Uuid::new_v4().to_string();
     let name = duplicate_name(
         &source.name,
@@ -342,11 +339,8 @@ pub fn duplicate_profile(store: &mut Store, id: &str) -> Result<String> {
 /// group when the target name is already in use.
 pub fn rename_group(store: &mut Store, old: &str, new: &str) -> Result<usize> {
     let new = new.trim();
-    ensure!(!new.is_empty(), "分组名称不能为空");
-    ensure!(
-        new.chars().count() <= 128 && !new.chars().any(char::is_control),
-        "分组名称无效"
-    );
+    ensure!(!new.is_empty(), "{}", crate::i18n::t("Group name cannot be empty"));
+    ensure!(new.chars().count() <= 128 && !new.chars().any(char::is_control), "{}", crate::i18n::t("Invalid group name"));
     if old == new {
         return Ok(0);
     }

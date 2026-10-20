@@ -246,7 +246,7 @@ fn open_rejects_corrupt_oversized_and_wrong_version_files() {
     let corrupt = dir.path().join("corrupt.json");
     write_json(&corrupt, "{ not json");
     let error = Store::open(corrupt).err().unwrap().to_string();
-    assert!(error.contains("损坏"), "unexpected error: {error}");
+    assert!(error.contains("corrupted"), "unexpected error: {error}");
 
     let empty = dir.path().join("empty.json");
     write_json(&empty, "");
@@ -255,7 +255,7 @@ fn open_rejects_corrupt_oversized_and_wrong_version_files() {
     let wrong = dir.path().join("wrong-version.json");
     write_json(&wrong, r#"{"version":1,"hosts":[]}"#);
     let error = Store::open(wrong).err().unwrap().to_string();
-    assert!(error.contains("版本"), "unexpected error: {error}");
+    assert!(error.contains("version"), "unexpected error: {error}");
 
     let missing_version = dir.path().join("missing-version.json");
     write_json(&missing_version, r#"{"hosts":[]}"#);
@@ -272,7 +272,7 @@ fn open_rejects_corrupt_oversized_and_wrong_version_files() {
     let file = fs::File::create(&oversized).unwrap();
     file.set_len(16 * 1024 * 1024 + 1).unwrap();
     let error = Store::open(oversized).err().unwrap().to_string();
-    assert!(error.contains("过大"), "unexpected error: {error}");
+    assert!(error.contains("too large"), "unexpected error: {error}");
 }
 
 #[test]

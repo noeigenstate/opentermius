@@ -555,7 +555,7 @@ async fn untrusted_fingerprint_and_cancel_during_handshake() {
     })
     .await
     .unwrap();
-    assert!(bad.status().message.contains("主机密钥已变化"));
+    assert!(bad.status().message.contains("SSH host key changed"));
     bad.stop().await;
     // A TCP server that never sends an SSH banner must not delay Stop.
     let stalled = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -646,7 +646,7 @@ async fn listener_conflict_is_reported_and_ssh_is_closed() {
     })
     .await
     .unwrap();
-    assert!(running.status().message.contains("无法监听"));
+    assert!(running.status().message.contains("Cannot listen"));
     running.stop().await;
     wait_zero(&f.state.peers).await;
 }

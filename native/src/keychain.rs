@@ -80,11 +80,11 @@ impl KeyKind {
         }
     }
 
-    pub const fn default_label(self) -> &'static str {
+    pub fn default_label(self) -> &'static str {
         match self {
-            Self::Ed25519 => "Ed25519 key",
-            Self::Rsa3072 => "RSA 3072 key",
-            Self::Rsa4096 => "RSA 4096 key",
+            Self::Ed25519 => crate::i18n::t("Ed25519 key"),
+            Self::Rsa3072 => crate::i18n::t("RSA 3072 key"),
+            Self::Rsa4096 => crate::i18n::t("RSA 4096 key"),
         }
     }
 
@@ -131,11 +131,8 @@ fn now() -> String {
 
 fn clean_label(label: &str) -> Result<String> {
     let label = label.trim();
-    ensure!(!label.is_empty(), "请输入密钥名称");
-    ensure!(
-        label.chars().count() <= 128 && !label.chars().any(char::is_control),
-        "密钥名称无效"
-    );
+    ensure!(!label.is_empty(), "{}", crate::i18n::t("Enter a key name"));
+    ensure!(label.chars().count() <= 128 && !label.chars().any(char::is_control), "{}", crate::i18n::t("Invalid key name"));
     Ok(label.to_string())
 }
 
@@ -145,29 +142,23 @@ fn key_type_of(key: &PrivateKey) -> Result<&'static str> {
         Algorithm::Ed25519 => Ok("ed25519"),
         Algorithm::Rsa { .. } => Ok("rsa"),
         Algorithm::Ecdsa { .. } => Ok("ecdsa"),
-        _ => bail!("暂不支持该类型的 SSH 私钥"),
+        _ => bail!("{}", crate::i18n::t("This SSH private key type is not supported yet")),
     }
 }
 
 /// Public key line, type and fingerprint derived from a private key.
 fn describe(key: &PrivateKey) -> Result<(&'static str, String, String)> {
-    let public_key = key.public_key().to_openssh().context("无法导出公钥")?;
-    ensure!(
-        !public_key.is_empty()
+    let public_key = key.public_key().to_openssh().context(crate::i18n::t("Cannot export public key"))?;
+    ensure!(!public_key.is_empty()
             && public_key.lines().count() == 1
-            && !public_key.chars().any(char::is_control),
-        "公钥格式无效"
-    );
+            && !public_key.chars().any(char::is_control), "{}", crate::i18n::t("Invalid public key format"));
     let fingerprint = key.public_key().fingerprint(HashAlg::Sha256).to_string();
-    ensure!(
-        fingerprint.starts_with("SHA256:") && fingerprint.len() > "SHA256:".len(),
-        "指纹格式无效"
-    );
+    ensure!(fingerprint.starts_with("SHA256:") && fingerprint.len() > "SHA256:".len(), "{}", crate::i18n::t("Invalid fingerprint format"));
     Ok((key_type_of(key)?, public_key, fingerprint))
 }
 
 fn entry_from_key(label: &str, key: &PrivateKey, passphrase: Option<&str>) -> Result<KeyEntry> {
-    ensure!(!key.is_encrypted(), "私钥仍受口令保护");
+    ensure!(!key.is_encrypted(), "{}", crate::i18n::t("Private key is still passphrase-protected"));
     let label = clean_label(label)?;
     let (key_type, public_key, fingerprint) = describe(key)?;
     let pem = key.to_openssh(LineEnding::LF)?;
@@ -218,8 +209,8 @@ pub fn decode_private_key(text: &str, passphrase: Option<&str>) -> Result<Privat
     // PPK parser errors can contain entire input lines. Do not retain them as
     // an error source: callers display both Display and Debug error chains.
     let key = russh::keys::decode_secret_key(text, passphrase)
-        .map_err(|_| anyhow::anyhow!("私钥或口令无效"))?;
-    ensure!(!key.is_encrypted(), "私钥口令无效或缺失");
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid private key or passphrase")))?;
+    ensure!(!key.is_encrypted(), "{}", crate::i18n::t("Invalid or missing private key passphrase"));
     Ok(key)
 }
 
@@ -228,7 +219,7 @@ pub fn decode_private_key(text: &str, passphrase: Option<&str>) -> Result<Privat
 /// exported copy can retain its original protection.
 pub fn import_private_key(label: &str, text: &str, passphrase: Option<&str>) -> Result<KeyEntry> {
     let label = if label.trim().is_empty() {
-        "Imported key"
+        crate::i18n::t("Imported key")
     } else {
         label
     };
@@ -237,15 +228,12 @@ pub fn import_private_key(label: &str, text: &str, passphrase: Option<&str>) -> 
 }
 
 pub fn import_file(path: &Path, label: &str, passphrase: Option<&str>) -> Result<KeyEntry> {
-    ensure!(
-        fs::metadata(path).context("读取私钥失败")?.len() <= MAX_KEY_FILE,
-        "私钥不能超过 1 MB"
-    );
-    let text = Zeroizing::new(fs::read_to_string(path).context("读取私钥失败")?);
+    ensure!(fs::metadata(path).context(crate::i18n::t("Cannot read private key"))?.len() <= MAX_KEY_FILE, "{}", crate::i18n::t("Private key must not exceed 1 MB"));
+    let text = Zeroizing::new(fs::read_to_string(path).context(crate::i18n::t("Cannot read private key"))?);
     let fallback = path
         .file_stem()
         .and_then(|name| name.to_str())
-        .unwrap_or("Imported key");
+        .unwrap_or(crate::i18n::t("Imported key"));
     import_private_key(
         if label.trim().is_empty() {
             fallback
@@ -288,20 +276,11 @@ pub fn file_requires_passphrase(path: &Path) -> bool {
 impl KeyEntry {
     pub fn validate(&mut self) -> Result<()> {
         self.label = clean_label(&self.label)?;
-        ensure!(
-            matches!(self.key_type.as_str(), "ed25519" | "rsa" | "ecdsa"),
-            "密钥类型无效"
-        );
-        ensure!(
-            self.public_key.starts_with("ssh-") || self.public_key.starts_with("ecdsa-"),
-            "公钥格式无效"
-        );
-        ensure!(
-            self.public_key.lines().count() == 1 && !self.public_key.chars().any(char::is_control),
-            "公钥格式无效"
-        );
-        ensure!(self.fingerprint.starts_with("SHA256:"), "指纹格式无效");
-        ensure!(!self.encrypted_private_key.is_empty(), "密钥材料缺失");
+        ensure!(matches!(self.key_type.as_str(), "ed25519" | "rsa" | "ecdsa"), "{}", crate::i18n::t("Invalid key type"));
+        ensure!(self.public_key.starts_with("ssh-") || self.public_key.starts_with("ecdsa-"), "{}", crate::i18n::t("Invalid public key format"));
+        ensure!(self.public_key.lines().count() == 1 && !self.public_key.chars().any(char::is_control), "{}", crate::i18n::t("Invalid public key format"));
+        ensure!(self.fingerprint.starts_with("SHA256:"), "{}", crate::i18n::t("Invalid fingerprint format"));
+        ensure!(!self.encrypted_private_key.is_empty(), "{}", crate::i18n::t("Key material is missing"));
         if self.id.is_empty() {
             self.id = uuid::Uuid::new_v4().to_string();
         }
@@ -332,13 +311,13 @@ impl KeyEntry {
 
     /// Decrypt this entry into material suitable for the SSH transport.
     pub fn load(&self) -> Result<KeyMaterial> {
-        let pem = Zeroizing::new(unprotect(&self.encrypted_private_key).context("无法解密私钥")?);
+        let pem = Zeroizing::new(unprotect(&self.encrypted_private_key).context(crate::i18n::t("Cannot decrypt private key"))?);
         let passphrase = self
             .encrypted_passphrase
             .as_deref()
             .map(unprotect)
             .transpose()
-            .context("无法解密私钥口令")?
+            .context(crate::i18n::t("Cannot decrypt private key passphrase"))?
             .map(Zeroizing::new);
         Ok(KeyMaterial { pem, passphrase })
     }
@@ -367,19 +346,13 @@ impl KeyEntry {
 impl Store {
     pub fn add_key(&mut self, mut entry: KeyEntry) -> Result<()> {
         entry.validate()?;
-        ensure!(
-            !self.data.keys.iter().any(|key| key.id == entry.id),
-            "密钥 ID 已存在"
-        );
-        ensure!(
-            !self
+        ensure!(!self.data.keys.iter().any(|key| key.id == entry.id), "{}", crate::i18n::t("Key ID already exists"));
+        ensure!(!self
                 .data
                 .keys
                 .iter()
-                .any(|key| key.fingerprint == entry.fingerprint),
-            "该密钥已存在"
-        );
-        ensure!(self.data.keys.len() < MAX_KEYS, "密钥数量过多");
+                .any(|key| key.fingerprint == entry.fingerprint), "{}", crate::i18n::t("This key already exists"));
+        ensure!(self.data.keys.len() < MAX_KEYS, "{}", crate::i18n::t("Too many keys"));
         let old = self.data.clone();
         self.data.keys.push(entry);
         if let Err(error) = self.persist() {
@@ -397,7 +370,7 @@ impl Store {
             .keys
             .iter_mut()
             .find(|key| key.id == id)
-            .context("Keychain 密钥不存在")?;
+            .context(crate::i18n::t("Keychain key not found"))?;
         entry.label = label;
         if let Err(error) = self.persist() {
             self.data = old;
@@ -412,7 +385,7 @@ impl Store {
             .keys
             .iter()
             .find(|key| key.id == id)
-            .context("Keychain 密钥不存在")?;
+            .context(crate::i18n::t("Keychain key not found"))?;
         let hosts: Vec<String> = self
             .data
             .hosts
@@ -420,11 +393,7 @@ impl Store {
             .filter(|host| host.key_id == entry.id)
             .map(|host| format!("“{}”", host.name))
             .collect();
-        ensure!(
-            hosts.is_empty(),
-            "无法删除：主机 {} 正在使用该密钥",
-            hosts.join("、")
-        );
+        ensure!(hosts.is_empty(), "{}", crate::tf!("Cannot delete: host {} is using this key", "0" => format!("{}", hosts.join("、"))));
         let old = self.data.clone();
         self.data.keys.retain(|key| key.id != id);
         if let Err(error) = self.persist() {
@@ -439,7 +408,7 @@ impl Store {
     }
 
     pub fn key_material(&self, id: &str) -> Result<KeyMaterial> {
-        self.key_entry(id).context("Keychain 密钥不存在")?.load()
+        self.key_entry(id).context(crate::i18n::t("Keychain key not found"))?.load()
     }
 }
 
@@ -585,7 +554,7 @@ mod tests {
         store.add_key(entry).unwrap();
         store.save(profile(Some(id.clone())), None, false).unwrap();
         let error = store.delete_key(&id).unwrap_err().to_string();
-        assert!(error.contains("无法删除"));
+        assert!(error.contains("Cannot delete"));
         assert!(error.contains("开发机"));
         assert!(store.key_entry(&id).is_some());
 
@@ -615,7 +584,7 @@ mod tests {
             .save(profile(Some("missing-key".into())), None, false)
             .unwrap_err()
             .to_string();
-        assert!(error.contains("密钥不存在"));
+        assert!(error.contains("Selected Keychain key does not exist"));
         assert!(store.data.hosts.is_empty());
     }
 

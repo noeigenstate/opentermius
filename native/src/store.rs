@@ -52,58 +52,40 @@ fn password_auth() -> String {
 impl Profile {
     pub fn validate(&mut self) -> Result<()> {
         for (value, label, max) in [
-            (&mut self.name, "名称", 128),
-            (&mut self.host, "地址", 253),
-            (&mut self.username, "用户名", 128),
-            (&mut self.group, "分组", 128),
+            (&mut self.name, crate::i18n::t("Name"), 128),
+            (&mut self.host, crate::i18n::t("Address"), 253),
+            (&mut self.username, crate::i18n::t("Username"), 128),
+            (&mut self.group, crate::i18n::t("Group"), 128),
         ] {
             *value = value.trim().into();
-            ensure!(
-                value.chars().count() <= max
+            ensure!(value.chars().count() <= max
                     && value.len() <= max * 4
-                    && !value.chars().any(char::is_control),
-                "{label}无效"
-            );
+                    && !value.chars().any(char::is_control), "{}", crate::tf!("Invalid {label}", "label" => format!("{}", label)));
         }
-        ensure!(!self.host.is_empty(), "Host address is required");
-        ensure!(
-            !self.host.chars().any(char::is_whitespace),
-            "地址无效"
-        );
+        ensure!(!self.host.is_empty(), "{}", crate::i18n::t("Host address is required"));
+        ensure!(!self.host.chars().any(char::is_whitespace), "{}", crate::i18n::t("Invalid address"));
         if self.name.is_empty() {
             self.name = self.host.chars().take(128).collect();
         }
-        ensure!(self.port > 0, "端口必须在 1–65535 之间");
-        ensure!(
-            self.auth_type == "password" || self.auth_type == "key",
-            "认证方式无效"
-        );
+        ensure!(self.port > 0, "{}", crate::i18n::t("Port must be between 1 and 65535"));
+        ensure!(self.auth_type == "password" || self.auth_type == "key", "{}", crate::i18n::t("Invalid authentication method"));
         self.private_key_path = self.private_key_path.trim().into();
-        ensure!(
-            self.private_key_path.chars().count() <= 32767
+        ensure!(self.private_key_path.chars().count() <= 32767
                 && self.private_key_path.len() <= 32767 * 4
-                && !self.private_key_path.chars().any(char::is_control),
-            "私钥路径无效"
-        );
-        ensure!(
-            self.auth_type != "key"
+                && !self.private_key_path.chars().any(char::is_control), "{}", crate::i18n::t("Invalid private key path"));
+        ensure!(self.auth_type != "key"
                 || !self.private_key_path.is_empty()
-                || !self.key_id.is_empty(),
-            "请选择私钥文件或 Keychain 密钥"
-        );
+                || !self.key_id.is_empty(), "{}", crate::i18n::t("Select a private key file or a Keychain key"));
         if self.id.is_empty() {
             self.id = Uuid::new_v4().to_string();
         }
         self.tags = crate::hosts::normalize_tags(&self.tags);
         for (value, label) in [
-            (&self.created_at, "创建时间"),
-            (&self.last_connected, "最近连接时间"),
+            (&self.created_at, crate::i18n::t("Creation time")),
+            (&self.last_connected, crate::i18n::t("Last connection time")),
         ] {
             if let Some(value) = value {
-                ensure!(
-                    value.len() <= 64 && chrono::DateTime::parse_from_rfc3339(value).is_ok(),
-                    "{label}无效"
-                );
+                ensure!(value.len() <= 64 && chrono::DateTime::parse_from_rfc3339(value).is_ok(), "{}", crate::tf!("Invalid {label}", "label" => format!("{}", label)));
             }
         }
         Ok(())
@@ -134,13 +116,10 @@ pub struct Store {
 impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
         let data = if path.exists() {
-            ensure!(
-                fs::metadata(&path)?.len() < 16 * 1024 * 1024,
-                "本机配置文件过大"
-            );
+            ensure!(fs::metadata(&path)?.len() < 16 * 1024 * 1024, "{}", crate::i18n::t("Local configuration file is too large"));
             let mut data: Data = serde_json::from_slice(&fs::read(&path)?)
-                .context("本机配置损坏，请保留文件并从备份恢复")?;
-            ensure!(data.version == 2, "本机配置版本不受支持");
+                .context(crate::i18n::t("Local configuration is corrupted; keep the file and restore a backup"))?;
+            ensure!(data.version == 2, "{}", crate::i18n::t("Unsupported local configuration version"));
             for p in &mut data.hosts {
                 p.validate()?;
             }
@@ -154,9 +133,9 @@ impl Store {
         Ok(Self { path, data })
     }
     pub fn persist(&self) -> Result<()> {
-        let parent = self.path.parent().context("无效的数据目录")?;
+        let parent = self.path.parent().context(crate::i18n::t("Invalid data directory"))?;
         let encoded = serde_json::to_vec_pretty(&self.data)?;
-        ensure!(encoded.len() < 16 * 1024 * 1024, "本机配置文件过大");
+        ensure!(encoded.len() < 16 * 1024 * 1024, "{}", crate::i18n::t("Local configuration file is too large"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;
@@ -189,12 +168,9 @@ impl Store {
         remember: bool,
     ) -> Result<()> {
         profile.validate()?;
-        ensure!(
-            profile.key_id.is_empty()
+        ensure!(profile.key_id.is_empty()
                 || profile.auth_type != "key"
-                || self.data.keys.iter().any(|key| key.id == profile.key_id),
-            "所选 Keychain 密钥不存在"
-        );
+                || self.data.keys.iter().any(|key| key.id == profile.key_id), "{}", crate::i18n::t("Selected Keychain key does not exist"));
         let old = self.data.clone();
         let previous = self.data.hosts.iter().find(|p| p.id == profile.id);
         let previous_created = previous.and_then(|p| p.created_at.clone());
@@ -237,21 +213,15 @@ impl Store {
         Ok(())
     }
     pub fn trust(&mut self, host: &str, port: u16, fingerprint: &str) -> Result<()> {
-        ensure!(
-            !host.trim().is_empty()
+        ensure!(!host.trim().is_empty()
                 && !host.chars().any(|c| c.is_whitespace() || c.is_control())
-                && host.len() <= 253 * 4,
-            "主机地址无效"
-        );
-        ensure!(
-            !fingerprint.trim().is_empty()
+                && host.len() <= 253 * 4, "{}", crate::i18n::t("Invalid host address"));
+        ensure!(!fingerprint.trim().is_empty()
                 && !fingerprint.chars().any(|c| c.is_whitespace() || c.is_control())
-                && fingerprint.len() <= 512,
-            "主机指纹无效"
-        );
+                && fingerprint.len() <= 512, "{}", crate::i18n::t("Invalid host fingerprint"));
         let key = key(host, port);
         if let Some(previous) = self.data.known_hosts.get(&key) {
-            ensure!(previous == fingerprint, "SSH 主机密钥已变化，拒绝连接");
+            ensure!(previous == fingerprint, "{}", crate::i18n::t("SSH host key changed; connection refused"));
             return Ok(());
         }
         self.data
@@ -291,12 +261,9 @@ impl Store {
         Ok(true)
     }
     pub fn export(&self, path: &Path) -> Result<()> {
-        ensure!(path != self.path, "不能导出到当前配置文件");
+        ensure!(path != self.path, "{}", crate::i18n::t("Cannot export to the current configuration file"));
         if path.exists() && self.path.exists() {
-            ensure!(
-                fs::canonicalize(path)? != fs::canonicalize(&self.path)?,
-                "不能导出到当前配置文件"
-            );
+            ensure!(fs::canonicalize(path)? != fs::canonicalize(&self.path)?, "{}", crate::i18n::t("Cannot export to the current configuration file"));
         }
         let mut data = self.data.clone();
         data.known_hosts.clear();
@@ -310,16 +277,13 @@ impl Store {
         Ok(())
     }
     pub fn import(&mut self, path: &Path) -> Result<usize> {
-        ensure!(
-            fs::metadata(path)?.len() < 16 * 1024 * 1024,
-            "导入文件不能超过 16 MB"
-        );
+        ensure!(fs::metadata(path)?.len() < 16 * 1024 * 1024, "{}", crate::i18n::t("Import file must not exceed 16 MB"));
         let value: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
         let hosts = value
             .get("hosts")
             .and_then(|v| v.as_array())
-            .context("缺少主机列表")?;
-        ensure!(hosts.len() <= 10000, "主机数量过多");
+            .context(crate::i18n::t("Host list is missing"))?;
+        ensure!(hosts.len() <= 10000, "{}", crate::i18n::t("Too many hosts"));
         let mut imported = Vec::new();
         for item in hosts {
             let mut p: Profile = serde_json::from_value(item.clone())?;
@@ -506,7 +470,7 @@ fn open_with_legacy_path(path: PathBuf, legacy_path: PathBuf) -> Result<Store> {
     Ok(migrated)
 }
 pub fn parse_quick_connect(value: &str) -> Result<Profile> {
-    let mut tokens = shlex::split(value).context("Invalid SSH command")?;
+    let mut tokens = shlex::split(value).context(crate::i18n::t("Invalid SSH command"))?;
     if tokens.first().is_some_and(|s| s == "ssh") {
         tokens.remove(0);
     }
@@ -520,7 +484,7 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
     while i < tokens.len() {
         match tokens[i].as_str() {
             "-p" | "-l" | "-i" => {
-                ensure!(i + 1 < tokens.len(), "Missing SSH option value");
+                ensure!(i + 1 < tokens.len(), "{}", crate::i18n::t("Missing SSH option value"));
                 let option = &tokens[i];
                 i += 1;
                 match option.as_str() {
@@ -536,13 +500,11 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
                 }
             }
             v if !v.starts_with('-') && host.is_none() => host = Some(v.to_string()),
-            _ => anyhow::bail!(
-                "Use ssh user@hostname -p port; remote commands are not supported here"
-            ),
+            _ => anyhow::bail!("{}", crate::i18n::t("Use ssh user@hostname -p port; remote commands are not supported here")),
         };
         i += 1;
     }
-    let host = host.context("Enter a host address")?;
+    let host = host.context(crate::i18n::t("Enter a host address"))?;
     let host = if let Some((user, host)) = host.rsplit_once('@') {
         username = user.into();
         host.to_string()
@@ -578,11 +540,8 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
     Ok(profile)
 }
 fn parse_port(value: &str) -> Result<u16> {
-    ensure!(
-        !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()),
-        "Invalid SSH port"
-    );
-    value.parse().context("Invalid SSH port")
+    ensure!(!value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()), "{}", crate::i18n::t("Invalid SSH port"));
+    value.parse().context(crate::i18n::t("Invalid SSH port"))
 }
 /// Accept `host`, `host:port`, `[ipv6]` and `[ipv6]:port` without treating
 /// any of the text as shell syntax.
@@ -590,23 +549,23 @@ fn split_host_port(value: &str) -> Result<(String, Option<u16>)> {
     if value.contains(['[', ']']) {
         let rest = value
             .strip_prefix('[')
-            .context("IPv6 地址格式无效")?;
-        let close = rest.find(']').context("IPv6 地址格式无效")?;
+            .context(crate::i18n::t("Invalid IPv6 address"))?;
+        let close = rest.find(']').context(crate::i18n::t("Invalid IPv6 address"))?;
         let host = &rest[..close];
-        ensure!(host.contains(':'), "IPv6 地址格式无效");
+        ensure!(host.contains(':'), "{}", crate::i18n::t("Invalid IPv6 address"));
         let suffix = &rest[close + 1..];
         let port = if suffix.is_empty() {
             None
         } else {
             let port = suffix
                 .strip_prefix(':')
-                .context("IPv6 地址格式无效")?;
+                .context(crate::i18n::t("Invalid IPv6 address"))?;
             Some(parse_port(port)?)
         };
         Ok((host.to_string(), port))
     } else if value.matches(':').count() == 1 {
         let (host, port) = value.rsplit_once(':').expect("one colon");
-        ensure!(!host.is_empty(), "Enter a host address");
+        ensure!(!host.is_empty(), "{}", crate::i18n::t("Enter a host address"));
         Ok((host.to_string(), Some(parse_port(port)?)))
     } else {
         Ok((value.to_string(), None))
@@ -621,7 +580,7 @@ fn crypt(input: &[u8], encrypt: bool) -> Result<Vec<u8>> {
             CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN, CryptProtectData, CryptUnprotectData,
         },
     };
-    ensure!(input.len() <= u32::MAX as usize, "凭据过长");
+    ensure!(input.len() <= u32::MAX as usize, "{}", crate::i18n::t("Credentials are too long"));
     let blob = CRYPT_INTEGER_BLOB {
         cbData: input.len() as u32,
         pbData: input.as_ptr() as *mut u8,
@@ -652,11 +611,7 @@ fn crypt(input: &[u8], encrypt: bool) -> Result<Vec<u8>> {
                 &mut out,
             )
         };
-        ensure!(
-            success != 0,
-            "Windows 系统加密操作失败：{}",
-            std::io::Error::last_os_error()
-        );
+        ensure!(success != 0, "{}", crate::tf!("Windows system encryption failed: {}", "0" => format!("{}", std::io::Error::last_os_error())));
         let result = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
         std::slice::from_raw_parts_mut(out.pbData, out.cbData as usize).fill(0);
         LocalFree(out.pbData as *mut _);
@@ -664,7 +619,7 @@ fn crypt(input: &[u8], encrypt: bool) -> Result<Vec<u8>> {
     }
 }
 pub fn protect(secret: &str) -> Result<String> {
-    ensure!(secret.len() <= 16384, "凭据过长");
+    ensure!(secret.len() <= 16384, "{}", crate::i18n::t("Credentials are too long"));
     #[cfg(windows)]
     {
         Ok(STANDARD.encode(crypt(secret.as_bytes(), true)?))
@@ -677,7 +632,7 @@ pub fn protect(secret: &str) -> Result<String> {
 pub fn unprotect(secret: &str) -> Result<String> {
     #[cfg(windows)]
     {
-        String::from_utf8(crypt(&STANDARD.decode(secret)?, false)?).context("凭据解密失败")
+        String::from_utf8(crypt(&STANDARD.decode(secret)?, false)?).context(crate::i18n::t("Credential decryption failed"))
     }
     #[cfg(not(windows))]
     {

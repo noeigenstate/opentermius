@@ -44,18 +44,17 @@ pub struct RestoreSummary {
 }
 impl std::fmt::Display for RestoreSummary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "已恢复 {} 台主机、{} 个密钥、{} 条片段、{} 条转发、{} 个密钥文件、{} 条信任记录；跳过 {} 个已有项目，{} 个指纹冲突（保留本机指纹）",
-            self.hosts,
-            self.keys,
-            self.snippets,
-            self.forwards,
-            self.key_files,
-            self.known_hosts,
-            self.skipped,
-            self.fingerprint_conflicts.len()
-        )
+        f.write_str(&crate::tf!(
+            "Restored {} hosts, {} keys, {} snippets, {} forwarding rules, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)",
+            "0" => self.hosts.to_string(),
+            "1" => self.keys.to_string(),
+            "2" => self.snippets.to_string(),
+            "3" => self.forwards.to_string(),
+            "4" => self.key_files.to_string(),
+            "5" => self.known_hosts.to_string(),
+            "6" => self.skipped.to_string(),
+            "7" => self.fingerprint_conflicts.len().to_string()
+        ))
     }
 }
 
@@ -125,27 +124,24 @@ fn transform_encrypted_at(
 
 fn validate_ids(data: &Value) -> Result<()> {
     for section in ["hosts", "keys", "snippets", "forwards"] {
-        let rows = data[section].as_array().context("恢复数据缺少列表")?;
-        ensure!(rows.len() <= 10_000, "恢复数据项目过多");
+        let rows = data[section].as_array().context(crate::i18n::t("Recovery data is missing a list"))?;
+        ensure!(rows.len() <= 10_000, "{}", crate::i18n::t("Too many recovery data items"));
         let mut seen = HashSet::new();
         for row in rows {
-            let id = row["id"].as_str().context("恢复数据缺少 ID")?;
-            ensure!(
-                !id.is_empty()
+            let id = row["id"].as_str().context(crate::i18n::t("Recovery data is missing an ID"))?;
+            ensure!(!id.is_empty()
                     && id.len() <= 128
                     && id
                         .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'),
-                "恢复数据 ID 无效"
-            );
-            ensure!(seen.insert(id), "恢复数据包含重复 ID");
+                        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'), "{}", crate::i18n::t("Invalid recovery data ID"));
+            ensure!(seen.insert(id), "{}", crate::i18n::t("Recovery data contains duplicate IDs"));
         }
     }
     Ok(())
 }
 
 pub fn generate(data: &Data, passphrase: Option<&str>, include_secrets: bool) -> Result<String> {
-    ensure!(data.version == 2, "配置版本不受支持");
+    ensure!(data.version == 2, "{}", crate::i18n::t("Unsupported configuration version"));
     let mut payload = Payload {
         data: serde_json::to_value(data)?,
         key_files: BTreeMap::new(),
@@ -169,17 +165,14 @@ pub fn generate(data: &Data, passphrase: Option<&str>, include_secrets: bool) ->
         for host in &data.hosts {
             if !host.private_key_path.is_empty() {
                 let path = Path::new(&host.private_key_path);
-                ensure!(
-                    fs::metadata(path)
-                        .context("无法读取私钥文件，未生成不完整备份")?
+                ensure!(fs::metadata(path)
+                        .context(crate::i18n::t("Cannot read private key file; no incomplete backup was generated"))?
                         .len()
-                        <= 1024 * 1024,
-                    "私钥文件过大"
-                );
+                        <= 1024 * 1024, "{}", crate::i18n::t("Private key file is too large"));
                 let bytes =
-                    Zeroizing::new(fs::read(path).context("无法读取私钥文件，未生成不完整备份")?);
+                    Zeroizing::new(fs::read(path).context(crate::i18n::t("Cannot read private key file; no incomplete backup was generated"))?);
                 embedded_size += bytes.len();
-                ensure!(embedded_size <= MAX_PAYLOAD * 3 / 4, "私钥文件总量过大");
+                ensure!(embedded_size <= MAX_PAYLOAD * 3 / 4, "{}", crate::i18n::t("Total private key file size is too large"));
                 payload
                     .key_files
                     .insert(host.id.clone(), URL_SAFE_NO_PAD.encode(&*bytes));
@@ -187,7 +180,7 @@ pub fn generate(data: &Data, passphrase: Option<&str>, include_secrets: bool) ->
         }
     }
     let serialized = Zeroizing::new(serde_json::to_vec(&payload)?);
-    ensure!(serialized.len() <= MAX_PAYLOAD, "恢复数据过大");
+    ensure!(serialized.len() <= MAX_PAYLOAD, "{}", crate::i18n::t("Recovery data is too large"));
     let mut compressed = Zeroizing::new(miniz_oxide::deflate::compress_to_vec_zlib(&serialized, 6));
     let random = SystemRandom::new();
     let passphrase = passphrase.filter(|s| !s.is_empty());
@@ -199,7 +192,7 @@ pub fn generate(data: &Data, passphrase: Option<&str>, include_secrets: bool) ->
         let mut salt = [0u8; 16];
         random
             .fill(&mut salt)
-            .map_err(|_| anyhow::anyhow!("无法生成安全随机数"))?;
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Cannot generate secure random bytes")))?;
         pbkdf2::derive(
             pbkdf2::PBKDF2_HMAC_SHA256,
             NonZeroU32::new(ITERATIONS).unwrap(),
@@ -211,17 +204,17 @@ pub fn generate(data: &Data, passphrase: Option<&str>, include_secrets: bool) ->
     } else {
         random
             .fill(&mut *key)
-            .map_err(|_| anyhow::anyhow!("无法生成安全随机数"))?;
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Cannot generate secure random bytes")))?;
         header.extend_from_slice(&*key);
     }
     let mut nonce = [0u8; 12];
     random
         .fill(&mut nonce)
-        .map_err(|_| anyhow::anyhow!("无法生成安全随机数"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Cannot generate secure random bytes")))?;
     header.extend_from_slice(&nonce);
     let cipher = aead::LessSafeKey::new(
         aead::UnboundKey::new(&aead::AES_256_GCM, &*key)
-            .map_err(|_| anyhow::anyhow!("恢复加密初始化失败"))?,
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Recovery encryption initialization failed")))?,
     );
     cipher
         .seal_in_place_append_tag(
@@ -229,14 +222,14 @@ pub fn generate(data: &Data, passphrase: Option<&str>, include_secrets: bool) ->
             aead::Aad::from(&header),
             &mut *compressed,
         )
-        .map_err(|_| anyhow::anyhow!("恢复数据加密失败"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Recovery data encryption failed")))?;
     let mut output = Zeroizing::new(header);
     output.extend_from_slice(&compressed);
     Ok(format!("{PREFIX}{}", URL_SAFE_NO_PAD.encode(&*output)))
 }
 
 fn decode(code: &str, passphrase: Option<&str>) -> Result<Payload> {
-    ensure!(code.len() <= MAX_CODE, "恢复码过长");
+    ensure!(code.len() <= MAX_CODE, "{}", crate::i18n::t("Recovery code is too long"));
     let compact = Zeroizing::new(
         code.chars()
             .filter(|c| !c.is_whitespace())
@@ -244,22 +237,19 @@ fn decode(code: &str, passphrase: Option<&str>) -> Result<Payload> {
     );
     let encoded = compact
         .strip_prefix(PREFIX)
-        .context("恢复码前缀或版本无效")?;
-    let mut bytes = Zeroizing::new(URL_SAFE_NO_PAD.decode(encoded).context("恢复码编码无效")?);
-    ensure!(bytes.len() >= 3, "恢复码不完整");
-    ensure!(bytes[0] == VERSION, "恢复码版本不受支持");
-    ensure!(bytes[1] <= 1 && bytes[2] == 1, "恢复码格式不受支持");
+        .context(crate::i18n::t("Invalid recovery code prefix or version"))?;
+    let mut bytes = Zeroizing::new(URL_SAFE_NO_PAD.decode(encoded).context(crate::i18n::t("Invalid recovery code encoding"))?);
+    ensure!(bytes.len() >= 3, "{}", crate::i18n::t("Recovery code is incomplete"));
+    ensure!(bytes[0] == VERSION, "{}", crate::i18n::t("Unsupported recovery code version"));
+    ensure!(bytes[1] <= 1 && bytes[2] == 1, "{}", crate::i18n::t("Unsupported recovery code format"));
     let passphrase_mode = bytes[1] == 1;
     let header_len = 3 + if passphrase_mode { 16 } else { 32 } + 12;
-    ensure!(
-        bytes.len() >= header_len + aead::AES_256_GCM.tag_len(),
-        "恢复码不完整"
-    );
+    ensure!(bytes.len() >= header_len + aead::AES_256_GCM.tag_len(), "{}", crate::i18n::t("Recovery code is incomplete"));
     let mut key = Zeroizing::new([0u8; 32]);
     if passphrase_mode {
         let passphrase = passphrase
             .filter(|s| !s.is_empty())
-            .context("此恢复码需要口令，请填写后重试")?;
+            .context(crate::i18n::t("This recovery code requires a password; enter it and try again"))?;
         pbkdf2::derive(
             pbkdf2::PBKDF2_HMAC_SHA256,
             NonZeroU32::new(ITERATIONS).unwrap(),
@@ -273,7 +263,7 @@ fn decode(code: &str, passphrase: Option<&str>) -> Result<Payload> {
     let nonce: [u8; 12] = bytes[header_len - 12..header_len].try_into()?;
     let cipher = aead::LessSafeKey::new(
         aead::UnboundKey::new(&aead::AES_256_GCM, &*key)
-            .map_err(|_| anyhow::anyhow!("恢复解密初始化失败"))?,
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Recovery decryption initialization failed")))?,
     );
     let (header, ciphertext) = bytes.split_at_mut(header_len);
     let compressed = cipher
@@ -282,14 +272,14 @@ fn decode(code: &str, passphrase: Option<&str>) -> Result<Payload> {
             aead::Aad::from(header),
             ciphertext,
         )
-        .map_err(|_| anyhow::anyhow!("恢复码已损坏或口令错误"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Recovery code is corrupted or the password is incorrect")))?;
     let json = Zeroizing::new(
         miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(compressed, MAX_PAYLOAD)
-            .map_err(|_| anyhow::anyhow!("恢复数据压缩格式无效或过大"))?,
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Recovery data compression is invalid or too large")))?,
     );
     let payload: Payload = serde_json::from_slice(&json)
-        .map_err(|_| anyhow::anyhow!("恢复数据格式无效"))?;
-    ensure!(payload.data["version"] == 2, "配置版本不受支持");
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid recovery data format")))?;
+    ensure!(payload.data["version"] == 2, "{}", crate::i18n::t("Unsupported configuration version"));
     validate_ids(&payload.data)?;
     Ok(payload)
 }
@@ -300,9 +290,9 @@ fn merge_rows(
     mode: RestoreMode,
     skipped: &mut usize,
 ) -> Result<usize> {
-    let rows = current.as_array_mut().context("本机配置列表无效")?;
+    let rows = current.as_array_mut().context(crate::i18n::t("Invalid local configuration list"))?;
     let mut count = 0;
-    for row in incoming.as_array().context("恢复数据列表无效")? {
+    for row in incoming.as_array().context(crate::i18n::t("Invalid recovery data list"))? {
         if let Some(existing) = rows.iter_mut().find(|r| r["id"] == row["id"]) {
             if mode == RestoreMode::Merge {
                 *skipped += 1;
@@ -345,10 +335,7 @@ fn write_key(
     created: &mut CreatedFiles,
 ) -> Result<PathBuf> {
     fs::create_dir_all(directory)?;
-    ensure!(
-        !fs::symlink_metadata(directory)?.file_type().is_symlink(),
-        "密钥目录不能是符号链接"
-    );
+    ensure!(!fs::symlink_metadata(directory)?.file_type().is_symlink(), "{}", crate::i18n::t("Key directory must not be a symbolic link"));
     let mut path = directory.join(format!("{id}.key"));
     let mut file = loop {
         match fs::OpenOptions::new()
@@ -360,7 +347,7 @@ fn write_key(
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 path = directory.join(format!("{id}-{}.key", uuid::Uuid::new_v4()));
             }
-            Err(e) => return Err(e).context("无法写入恢复的私钥"),
+            Err(e) => return Err(e).context(crate::i18n::t("Cannot write restored private key")),
         }
     };
     created.paths.push(path.clone());
@@ -390,16 +377,16 @@ pub fn restore(
             .unwrap_or_default()
             .replace("~1", "/")
             .replace("~0", "~");
-        ensure!(field.starts_with("encrypted"), "恢复码凭据位置无效");
+        ensure!(field.starts_with("encrypted"), "{}", crate::i18n::t("Invalid recovery code credential location"));
         let value = payload
             .data
             .pointer_mut(path)
-            .context("恢复码凭据位置无效")?;
-        ensure!(value.as_str() == Some(""), "恢复码空凭据标记无效");
+            .context(crate::i18n::t("Invalid recovery code credential location"))?;
+        ensure!(value.as_str() == Some(""), "{}", crate::i18n::t("Invalid recovery code empty credential marker"));
         *value = Value::String(store::protect("")?);
     }
     let mut incoming: Data = serde_json::from_value(payload.data.clone())
-        .map_err(|_| anyhow::anyhow!("恢复配置无效"))?;
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid restored configuration")))?;
     for host in &mut incoming.hosts {
         if host.encrypted_secret.as_deref() == Some("") {
             host.encrypted_secret = None;
@@ -407,14 +394,11 @@ pub fn restore(
         host.validate()?;
     }
     for id in payload.key_files.keys() {
-        ensure!(
-            incoming.hosts.iter().any(|host| &host.id == id),
-            "私钥文件缺少关联主机"
-        );
+        ensure!(incoming.hosts.iter().any(|host| &host.id == id), "{}", crate::i18n::t("Private key file has no associated host"));
     }
     let mut summary = RestoreSummary::default();
     let mut files = CreatedFiles::default();
-    let directory = store.path.parent().context("配置目录无效")?.join("keys");
+    let directory = store.path.parent().context(crate::i18n::t("Invalid configuration directory"))?.join("keys");
     for host in &mut incoming.hosts {
         if mode == RestoreMode::Merge && store.data.hosts.iter().any(|h| h.id == host.id) {
             continue;
@@ -423,9 +407,9 @@ pub fn restore(
             let bytes = Zeroizing::new(
                 URL_SAFE_NO_PAD
                     .decode(encoded)
-                    .context("私钥文件编码无效")?,
+                    .context(crate::i18n::t("Invalid private key file encoding"))?,
             );
-            ensure!(bytes.len() <= 1024 * 1024, "私钥文件过大");
+            ensure!(bytes.len() <= 1024 * 1024, "{}", crate::i18n::t("Private key file is too large"));
             host.private_key_path = write_key(&directory, &host.id, &bytes, &mut files)?
                 .to_string_lossy()
                 .into_owned();
@@ -471,10 +455,10 @@ pub fn restore(
     merge_preferences(&mut merged["hostsView"], &incoming["hostsView"], mode, fresh);
     let known = merged["knownHosts"]
         .as_object_mut()
-        .context("本机指纹列表无效")?;
+        .context(crate::i18n::t("Invalid local fingerprint list"))?;
     for (host, fingerprint) in incoming["knownHosts"]
         .as_object()
-        .context("恢复指纹列表无效")?
+        .context(crate::i18n::t("Invalid recovery fingerprint list"))?
     {
         match known.get(host) {
             Some(existing) if existing != fingerprint => {
@@ -488,14 +472,11 @@ pub fn restore(
         }
     }
     let updated: Data = serde_json::from_value(merged)?;
-    ensure!(
-        serde_json::to_vec_pretty(&updated)?.len() < 16 * 1024 * 1024,
-        "合并后配置过大"
-    );
+    ensure!(serde_json::to_vec_pretty(&updated)?.len() < 16 * 1024 * 1024, "{}", crate::i18n::t("Merged configuration is too large"));
     let previous = std::mem::replace(&mut store.data, updated);
     if let Err(error) = store.persist() {
         store.data = previous;
-        bail!("恢复保存失败：{error}");
+        bail!("{}", crate::tf!("Failed to save restored configuration: {error}", "error" => format!("{}", error)));
     }
     files.committed = true;
     Ok(summary)

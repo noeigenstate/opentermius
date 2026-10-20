@@ -221,7 +221,7 @@ async fn ssh_connection_uses_the_configured_handshake_timeout() {
     .await;
     server.abort();
     let message = failure.expect("configured one-second timeout was not applied");
-    assert!(message.contains("SSH 连接超时"), "{message}");
+    assert!(message.contains("SSH connection timed out"), "{message}");
     assert!(started.elapsed() >= Duration::from_secs(1));
     timeout(Duration::from_secs(2), session.task)
         .await

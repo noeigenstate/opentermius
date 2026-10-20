@@ -289,7 +289,7 @@ export component Input inherits Rectangle {
 // ---------------------------------------------------------------------------
 export component SearchField inherits Rectangle {
     in-out property <string> text;
-    in property <string> placeholder: "Search";
+    in property <string> placeholder: @tr("Search");
     in property <bool> enabled: true;
     out property <bool> focused: field.focused;
     callback edited;
@@ -713,9 +713,9 @@ export component Caption inherits Text {
 // ---------------------------------------------------------------------------
 export component PageHeader inherits Rectangle {
     in-out property <string> search;
-    in property <string> placeholder: "Search";
+    in property <string> placeholder: @tr("Search");
     in property <bool> search-visible: true;
-    in property <string> primary-text: "New";
+    in property <string> primary-text: @tr("New");
     in property <image> primary-icon;
     in property <bool> primary-has-icon: false;
     in property <bool> primary-enabled: true;
@@ -751,7 +751,7 @@ export component EmptyState inherits Rectangle {
     in property <image> icon;
     in property <string> title;
     in property <string> description;
-    in property <string> action-text: "Continue";
+    in property <string> action-text: @tr("Continue");
     in property <bool> action-visible: true;
     in property <length> action-min-width: 160px;
     in property <string> secondary-text: "";
@@ -786,11 +786,11 @@ export component EmptyState inherits Rectangle {
 export component DetailPanel inherits Rectangle {
     in property <string> title;
     in property <bool> more-visible: true;
-    in property <string> primary-text: "Save";
+    in property <string> primary-text: @tr("Save");
     in property <bool> primary-enabled: true;
     in property <bool> show-primary: true;
     in property <bool> show-delete: false;
-    in property <string> delete-text: "Delete";
+    in property <string> delete-text: @tr("Delete");
     callback close;
     callback more-clicked;
     callback delete-clicked;
@@ -858,8 +858,8 @@ export component Dialog inherits Rectangle {
     in property <string> title;
     in property <string> description;
     in property <length> dialog-width: 440px;
-    in property <string> confirm-text: "OK";
-    in property <string> cancel-text: "Cancel";
+    in property <string> confirm-text: @tr("OK");
+    in property <string> cancel-text: @tr("Cancel");
     /// "primary" (default) or "danger" for destructive confirmations.
     in property <string> confirm-kind: "primary";
     in property <bool> confirm-enabled: true;

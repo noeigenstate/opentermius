@@ -861,7 +861,7 @@ async fn unsafe_server_names_never_create_local_files() {
         })
         .await;
         let message = f.finished(index as u64 + 1, true, false).await;
-        assert!(message.contains("文件名"), "unexpected rejection: {message}");
+        assert!(message.contains("file name"), "unexpected rejection: {message}");
         assert_eq!(
             std::fs::read_dir(dir.path()).unwrap().count(),
             0,
@@ -958,7 +958,7 @@ async fn bounded_queue_reports_rejections_and_all_accepted_jobs_can_be_cancelled
             assert!(finished.insert(transfer), "duplicate terminal event");
             if error {
                 rejected += 1;
-                assert!(message.contains("队列"));
+                assert!(message.contains("queue"));
             } else {
                 assert!(cancelled);
             }

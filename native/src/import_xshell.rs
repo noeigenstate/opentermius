@@ -36,15 +36,9 @@ pub struct ImportSummary {
 
 impl ImportSummary {
     pub fn message(&self) -> String {
-        let mut message = format!(
-            "已导入 {} 台主机，重复 {} 台，跳过 {} 项；密码未导入，首次连接时需输入凭据",
-            self.imported, self.duplicates, self.skipped
-        );
+        let mut message = crate::tf!("Imported {} hosts, {} duplicates, {} skipped; passwords were excluded. Enter credentials on first connect", "0" => format!("{}", self.imported), "1" => format!("{}", self.duplicates), "2" => format!("{}", self.skipped));
         if self.needs_key > 0 {
-            message.push_str(&format!(
-                "；其中 {} 台原使用公钥，已暂设为密码认证，请在主机详情中选择私钥",
-                self.needs_key
-            ));
+            message.push_str(&crate::tf!("; {} hosts used public keys and now use password authentication. Select a private key in Host Details", "0" => format!("{}", self.needs_key)));
         }
         message
     }
@@ -73,33 +67,33 @@ fn is_link(metadata: &fs::Metadata) -> bool {
 
 fn visit(root: &Path, dir: &Path, result: &mut ScanResult, seen: &mut usize, depth: usize) {
     if depth >= MAX_DEPTH {
-        result.skipped.push((dir.into(), "会话目录过深".into()));
+        result.skipped.push((dir.into(), crate::i18n::t("Session directory nesting is too deep").into()));
         return;
     }
     match fs::symlink_metadata(dir) {
         Ok(metadata) if metadata.is_dir() && !is_link(&metadata) => {}
         _ => {
-            result.skipped.push((dir.into(), "会话目录无效或为链接".into()));
+            result.skipped.push((dir.into(), crate::i18n::t("Session directory is invalid or is a link").into()));
             return;
         }
     }
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(_) => {
-            result.skipped.push((dir.into(), "无法读取会话目录".into()));
+            result.skipped.push((dir.into(), crate::i18n::t("Cannot read session directory").into()));
             return;
         }
     };
     let mut paths = Vec::new();
     for entry in entries {
         if *seen >= MAX_ENTRIES {
-            result.skipped.push((dir.into(), "会话目录项目过多".into()));
+            result.skipped.push((dir.into(), crate::i18n::t("Too many session directory entries").into()));
             break;
         }
         *seen += 1;
         match entry {
             Ok(entry) => paths.push(entry.path()),
-            Err(_) => result.skipped.push((dir.into(), "无法读取目录项".into())),
+            Err(_) => result.skipped.push((dir.into(), crate::i18n::t("Cannot read directory entry").into())),
         }
     }
     paths.sort();
@@ -107,13 +101,13 @@ fn visit(root: &Path, dir: &Path, result: &mut ScanResult, seen: &mut usize, dep
         let metadata = match fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(_) => {
-                result.skipped.push((path, "无法读取会话文件信息".into()));
+                result.skipped.push((path, crate::i18n::t("Cannot read session file metadata").into()));
                 continue;
             }
         };
         // Windows junctions are also reparse points; do not traverse them.
         if is_link(&metadata) {
-            result.skipped.push((path, "不导入链接目录或文件".into()));
+            result.skipped.push((path, crate::i18n::t("Linked directories and files cannot be imported").into()));
         } else if metadata.is_dir() {
             visit(root, &path, result, seen, depth + 1);
         } else if metadata.is_file()
@@ -133,10 +127,10 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
     let mut bytes = Zeroizing::new(Vec::new());
     fs::File::open(path)
         .and_then(|file| file.take(MAX_SESSION_BYTES + 1).read_to_end(&mut bytes))
-        .map_err(|_| anyhow::anyhow!("无法读取会话文件"))?;
-    ensure!(bytes.len() as u64 <= MAX_SESSION_BYTES, "会话文件过大");
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Cannot read session file")))?;
+    ensure!(bytes.len() as u64 <= MAX_SESSION_BYTES, "{}", crate::i18n::t("Session file is too large"));
     let text = if bytes.starts_with(&[0xff, 0xfe]) {
-        ensure!(bytes.len() % 2 == 0, "UTF-16 会话编码无效");
+        ensure!(bytes.len() % 2 == 0, "{}", crate::i18n::t("Invalid UTF-16 session encoding"));
         let words = Zeroizing::new(
             bytes[2..]
                 .chunks_exact(2)
@@ -144,13 +138,13 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
                 .collect::<Vec<_>>(),
         );
         Zeroizing::new(
-            String::from_utf16(&words).map_err(|_| anyhow::anyhow!("UTF-16 会话编码无效"))?,
+            String::from_utf16(&words).map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid UTF-16 session encoding")))?,
         )
     } else {
         let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes);
         Zeroizing::new(
             std::str::from_utf8(bytes)
-                .map_err(|_| anyhow::anyhow!("会话编码无效"))?
+                .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid session encoding")))?
                 .to_owned(),
         )
     };
@@ -163,16 +157,13 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
             continue;
         }
         if line.starts_with('[') {
-            ensure!(line.ends_with(']'), "会话 INI 节格式无效");
+            ensure!(line.ends_with(']'), "{}", crate::i18n::t("Invalid session INI section"));
             section = line[1..line.len() - 1].trim().to_ascii_uppercase();
             continue;
         }
         let Some((key, value)) = line.split_once('=') else {
             // Ignore unrelated vendor sections, but reject broken connection data.
-            ensure!(
-                !matches!(section.as_str(), "CONNECTION" | "CONNECTION:AUTHENTICATION"),
-                "会话 INI 字段格式无效"
-            );
+            ensure!(!matches!(section.as_str(), "CONNECTION" | "CONNECTION:AUTHENTICATION"), "{}", crate::i18n::t("Invalid session INI field"));
             continue;
         };
         let value = value.trim();
@@ -187,14 +178,8 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
             _ => {} // Password and Passphrase are deliberately never copied.
         }
     }
-    ensure!(
-        protocol.eq_ignore_ascii_case("SSH") || protocol.eq_ignore_ascii_case("SFTP"),
-        "仅支持 SSH 和 SFTP 会话"
-    );
-    ensure!(
-        matches!(method, "" | "0" | "1" | "2"),
-        "不支持此认证方式（如 GSSAPI）"
-    );
+    ensure!(protocol.eq_ignore_ascii_case("SSH") || protocol.eq_ignore_ascii_case("SFTP"), "{}", crate::i18n::t("Only SSH and SFTP sessions are supported"));
+    ensure!(matches!(method, "" | "0" | "1" | "2"), "{}", crate::i18n::t("Unsupported authentication method (such as GSSAPI)"));
     let needs_key = method == "1"
         || use_key == "1"
         || use_key.eq_ignore_ascii_case("true")
@@ -203,7 +188,7 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
         22
     } else {
         port.parse::<u16>()
-            .map_err(|_| anyhow::anyhow!("会话端口无效"))?
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Invalid session port")))?
     };
     let group = path
         .parent()

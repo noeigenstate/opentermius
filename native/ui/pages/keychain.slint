@@ -42,7 +42,7 @@ component KeyCard inherits EntityCard {
     icon: @image-url("../icons/keychain.svg");
     selected: KeychainBridge.selected-id == entry.id;
     show-more: false;
-    Badge { text: "Key"; kind: "accent"; }
+    Badge { text: @tr("Key"); kind: "accent"; }
 }
 
 // Public material stays selectable and read-only without an unthemed TextEdit.
@@ -88,16 +88,16 @@ export component KeychainPage inherits Rectangle {
     HorizontalLayout { spacing: 0px;
         VerticalLayout { spacing: 0px; horizontal-stretch: 1; min-width: 0px;
             PageHeader {
-                search <=> root.search; placeholder: "Search keys";
-                primary-text: "New key"; primary-has-icon: true; primary-icon: @image-url("../icons/plus.svg");
+                search <=> root.search; placeholder: @tr("Search keys");
+                primary-text: @tr("New key"); primary-has-icon: true; primary-icon: @image-url("../icons/plus.svg");
                 primary-enabled: !KeychainBridge.busy;
                 primary-clicked => { root.generate-open = true; }
             }
             PageToolbar {
-                Action { text: "Import key"; kind: "secondary"; has-icon: true; icon: @image-url("../icons/arrow-down.svg"); disabled: KeychainBridge.busy; clicked => { KeychainBridge.import-key(); } }
-                Action { text: "Generate"; kind: "flat"; disabled: KeychainBridge.busy; clicked => { root.generate-open = true; } }
+                Action { text: @tr("Import key"); kind: "secondary"; has-icon: true; icon: @image-url("../icons/arrow-down.svg"); disabled: KeychainBridge.busy; clicked => { KeychainBridge.import-key(); } }
+                Action { text: @tr("Generate"); kind: "flat"; disabled: KeychainBridge.busy; clicked => { root.generate-open = true; } }
                 Rectangle { horizontal-stretch: 1; }
-                Caption { text: KeychainBridge.keys.length == 1 ? "1 key" : KeychainBridge.keys.length + " keys"; }
+                Caption { text: KeychainBridge.keys.length == 1 ? @tr("1 key") : KeychainBridge.keys.length + @tr(" keys"); }
             }
             if KeychainBridge.message != "": Rectangle {
                 height: Theme.space-32; background: Theme.base;
@@ -105,9 +105,9 @@ export component KeychainPage inherits Rectangle {
             }
             if KeychainBridge.keys.length == 0: EmptyState {
                 vertical-stretch: 1; icon: @image-url("../icons/keychain.svg");
-                title: "No keys yet";
-                description: "Generate or import SSH keys and reuse them across hosts. Private keys stay encrypted on this computer.";
-                action-text: "New key"; action-visible: !KeychainBridge.busy;
+                title: @tr("No keys yet");
+                description: @tr("Generate or import SSH keys and reuse them across hosts. Private keys stay encrypted on this computer.");
+                action-text: @tr("New key"); action-visible: !KeychainBridge.busy;
                 action-clicked => { root.generate-open = true; }
             }
             if KeychainBridge.keys.length > 0: Rectangle {
@@ -116,7 +116,7 @@ export component KeychainPage inherits Rectangle {
                     private property <int> columns: Math.max(1, Math.floor((self.visible-width - 2 * Theme.gutter + Theme.space-12) / (300px + Theme.space-12)));
                     private property <length> cell-width: (self.visible-width - 2 * Theme.gutter - (self.columns - 1) * Theme.space-12) / self.columns;
                     content-height: Theme.gutter + 28px + Math.ceil(KeychainBridge.keys.length / self.columns) * (Theme.entity-height + Theme.space-12) + Theme.gutter;
-                    SectionHeader { x: Theme.gutter; y: Theme.gutter; width: grid.visible-width - 2 * Theme.gutter; height: Theme.space-16; text: "Keys"; }
+                    SectionHeader { x: Theme.gutter; y: Theme.gutter; width: grid.visible-width - 2 * Theme.gutter; height: Theme.space-16; text: @tr("Keys"); }
                     for key[index] in KeychainBridge.keys: KeyCard {
                         x: Theme.gutter + Math.mod(index, grid.columns) * (grid.cell-width + Theme.space-12);
                         y: Theme.gutter + 28px + Math.floor(index / grid.columns) * (Theme.entity-height + Theme.space-12);
@@ -138,64 +138,64 @@ export component KeychainPage inherits Rectangle {
                         }
                     }
                     if result-list.preferred-height <= 2 * Theme.gutter: EmptyState {
-                        icon: @image-url("../icons/search.svg"); title: "No matching keys";
-                        description: "Try another label, key type or fingerprint.";
-                        action-text: "Clear search"; action-clicked => { root.search = ""; }
+                        icon: @image-url("../icons/search.svg"); title: @tr("No matching keys");
+                        description: @tr("Try another label, key type or fingerprint.");
+                        action-text: @tr("Clear search"); action-clicked => { root.search = ""; }
                     }
                 }
             }
         }
         if root.detail-open && KeychainBridge.selected-id != "": DetailPanel {
-            title: "Key details"; more-visible: false; show-delete: true;
+            title: @tr("Key details"); more-visible: false; show-delete: true;
             init => { self.focus(); }
-            primary-text: "Save label";
+            primary-text: @tr("Save label");
             primary-enabled: !KeychainBridge.busy && KeychainBridge.rename-text != "" && KeychainBridge.rename-text != KeychainBridge.selected.label;
             close => { root.detail-open = false; }
             delete-clicked => { root.delete-open = true; }
             primary-clicked => { KeychainBridge.rename(KeychainBridge.selected-id, KeychainBridge.rename-text); }
-            Card { title: "Label";
-                Input { text <=> KeychainBridge.rename-text; placeholder-text: "Key label"; }
+            Card { title: @tr("Label");
+                Input { text <=> KeychainBridge.rename-text; placeholder-text: @tr("Key label"); }
             }
-            Card { title: "Type";
+            Card { title: @tr("Type");
                 Badge { text: KeychainBridge.selected.key-type; kind: "accent"; }
-                Caption { text: "Created " + KeychainBridge.selected.created; overflow: elide; }
+                Caption { text: @tr("Created ") + KeychainBridge.selected.created; overflow: elide; }
             }
-            Card { title: "Credentials";
-                Text { text: "Fingerprint"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+            Card { title: @tr("Credentials");
+                Text { text: @tr("Fingerprint"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
                 PublicMaterial { value: KeychainBridge.selected.fingerprint; height: 80px; }
-                Text { text: "Public key"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+                Text { text: @tr("Public key"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
                 PublicMaterial { value: KeychainBridge.selected.public-key; height: 144px; }
-                Action { text: "Copy public key"; has-icon: true; icon: @image-url("../icons/copy.svg"); clicked => { KeychainBridge.copy-public(KeychainBridge.selected-id); } }
-                Action { text: "Save public key..."; kind: "flat"; clicked => { KeychainBridge.save-public(KeychainBridge.selected-id); } }
-                Action { text: "Save private key..."; kind: "flat"; clicked => { KeychainBridge.save-private(KeychainBridge.selected-id); } }
+                Action { text: @tr("Copy public key"); has-icon: true; icon: @image-url("../icons/copy.svg"); clicked => { KeychainBridge.copy-public(KeychainBridge.selected-id); } }
+                Action { text: @tr("Save public key..."); kind: "flat"; clicked => { KeychainBridge.save-public(KeychainBridge.selected-id); } }
+                Action { text: @tr("Save private key..."); kind: "flat"; clicked => { KeychainBridge.save-private(KeychainBridge.selected-id); } }
             }
         }
     }
 
     Dialog {
-        open <=> root.generate-open; title: "Generate SSH key";
-        description: "Private keys are encrypted with Windows DPAPI in local storage.";
-        confirm-text: "Generate"; confirm-enabled: !KeychainBridge.busy;
+        open <=> root.generate-open; title: @tr("Generate SSH key");
+        description: @tr("Private keys are encrypted with Windows DPAPI in local storage.");
+        confirm-text: @tr("Generate"); confirm-enabled: !KeychainBridge.busy;
         confirm => { KeychainBridge.generate(root.new-label, root.new-kind); root.generate-open = false; }
-        Field { label: "Label"; placeholder: "Key label"; text <=> root.new-label; auto-focus: true; }
-        Text { text: "Type"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
-        Segmented { options: ["Ed25519", "RSA 3072", "RSA 4096"]; current-index <=> root.new-kind; }
+        Field { label: @tr("Label"); placeholder: @tr("Key label"); text <=> root.new-label; auto-focus: true; }
+        Text { text: @tr("Type"); color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+        Segmented { options: [@tr("Ed25519"), @tr("RSA 3072"), @tr("RSA 4096")]; current-index <=> root.new-kind; }
         // Leave room for the shared Dialog's scrolling body to paint the last border.
         Rectangle { height: Theme.space-4; }
     }
     Dialog {
-        open: KeychainBridge.passphrase-visible; title: "Private key passphrase";
-        description: "Enter the passphrase for this encrypted private key.";
-        confirm-text: "Import"; confirm-enabled: !KeychainBridge.busy;
+        open: KeychainBridge.passphrase-visible; title: @tr("Private key passphrase");
+        description: @tr("Enter the passphrase for this encrypted private key.");
+        confirm-text: @tr("Import"); confirm-enabled: !KeychainBridge.busy;
         cancel => { KeychainBridge.cancel-passphrase(); }
         confirm => { KeychainBridge.submit-passphrase(KeychainBridge.passphrase); }
         if KeychainBridge.passphrase-error != "": Text { text: KeychainBridge.passphrase-error; color: Theme.danger; font-size: Theme.font-caption; wrap: word-wrap; }
-        Input { text <=> KeychainBridge.passphrase; input-type: password; placeholder-text: "Passphrase"; invalid: KeychainBridge.passphrase-error != ""; init => { self.focus(); } }
+        Input { text <=> KeychainBridge.passphrase; input-type: password; placeholder-text: @tr("Passphrase"); invalid: KeychainBridge.passphrase-error != ""; init => { self.focus(); } }
         Rectangle { height: Theme.space-4; }
     }
     Dialog {
-        open <=> root.delete-open; title: "Delete key"; confirm-text: "Delete"; confirm-kind: "danger";
-        description: "Delete “" + KeychainBridge.selected.label + "”? This cannot be undone. Hosts using this key must be changed first.";
+        open <=> root.delete-open; title: @tr("Delete key"); confirm-text: @tr("Delete"); confirm-kind: "danger";
+        description: @tr("Delete “") + KeychainBridge.selected.label + @tr("”? This cannot be undone. Hosts using this key must be changed first.");
         confirm-enabled: !KeychainBridge.busy;
         confirm => { root.delete-open = false; KeychainBridge.delete-key(KeychainBridge.selected-id); }
     }

@@ -24,7 +24,7 @@ pub fn install(ui: &AppWindow) {
     let weak = ui.as_weak();
     bridge.on_import_known_hosts(move || {
         let Some(path) = rfd::FileDialog::new()
-            .set_title("导入 OpenSSH known_hosts")
+            .set_title(crate::i18n::t("Import OpenSSH known_hosts"))
             .add_filter("known_hosts", &["known_hosts", "txt", "pub"])
             .pick_file()
         else {
@@ -39,8 +39,8 @@ pub fn install(ui: &AppWindow) {
                 refresh(&ui);
                 set_status(&ui, import_summary(&parsed, outcome), false);
             }
-            Some(Err(error)) => set_status(&ui, format!("导入失败：{error:#}"), true),
-            None => set_status(&ui, "配置尚未就绪，无法导入", true),
+            Some(Err(error)) => set_status(&ui, opentermius::tf!("Import failed: {error:#}", "error:#" => format!("{:#}", error)), true),
+            None => set_status(&ui, crate::i18n::t("Configuration is not ready; cannot import"), true),
         }
     });
     let weak = ui.as_weak();
@@ -49,14 +49,14 @@ pub fn install(ui: &AppWindow) {
             return;
         };
         let Ok(port) = u16::try_from(port) else {
-            set_status(&ui, "端口无效，无法移除该指纹", true);
+            set_status(&ui, crate::i18n::t("Invalid port; cannot remove this fingerprint"), true);
             return;
         };
         let result = with_state(|state| {
             state
                 .store
                 .lock()
-                .map_err(|_| anyhow::anyhow!("配置锁不可用"))
+                .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
                 .and_then(|mut store| store.forget(host.as_str(), port))
         });
         match result {
@@ -64,16 +64,16 @@ pub fn install(ui: &AppWindow) {
                 refresh(&ui);
                 set_status(
                     &ui,
-                    format!("已移除 {host}:{port} 的主机指纹，下次连接将重新确认"),
+                    opentermius::tf!("Removed host fingerprint for {host}:{port}; it will be confirmed on next connection", "host" => format!("{}", host), "port" => format!("{}", port)),
                     false,
                 );
             }
             Some(Ok(false)) => {
                 refresh(&ui);
-                set_status(&ui, format!("{host}:{port} 的主机指纹已不存在"), false);
+                set_status(&ui, opentermius::tf!("Host fingerprint for {host}:{port} no longer exists", "host" => format!("{}", host), "port" => format!("{}", port)), false);
             }
             Some(Err(error)) => set_status(&ui, error.to_string(), true),
-            None => set_status(&ui, "配置尚未就绪，无法移除", true),
+            None => set_status(&ui, crate::i18n::t("Configuration is not ready; cannot remove"), true),
         }
     });
     refresh(ui);
@@ -83,14 +83,14 @@ fn import_file(
     state: &mut State,
     path: &std::path::Path,
 ) -> anyhow::Result<(store::ParsedKnownHosts, store::KnownHostsMerge)> {
-    let metadata = std::fs::metadata(path).context("无法读取导入文件")?;
-    anyhow::ensure!(metadata.len() <= 5 * 1024 * 1024, "导入文件不能超过 5 MB");
-    let bytes = std::fs::read(path).context("无法读取导入文件")?;
+    let metadata = std::fs::metadata(path).context(crate::i18n::t("Cannot read import file"))?;
+    anyhow::ensure!(metadata.len() <= 5 * 1024 * 1024, "{}", crate::i18n::t("Import file must not exceed 5 MB"));
+    let bytes = std::fs::read(path).context(crate::i18n::t("Cannot read import file"))?;
     let parsed = store::parse_known_hosts(&String::from_utf8_lossy(&bytes));
     let outcome = state
         .store
         .lock()
-        .map_err(|_| anyhow::anyhow!("配置锁不可用"))?
+        .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?
         .import_known_hosts(&parsed.entries)?;
     Ok((parsed, outcome))
 }
@@ -98,25 +98,25 @@ fn import_file(
 fn import_summary(parsed: &store::ParsedKnownHosts, outcome: store::KnownHostsMerge) -> String {
     if parsed.entries.is_empty() {
         return if parsed.skipped > 0 {
-            format!("未导入主机指纹，跳过 {} 条无效或不支持的记录", parsed.skipped)
+            opentermius::tf!("No host fingerprints imported; skipped {} invalid or unsupported records", "0" => format!("{}", parsed.skipped))
         } else {
-            "文件不包含 known_hosts 记录".to_string()
+            crate::i18n::t("File does not contain known_hosts records").to_string()
         };
     }
-    let mut message = format!("已导入 {} 条主机指纹", outcome.added);
+    let mut message = opentermius::tf!("Imported {} host fingerprints", "0" => format!("{}", outcome.added));
     if outcome.unchanged > 0 {
-        message.push_str(&format!("，{} 条已存在", outcome.unchanged));
+        message.push_str(&opentermius::tf!(", {} already existed", "0" => format!("{}", outcome.unchanged)));
     }
     if outcome.conflicts > 0 {
-        message.push_str(&format!("，{} 条与已有指纹冲突未覆盖", outcome.conflicts));
+        message.push_str(&opentermius::tf!(", {} fingerprint conflicts kept unchanged", "0" => format!("{}", outcome.conflicts)));
     }
     if parsed.skipped > 0 {
-        message.push_str(&format!("，跳过 {} 条", parsed.skipped));
+        message.push_str(&opentermius::tf!(", {} skipped", "0" => format!("{}", parsed.skipped)));
     }
     message
 }
 
-fn refresh(ui: &AppWindow) {
+pub(super) fn refresh(ui: &AppWindow) {
     let bridge = ui.global::<KnownHostsBridge>();
     let search = bridge.get_search().to_lowercase();
     let (rows, total) = with_state(|state| {
@@ -167,7 +167,7 @@ fn refresh(ui: &AppWindow) {
 
 fn usage_label(names: &[String]) -> String {
     match names {
-        [] => "Not in saved hosts".into(),
+        [] => crate::i18n::t("Not in saved hosts").into(),
         [only] => only.clone(),
         [first, second] => format!("{first}, {second}"),
         [first, second, rest @ ..] => format!("{first}, {second} +{}", rest.len()),

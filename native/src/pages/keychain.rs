@@ -18,7 +18,7 @@ fn key_row(entry: &KeyEntry) -> KeyRow {
 
 fn set_message(ui: &AppWindow, text: impl AsRef<str>, error: bool) {
     let bridge = ui.global::<KeychainBridge>();
-    bridge.set_message(text.as_ref().into());
+    bridge.set_message(crate::i18n::translate(text.as_ref()).into());
     bridge.set_message_error(error);
 }
 
@@ -40,7 +40,7 @@ fn keys_and_selected(selected: &str) -> (Vec<KeyRow>, Option<KeyEntry>) {
     .unwrap_or((Vec::new(), None))
 }
 
-fn refresh(ui: &AppWindow) {
+pub(super) fn refresh(ui: &AppWindow) {
     let bridge = ui.global::<KeychainBridge>();
     let selected_id = bridge.get_selected_id().to_string();
     let (rows, selected) = keys_and_selected(&selected_id);
@@ -74,7 +74,7 @@ fn commit_entry(ui: &AppWindow, entry: KeyEntry, success: &str) {
         let mut store = state
             .store
             .lock()
-            .map_err(|_| anyhow::anyhow!("配置锁不可用"))?;
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?;
         let id = entry.id.clone();
         store.add_key(entry)?;
         Ok::<String, anyhow::Error>(id)
@@ -86,7 +86,7 @@ fn commit_entry(ui: &AppWindow, entry: KeyEntry, success: &str) {
             set_message(ui, success, false);
         }
         Some(Err(error)) => set_message(ui, format!("{error:#}"), true),
-        None => set_message(ui, "界面状态不可用", true),
+        None => set_message(ui, crate::i18n::t("UI state is unavailable"), true),
     }
 }
 
@@ -121,19 +121,19 @@ pub fn install(ui: &AppWindow) {
                     state.store.clone(),
                 )
             }) else {
-                set_message(&ui, "界面状态不可用", true);
+                set_message(&ui, crate::i18n::t("UI state is unavailable"), true);
                 return;
             };
             let label = label.to_string();
             let bridge = ui.global::<KeychainBridge>();
             bridge.set_busy(true);
-            set_message(&ui, "正在生成密钥…", false);
+            set_message(&ui, crate::i18n::t("Generating key…"), false);
             handle.spawn_blocking(move || {
                 let result =
                     keychain::generate(&label, KeyKind::from_index(kind)).and_then(|entry| {
                         let id = entry.id.clone();
                         let mut store =
-                            store.lock().map_err(|_| anyhow::anyhow!("配置锁不可用"))?;
+                            store.lock().map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?;
                         store.add_key(entry)?;
                         Ok::<String, anyhow::Error>(id)
                     });
@@ -143,7 +143,7 @@ pub fn install(ui: &AppWindow) {
                         Ok(id) => {
                             ui.global::<KeychainBridge>().set_selected_id(id.into());
                             refresh(&ui);
-                            set_message(&ui, "密钥已生成", false);
+                            set_message(&ui, crate::i18n::t("Key generated"), false);
                         }
                         Err(error) => set_message(&ui, format!("{error:#}"), true),
                     }
@@ -159,7 +159,7 @@ pub fn install(ui: &AppWindow) {
             return;
         };
         let Some(path) = rfd::FileDialog::new()
-            .set_title("Import SSH private key")
+            .set_title(crate::i18n::t("Import SSH private key"))
             .pick_file()
         else {
             return;
@@ -167,10 +167,10 @@ pub fn install(ui: &AppWindow) {
         let label = path
             .file_stem()
             .and_then(|name| name.to_str())
-            .unwrap_or("Imported key")
+            .unwrap_or(crate::i18n::t("Imported key"))
             .to_string();
         match keychain::import_file(&path, &label, None) {
-            Ok(entry) => commit_entry(&ui, entry, "密钥已导入"),
+            Ok(entry) => commit_entry(&ui, entry, crate::i18n::t("Key imported")),
             Err(error) => {
                 if keychain::file_requires_passphrase(&path) {
                     *pending_import.borrow_mut() = Some((path, label));
@@ -178,7 +178,7 @@ pub fn install(ui: &AppWindow) {
                     bridge.set_passphrase("".into());
                     bridge.set_passphrase_error("".into());
                     bridge.set_passphrase_visible(true);
-                    set_message(&ui, "该私钥受口令保护，请输入口令", false);
+                    set_message(&ui, crate::i18n::t("This private key is passphrase-protected; enter its passphrase"), false);
                 } else {
                     set_message(&ui, format!("{error:#}"), true);
                 }
@@ -206,13 +206,13 @@ pub fn install(ui: &AppWindow) {
                     bridge.set_passphrase("".into());
                     bridge.set_passphrase_error("".into());
                     bridge.set_passphrase_visible(false);
-                    commit_entry(&ui, entry, "密钥已导入");
+                    commit_entry(&ui, entry, crate::i18n::t("Key imported"));
                 }
                 Err(error) => {
                     *pending_import.borrow_mut() = Some((path, label));
                     ui.global::<KeychainBridge>()
                         .set_passphrase_error(format!("{error:#}").into());
-                    set_message(&ui, "私钥口令无效", true);
+                    set_message(&ui, crate::i18n::t("Invalid private key passphrase"), true);
                 }
             }
         });
@@ -245,7 +245,7 @@ pub fn install(ui: &AppWindow) {
             state
                 .store
                 .lock()
-                .map_err(|_| anyhow::anyhow!("配置锁不可用"))?
+                .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?
                 .rename_key(&id, &label)
         });
         if let Some(ui) = weak.upgrade() {
@@ -253,10 +253,10 @@ pub fn install(ui: &AppWindow) {
                 Some(Ok(())) => {
                     ui.global::<KeychainBridge>().set_selected_id(id);
                     refresh(&ui);
-                    set_message(&ui, "名称已更新", false);
+                    set_message(&ui, crate::i18n::t("Name updated"), false);
                 }
                 Some(Err(error)) => set_message(&ui, format!("{error:#}"), true),
-                None => set_message(&ui, "界面状态不可用", true),
+                None => set_message(&ui, crate::i18n::t("UI state is unavailable"), true),
             }
         }
     });
@@ -267,7 +267,7 @@ pub fn install(ui: &AppWindow) {
             state
                 .store
                 .lock()
-                .map_err(|_| anyhow::anyhow!("配置锁不可用"))?
+                .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))?
                 .delete_key(&id)
         });
         if let Some(ui) = weak.upgrade() {
@@ -275,10 +275,10 @@ pub fn install(ui: &AppWindow) {
                 Some(Ok(())) => {
                     ui.global::<KeychainBridge>().set_selected_id("".into());
                     refresh(&ui);
-                    set_message(&ui, "密钥已删除", false);
+                    set_message(&ui, crate::i18n::t("Key deleted"), false);
                 }
                 Some(Err(error)) => set_message(&ui, format!("{error:#}"), true),
-                None => set_message(&ui, "界面状态不可用", true),
+                None => set_message(&ui, crate::i18n::t("UI state is unavailable"), true),
             }
         }
     });
@@ -289,18 +289,18 @@ pub fn install(ui: &AppWindow) {
             return;
         };
         let Some(entry) = entry(&id) else {
-            set_message(&ui, "Keychain 密钥不存在", true);
+            set_message(&ui, crate::i18n::t("Keychain key not found"), true);
             return;
         };
         let result = (|| -> anyhow::Result<()> {
-            let mut clipboard = arboard::Clipboard::new().context("无法访问剪贴板")?;
+            let mut clipboard = arboard::Clipboard::new().context(crate::i18n::t("Cannot access clipboard"))?;
             clipboard
                 .set_text(entry.public_key)
-                .context("复制公钥失败")?;
+                .context(crate::i18n::t("Failed to copy public key"))?;
             Ok(())
         })();
         match result {
-            Ok(()) => set_message(&ui, "公钥已复制到剪贴板", false),
+            Ok(()) => set_message(&ui, crate::i18n::t("Public key copied to clipboard"), false),
             Err(error) => set_message(&ui, format!("{error:#}"), true),
         }
     });
@@ -311,21 +311,21 @@ pub fn install(ui: &AppWindow) {
             return;
         };
         let Some(entry) = entry(&id) else {
-            set_message(&ui, "Keychain 密钥不存在", true);
+            set_message(&ui, crate::i18n::t("Keychain key not found"), true);
             return;
         };
         let name = file_name(&entry.label, ".pub");
         let Some(path) = rfd::FileDialog::new()
-            .set_title("Save SSH public key")
+            .set_title(crate::i18n::t("Save SSH public key"))
             .set_file_name(name.as_str())
-            .add_filter("Public key", &["pub", "txt"])
+            .add_filter(crate::i18n::t("Public key"), &["pub", "txt"])
             .save_file()
         else {
             return;
         };
         match fs::write(&path, format!("{}\n", entry.public_key)) {
-            Ok(()) => set_message(&ui, format!("公钥已保存到 {}", path.display()), false),
-            Err(error) => set_message(&ui, format!("保存公钥失败：{error}"), true),
+            Ok(()) => set_message(&ui, opentermius::tf!("Public key saved to {}", "0" => format!("{}", path.display())), false),
+            Err(error) => set_message(&ui, opentermius::tf!("Failed to save public key: {error}", "error" => format!("{}", error)), true),
         }
     });
 
@@ -335,13 +335,13 @@ pub fn install(ui: &AppWindow) {
             return;
         };
         let Some(entry) = entry(&id) else {
-            set_message(&ui, "Keychain 密钥不存在", true);
+            set_message(&ui, crate::i18n::t("Keychain key not found"), true);
             return;
         };
         let confirmed = rfd::MessageDialog::new()
-            .set_title("Export private key")
+            .set_title(crate::i18n::t("Export private key"))
             .set_description(
-                "The exported file is not protected by Windows DPAPI. Save it only in a trusted location and keep it secure.",
+                crate::i18n::t("The exported file is not protected by Windows DPAPI. Save it only in a trusted location and keep it secure."),
             )
             .set_buttons(rfd::MessageButtons::YesNo)
             .set_level(rfd::MessageLevel::Warning)
@@ -352,20 +352,20 @@ pub fn install(ui: &AppWindow) {
         }
         let name = file_name(&entry.label, "_key");
         let Some(path) = rfd::FileDialog::new()
-            .set_title("Save SSH private key")
+            .set_title(crate::i18n::t("Save SSH private key"))
             .set_file_name(name.as_str())
-            .add_filter("Private key", &["pem", "key", "txt"])
+            .add_filter(crate::i18n::t("Private key"), &["pem", "key", "txt"])
             .save_file()
         else {
             return;
         };
         let result = (|| -> anyhow::Result<()> {
-            let text = entry.export_private().context("无法导出私钥")?;
-            fs::write(&path, text.as_bytes()).context("写入私钥文件失败")?;
+            let text = entry.export_private().context(crate::i18n::t("Cannot export private key"))?;
+            fs::write(&path, text.as_bytes()).context(crate::i18n::t("Failed to write private key file"))?;
             Ok(())
         })();
         match result {
-            Ok(()) => set_message(&ui, format!("私钥已导出到 {}", path.display()), false),
+            Ok(()) => set_message(&ui, opentermius::tf!("Private key exported to {}", "0" => format!("{}", path.display())), false),
             Err(error) => set_message(&ui, format!("{error:#}"), true),
         }
     });

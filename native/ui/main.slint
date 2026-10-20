@@ -40,7 +40,7 @@ component FileTableRow inherits Rectangle {
     in property <bool> ascending: true;
     private property <[float]> cols: root.remote ? [0.33, 0.22, 0.12, 0.13, 0.20] : [0.44, 0.24, 0.16, 0.16];
     private property <[float]> starts: [0, root.cols[0], root.cols[0] + root.cols[1], root.cols[0] + root.cols[1] + root.cols[2], root.cols[0] + root.cols[1] + root.cols[2] + root.cols[3]];
-    private property <[string]> labels: root.remote ? ["Name", "Modified", "Size", "Kind", "Permissions"] : ["Name", "Modified", "Size", "Kind"];
+    private property <[string]> labels: root.remote ? [@tr("Name"), @tr("Modified"), @tr("Size"), @tr("Kind"), @tr("Permissions")] : [@tr("Name"), @tr("Modified"), @tr("Size"), @tr("Kind")];
     private property <[string]> sort-keys: ["name", "date", "size", "kind", ""];
     callback sort(string);
     height: root.heading ? Theme.table-header-height : 36px;
@@ -77,7 +77,7 @@ component FileTableRow inherits Rectangle {
 
 export component AppWindow inherits Window {
     no-frame: true;
-    title: "OpenTermius"; preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
+    title: @tr("OpenTermius"); preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
     icon: @image-url("../../assets/icon.png");
     background: Theme.base; default-font-family: Theme.ui-font; default-font-size: Theme.font-body;
     in property <[HostRow]> hosts;
@@ -308,7 +308,7 @@ export component AppWindow inherits Window {
                     background: root.hosts-page && !root.sftp-page ? Theme.tab-active : home-touch.has-hover ? Theme.tab-hover : Theme.tab-bg;
                     HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 8px; cross-axis-alignment: center;
                         Image { source: @image-url("../../assets/logo.svg"); width: 18px; height: 18px; }
-                        Text { text: root.section == "keychain" ? "Keychain" : root.section == "forwarding" ? "Port Forwarding" : root.section == "snippets" ? "Snippets" : root.section == "known-hosts" ? "Known Hosts" : root.section == "logs" ? "Logs" : root.section == "settings" ? "Settings" : root.section == "gallery" ? "Gallery" : "Hosts"; color: Theme.on-accent; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
+                        Text { text: root.section == "keychain" ? @tr("Keychain") : root.section == "forwarding" ? @tr("Port Forwarding") : root.section == "snippets" ? @tr("Snippets") : root.section == "known-hosts" ? @tr("Known Hosts") : root.section == "logs" ? @tr("Logs") : root.section == "settings" ? @tr("Settings") : root.section == "gallery" ? @tr("Gallery") : @tr("Hosts"); color: Theme.on-accent; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
                     }
                     if root.hosts-page && !root.sftp-page: Rectangle { x: 10px; y: 30px; width: parent.width - 20px; height: 2px; border-radius: 1px; background: Theme.accent; }
                     home-touch := TouchArea { mouse-cursor: pointer; clicked => { root.sftp-page = false; root.hosts-page = true; } }
@@ -317,7 +317,7 @@ export component AppWindow inherits Window {
                     background: root.sftp-page ? Theme.tab-active : sftp-tab-touch.has-hover ? Theme.tab-hover : Theme.tab-bg;
                     HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 8px; cross-axis-alignment: center;
                         Image { source: @image-url("icons/folder-filled.svg"); colorize: Theme.on-accent; width: 16px; height: 16px; }
-                        Text { text: "SFTP"; color: Theme.on-accent; font-weight: 500; }
+                        Text { text: @tr("SFTP"); color: Theme.on-accent; font-weight: 500; }
                     }
                     if root.sftp-page: Rectangle { x: 10px; y: 30px; width: parent.width - 20px; height: 2px; border-radius: 1px; background: Theme.accent; }
                     sftp-tab-touch := TouchArea { mouse-cursor: pointer; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = true; root.open-sftp(); } } }
@@ -364,15 +364,15 @@ export component AppWindow inherits Window {
         HorizontalLayout { spacing: 0px;
             Rectangle { width: Theme.sidebar-width; background: Theme.high;
                 VerticalLayout { padding: 10px; spacing: 2px;
-                    NavItem { text: "Hosts"; icon: @image-url("icons/hosts.svg"); active: root.host-section; clicked => { root.section = "hosts"; root.hosts-page = true; root.search = ""; root.select-group(""); root.search-hosts(""); } }
-                    NavItem { text: "Keychain"; icon: @image-url("icons/keychain.svg"); active: root.hosts-page && root.section == "keychain"; clicked => { root.open-section("keychain"); } }
-                    NavItem { text: "Port Forwarding"; icon: @image-url("icons/forward.svg"); active: root.hosts-page && root.section == "forwarding"; clicked => { root.open-section("forwarding"); } }
-                    NavItem { text: "Snippets"; icon: @image-url("icons/snippets.svg"); active: root.hosts-page && root.section == "snippets"; clicked => { root.open-section("snippets"); } }
-                    NavItem { text: "Known Hosts"; icon: @image-url("icons/known.svg"); active: root.hosts-page && root.section == "known-hosts"; clicked => { root.open-section("known-hosts"); } }
-                    NavItem { text: "Logs"; icon: @image-url("icons/history.svg"); active: root.hosts-page && root.section == "logs"; clicked => { root.open-section("logs"); } }
+                    NavItem { text: @tr("Hosts"); icon: @image-url("icons/hosts.svg"); active: root.host-section; clicked => { root.section = "hosts"; root.hosts-page = true; root.search = ""; root.select-group(""); root.search-hosts(""); } }
+                    NavItem { text: @tr("Keychain"); icon: @image-url("icons/keychain.svg"); active: root.hosts-page && root.section == "keychain"; clicked => { root.open-section("keychain"); } }
+                    NavItem { text: @tr("Port Forwarding"); icon: @image-url("icons/forward.svg"); active: root.hosts-page && root.section == "forwarding"; clicked => { root.open-section("forwarding"); } }
+                    NavItem { text: @tr("Snippets"); icon: @image-url("icons/snippets.svg"); active: root.hosts-page && root.section == "snippets"; clicked => { root.open-section("snippets"); } }
+                    NavItem { text: @tr("Known Hosts"); icon: @image-url("icons/known.svg"); active: root.hosts-page && root.section == "known-hosts"; clicked => { root.open-section("known-hosts"); } }
+                    NavItem { text: @tr("Logs"); icon: @image-url("icons/history.svg"); active: root.hosts-page && root.section == "logs"; clicked => { root.open-section("logs"); } }
                     for tab in root.tabs: NavItem { text: tab.title; icon: @image-url("icons/terminal.svg"); active: !root.hosts-page && root.active-session == tab.id; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
                     Rectangle { vertical-stretch: 1; background: transparent; }
-                    NavItem { text: "Settings"; icon: @image-url("icons/settings.svg"); active: root.hosts-page && root.section == "settings"; clicked => { root.open-section("settings"); } }
+                    NavItem { text: @tr("Settings"); icon: @image-url("icons/settings.svg"); active: root.hosts-page && root.section == "settings"; clicked => { root.open-section("settings"); } }
                 }
             }
             Rectangle { width: 1px; background: Theme.divider; }
@@ -383,19 +383,19 @@ export component AppWindow inherits Window {
                         HorizontalLayout { cross-axis-alignment: center; padding-top: 10px; padding-bottom: 10px; padding-left: Theme.gutter; padding-right: Theme.gutter; spacing: 10px;
                             Rectangle { horizontal-stretch: 1; height: 36px; background: Theme.search-bg; border-width: 1px; border-color: Theme.border; border-radius: Theme.r-field;
                                 HorizontalLayout { cross-axis-alignment: center; padding: 5px; spacing: 0px;
-                                    search-input := Input { search: true; has-leading-icon: true; leading-icon: @image-url("icons/search.svg"); border-width: 0px; min-height: 24px; max-height: 24px; placeholder-color: Theme.secondary; placeholder-text: "Type \"ssh user@hostname -p port\" to connect..."; text <=> root.search; horizontal-stretch: 1; edited => { root.search-hosts(self.text); } accepted => { root.quick-connect(self.text); } }
-                                    Action { kind: "secondary"; text: "Connect"; size: "s"; disabled: root.search == ""; clicked => { root.quick-connect(root.search); } }
+                                    search-input := Input { search: true; has-leading-icon: true; leading-icon: @image-url("icons/search.svg"); border-width: 0px; min-height: 24px; max-height: 24px; placeholder-color: Theme.secondary; placeholder-text: @tr("Type \"ssh user@hostname -p port\" to connect..."); text <=> root.search; horizontal-stretch: 1; edited => { root.search-hosts(self.text); } accepted => { root.quick-connect(self.text); } }
+                                    Action { kind: "secondary"; text: @tr("Connect"); size: "s"; disabled: root.search == ""; clicked => { root.quick-connect(root.search); } }
                                 }
                             }
-                            Action { text: "New host"; kind: "primary"; size: "l"; has-icon: true; icon: @image-url("icons/plus.svg"); clicked => { root.new-host(); } }
+                            Action { text: @tr("New host"); kind: "primary"; size: "l"; has-icon: true; icon: @image-url("icons/plus.svg"); clicked => { root.new-host(); } }
                         }
                     }
                     if root.host-section: Rectangle { height: Theme.toolbar-height; background: Theme.high;
                         Rectangle { x: Theme.gutter; y: 7px; width: parent.width - 172px; height: 30px; background: transparent;
                             HorizontalLayout { cross-axis-alignment: center; spacing: 10px; alignment: start;
-                                Action { kind: "secondary"; text: "Import"; has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = true; } }
-                                Action { text: "Terminal"; has-icon: true; icon: @image-url("icons/local-filled.svg"); kind: "flat"; clicked => { if root.save-current-draft() { root.close-editor(); root.open-terminal(); } } }
-                                if host-grid.width > 600px: Action { text: "Serial"; has-icon: true; icon: @image-url("icons/serial.svg"); kind: "flat"; disabled: true; }
+                                Action { kind: "secondary"; text: @tr("Import"); has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = true; } }
+                                Action { text: @tr("Terminal"); has-icon: true; icon: @image-url("icons/local-filled.svg"); kind: "flat"; clicked => { if root.save-current-draft() { root.close-editor(); root.open-terminal(); } } }
+                                if host-grid.width > 600px: Action { text: @tr("Serial"); has-icon: true; icon: @image-url("icons/serial.svg"); kind: "flat"; disabled: true; }
                             }
                         }
                         Rectangle { x: parent.width - Theme.gutter - 110px; y: 7px; width: 110px; height: 30px; background: transparent;
@@ -439,9 +439,9 @@ export component AppWindow inherits Window {
                         }
                         if root.hosts.length == 0 && !root.editor-open: EmptyState {
                             icon: @image-url("icons/hosts.svg");
-                            title: root.host-tag-filter != "" ? "No hosts with this tag" : root.search == "" ? "No hosts yet" : "No matching hosts";
-                            description: root.host-tag-filter != "" ? "Clear the tag filter or add the tag to a host." : root.search == "" ? "Save your connection details as hosts to connect in one click." : "Try another label, address, or group.";
-                            action-text: "New host"; action-visible: root.search == "" && root.host-tag-filter == "";
+                            title: root.host-tag-filter != "" ? @tr("No hosts with this tag") : root.search == "" ? @tr("No hosts yet") : @tr("No matching hosts");
+                            description: root.host-tag-filter != "" ? @tr("Clear the tag filter or add the tag to a host.") : root.search == "" ? @tr("Save your connection details as hosts to connect in one click.") : @tr("Try another label, address, or group.");
+                            action-text: @tr("New host"); action-visible: root.search == "" && root.host-tag-filter == "";
                             action-clicked => { root.new-host(); }
                         }
                         if (root.hosts.length > 0 || root.editor-open) && root.host-view-mode == "grid": ScrollView {
@@ -453,20 +453,20 @@ export component AppWindow inherits Window {
                                 }
                             }
                             content-height: root.group-height + 72px + Math.ceil((root.hosts.length + root.draft-count) / root.grid-cols) * 72px;
-                            if root.groups.length > 0: Text { x: Theme.gutter; y: 20px; width: parent.width - 40px; height: 20px; text: "Groups"; color: Theme.text; font-weight: 600; font-size: Theme.font-body; }
+                            if root.groups.length > 0: Text { x: Theme.gutter; y: 20px; width: parent.width - 40px; height: 20px; text: @tr("Groups"); color: Theme.text; font-weight: 600; font-size: Theme.font-body; }
                             for group[index] in root.groups: EntityCard {
                                 x: Theme.gutter + Math.mod(index, root.grid-cols) * (root.grid-cell-width + 12px);
                                 y: 52px + Math.floor(index / root.grid-cols) * 72px;
                                 width: root.grid-cell-width;
-                                title: group.name; subtitle: group.count + (group.count == 1 ? " host" : " hosts"); icon: @image-url("icons/hosts.svg");
+                                title: group.name; subtitle: group.count + (group.count == 1 ? @tr(" host") : @tr(" hosts")); icon: @image-url("icons/hosts.svg");
                                 clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.search = group.name; root.select-group(group.name); }
                                 more-clicked => { root.group-rename-old = group.name; root.group-rename-value = group.name; root.group-rename-open = true; }
                             }
-                            Text { x: Theme.gutter; y: 20px + root.group-height; width: parent.width - 40px; height: 20px; text: "Hosts"; color: Theme.text; font-weight: 600; font-size: Theme.font-body; }
+                            Text { x: Theme.gutter; y: 20px + root.group-height; width: parent.width - 40px; height: 20px; text: @tr("Hosts"); color: Theme.text; font-weight: 600; font-size: Theme.font-body; }
                             if root.host-tag-filter != "": Rectangle { x: 80px; y: root.group-height + 17px; width: 150px; height: 24px; border-radius: 6px; background: Theme.accent-soft;
                                 HorizontalLayout { cross-axis-alignment: center; padding-left: 8px; padding-right: 4px; spacing: 4px;
-                                    Text { text: "#" + root.host-tag-filter; color: Theme.accent; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                                    Text { text: "×"; color: Theme.accent; font-size: Theme.font-mono; vertical-alignment: center; }
+                                    Text { text: @tr("#") + root.host-tag-filter; color: Theme.accent; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                    Text { text: @tr("×"); color: Theme.accent; font-size: Theme.font-mono; vertical-alignment: center; }
                                 }
                                 TouchArea { clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); } }
                             }
@@ -478,8 +478,8 @@ export component AppWindow inherits Window {
                                         Image { source: @image-url("icons/hosts.svg"); colorize: Theme.on-accent; x: 8px; y: 8px; width: 20px; height: 20px; }
                                     }
                                     VerticalLayout { spacing: 0px;
-                                        Text { text: root.draft.name != "" ? root.draft.name : root.draft.host != "" ? root.draft.host : "Enter IP or Hostname..."; color: root.draft.host == "" ? Theme.secondary : Theme.text; font-size: Theme.font-body; overflow: elide; }
-                                        Text { text: "ssh"; color: Theme.secondary; font-size: Theme.font-caption; }
+                                        Text { text: root.draft.name != "" ? root.draft.name : root.draft.host != "" ? root.draft.host : @tr("Enter IP or Hostname..."); color: root.draft.host == "" ? Theme.secondary : Theme.text; font-size: Theme.font-body; overflow: elide; }
+                                        Text { text: @tr("ssh"); color: Theme.secondary; font-size: Theme.font-caption; }
                                     }
                                 }
                             }
@@ -522,7 +522,7 @@ export component AppWindow inherits Window {
                                 }
                             }
                             VerticalLayout { padding-left: 20px; padding-right: 20px; padding-top: 14px; padding-bottom: 24px; spacing: 4px;
-                                if root.groups.length > 0: Text { text: "Groups"; color: Theme.text; font-weight: 600; font-size: Theme.font-body; height: 24px; vertical-alignment: center; }
+                                if root.groups.length > 0: Text { text: @tr("Groups"); color: Theme.text; font-weight: 600; font-size: Theme.font-body; height: 24px; vertical-alignment: center; }
                                 for group in root.groups: Rectangle {
                                     height: 42px; border-radius: 8px; background: group-row-touch.has-hover ? Theme.hover : Theme.highest;
                                     group-row-touch := TouchArea { width: parent.width; mouse-cursor: pointer; clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.search = group.name; root.select-group(group.name); } }
@@ -531,7 +531,7 @@ export component AppWindow inherits Window {
                                             Image { colorize: Theme.on-accent; source: @image-url("icons/hosts.svg"); x: 6px; y: 6px; width: 16px; height: 16px; }
                                         }
                                         Text { text: group.name; color: Theme.text; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                                        Text { text: group.count + (group.count == 1 ? " host" : " hosts"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                                        Text { text: group.count + (group.count == 1 ? @tr(" host") : @tr(" hosts")); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
                                         Rectangle { width: 24px; height: 24px; background: transparent; visible: group-row-touch.has-hover || group-row-more.has-hover;
                                             Image { colorize: Theme.text; source: @image-url("icons/more.svg"); x: 5px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
                                             group-row-more := TouchArea { clicked => { root.group-rename-old = group.name; root.group-rename-value = group.name; root.group-rename-open = true; } }
@@ -541,26 +541,26 @@ export component AppWindow inherits Window {
                                 }
                                 if root.groups.length > 0: Rectangle { height: 8px; background: transparent; }
                                 HorizontalLayout { height: 26px; spacing: 8px;
-                                    Text { text: "Hosts"; color: Theme.text; font-weight: 600; font-size: Theme.font-body; vertical-alignment: center; }
+                                    Text { text: @tr("Hosts"); color: Theme.text; font-weight: 600; font-size: Theme.font-body; vertical-alignment: center; }
                                     if root.host-tag-filter != "": Rectangle { width: 150px; height: 24px; border-radius: 6px; background: Theme.accent-soft;
                                         HorizontalLayout { cross-axis-alignment: center; padding-left: 8px; padding-right: 4px; spacing: 4px;
-                                            Text { text: "#" + root.host-tag-filter; color: Theme.accent; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
-                                            Text { text: "×"; color: Theme.accent; font-size: Theme.font-mono; vertical-alignment: center; }
+                                            Text { text: @tr("#") + root.host-tag-filter; color: Theme.accent; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                                            Text { text: @tr("×"); color: Theme.accent; font-size: Theme.font-mono; vertical-alignment: center; }
                                         }
                                         TouchArea { clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); } }
                                     }
                                     Rectangle { horizontal-stretch: 1; background: transparent; }
                                 }
                                 Rectangle { height: Theme.table-header-height; background: Theme.high; border-radius: 6px;
-                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: "Name"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
-                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: "Address"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
-                                    Text { x: parent.width * 0.67; width: parent.width * 0.17 - 16px; text: "Group"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
-                                    Text { x: parent.width * 0.84; width: parent.width * 0.16 - 38px; text: "Auth"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: @tr("Name"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: @tr("Address"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                                    Text { x: parent.width * 0.67; width: parent.width * 0.17 - 16px; text: @tr("Group"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                                    Text { x: parent.width * 0.84; width: parent.width * 0.16 - 38px; text: @tr("Auth"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
                                 }
                                 if root.draft-count > 0: Rectangle { height: 44px; border-radius: 8px; border-width: 2px; border-color: Theme.accent; background: Theme.highest;
                                     Image { colorize: Theme.text; x: 14px; y: 13px; width: 18px; height: 18px; source: @image-url("icons/hosts.svg"); }
-                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: root.draft.name != "" ? root.draft.name : root.draft.host != "" ? root.draft.host : "Enter IP or Hostname..."; color: Theme.text; vertical-alignment: center; overflow: elide; }
-                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: "ssh"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                                    Text { x: 44px; width: parent.width * 0.40 - 54px; text: root.draft.name != "" ? root.draft.name : root.draft.host != "" ? root.draft.host : @tr("Enter IP or Hostname..."); color: Theme.text; vertical-alignment: center; overflow: elide; }
+                                    Text { x: parent.width * 0.40; width: parent.width * 0.27 - 24px; text: @tr("ssh"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
                                 }
                                 for host in root.hosts: Rectangle {
                                     height: 44px; border-radius: 8px;
@@ -598,11 +598,11 @@ export component AppWindow inherits Window {
                     if !root.hosts-page: Rectangle { height: 40px; background: Theme.high;
                         Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: Theme.divider; }
                         HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 6px;
-                            Badge { text: root.local-session ? "Local" : "SSH"; }
+                            Badge { text: root.local-session ? @tr("Local") : @tr("SSH"); }
                             Rectangle { horizontal-stretch: 1; background: transparent; }
-                            Action { text: "Copy"; kind: "flat"; clicked => { root.copy-terminal(); } }
-                            Action { text: "Paste"; kind: "flat"; clicked => { root.paste-terminal(); terminal-focus.focus(); } }
-                            Action { kind: "secondary"; text: "SFTP"; disabled: root.local-session; clicked => { root.list-files(root.file-path); } }
+                            Action { text: @tr("Copy"); kind: "flat"; clicked => { root.copy-terminal(); } }
+                            Action { text: @tr("Paste"); kind: "flat"; clicked => { root.paste-terminal(); terminal-focus.focus(); } }
+                            Action { kind: "secondary"; text: @tr("SFTP"); disabled: root.local-session; clicked => { root.list-files(root.file-path); } }
                         }
                     }
                     HorizontalLayout { visible: !root.hosts-page; min-height: 0px; max-height: root.hosts-page ? 0px : 100000px; vertical-stretch: root.hosts-page ? 0 : 1; spacing: 0px;
@@ -639,7 +639,7 @@ export component AppWindow inherits Window {
                                 scroll-event(event) => { root.terminal-wheel(Math.floor((self.mouse-y - 8px) / root.cell-height-px), Math.floor((self.mouse-x - 10px) / root.cell-advance), Math.round(event.delta-y / root.cell-height-px), event.modifiers.control, event.modifiers.alt, event.modifiers.shift); accept }
                             }
                             if root.reconnect-hint: Rectangle { x: 16px; y: parent.height - 56px; width: Math.min(420px, parent.width - 32px); height: 40px; background: Theme.tab-bg; border-radius: 6px;
-                                Text { text: "Press Enter to reconnect"; color: Theme.warning; font-size: Theme.font-body; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: @tr("Press Enter to reconnect"); color: Theme.warning; font-size: Theme.font-body; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.reconnect-session(root.active-session); terminal-focus.focus(); } }
                             }
                         }
@@ -647,14 +647,14 @@ export component AppWindow inherits Window {
                             VerticalLayout { spacing: 0px;
                                 Rectangle { height: 44px; background: Theme.high;
                                     HorizontalLayout { cross-axis-alignment: center; padding: 7px; spacing: 5px;
-                                        Text { text: "Remote files"; font-weight: 600; color: Theme.text; vertical-alignment: center; }
-                                        Action { kind: "secondary"; text: "Upload"; size: "s"; clicked => { root.upload-file(); } }
-                                        Action { kind: "secondary"; text: "Refresh"; size: "s"; clicked => { root.list-files(root.file-path); } }
+                                        Text { text: @tr("Remote files"); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+                                        Action { kind: "secondary"; text: @tr("Upload"); size: "s"; clicked => { root.upload-file(); } }
+                                        Action { kind: "secondary"; text: @tr("Refresh"); size: "s"; clicked => { root.list-files(root.file-path); } }
                                         IconButton { icon: @image-url("icons/close.svg"); size: 24px; clicked => { root.files-open = false; terminal-focus.focus(); } }
                                     }
                                 }
                                 Input { filled: true; compact: true; text: root.file-path; accepted => { root.list-files(self.text); } }
-                                Text { visible: root.file-busy; text: "Loading…"; color: Theme.secondary; height: root.file-busy ? 28px : 0px; }
+                                Text { visible: root.file-busy; text: @tr("Loading…"); color: Theme.secondary; height: root.file-busy ? 28px : 0px; }
                                 ListView {
                                     for file in root.files: Rectangle { height: 36px; background: file-touch.has-hover ? Theme.high : transparent;
                                         HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 9px;
@@ -688,10 +688,10 @@ export component AppWindow inherits Window {
                                 Rectangle { width: 24px; height: 24px; border-radius: 8px; background: Theme.tile-host;
                                     Image { source: @image-url("icons/local-filled.svg"); colorize: Theme.on-accent; x: 5px; y: 5px; width: 14px; height: 14px; }
                                 }
-                                Text { text: "Local"; color: Theme.text; font-weight: 500; vertical-alignment: center; }
+                                Text { text: @tr("Local"); color: Theme.text; font-weight: 500; vertical-alignment: center; }
                                 Rectangle { horizontal-stretch: 1; }
-                                Action { text: root.show-hidden ? "Hidden: shown" : "Hidden: off"; kind: "flat"; text-size: 12px; clicked => { root.show-hidden = !root.show-hidden; SettingsBridge.apply(); root.update-file-view(); } }
-                                Action { text: "Actions"; kind: "flat"; has-icon: true; icon: @image-url("icons/chevron-down.svg"); clicked => { root.file-actions-pane = 1; root.file-actions-x = self.absolute-position.x; root.file-actions-y = self.absolute-position.y + 36px; } }
+                                Action { text: root.show-hidden ? @tr("Hidden: shown") : @tr("Hidden: off"); kind: "flat"; text-size: 12px; clicked => { root.show-hidden = !root.show-hidden; SettingsBridge.apply(); root.update-file-view(); } }
+                                Action { text: @tr("Actions"); kind: "flat"; has-icon: true; icon: @image-url("icons/chevron-down.svg"); clicked => { root.file-actions-pane = 1; root.file-actions-x = self.absolute-position.x; root.file-actions-y = self.absolute-position.y + 36px; } }
                             }
                         }
                         Rectangle { height: 44px; background: Theme.high;
@@ -716,10 +716,10 @@ export component AppWindow inherits Window {
                                 Rectangle { width: 24px; height: 24px; border-radius: 8px; background: Theme.tile-host;
                                     Image { source: @image-url("icons/hosts.svg"); colorize: Theme.on-accent; x: 5px; y: 5px; width: 14px; height: 14px; }
                                 }
-                                Text { text: root.remote-connected ? root.active-host : "Remote"; color: Theme.text; font-weight: 500; overflow: elide; vertical-alignment: center; }
+                                Text { text: root.remote-connected ? root.active-host : @tr("Remote"); color: Theme.text; font-weight: 500; overflow: elide; vertical-alignment: center; }
                                 Rectangle { horizontal-stretch: 1; }
-                                Action { text: "Select host"; kind: "flat"; text-size: 12px; clicked => { root.host-picker-open = true; } }
-                                Action { text: "Actions"; kind: "flat"; has-icon: true; icon: @image-url("icons/chevron-down.svg"); disabled: !root.remote-connected; clicked => { root.file-actions-pane = 2; root.file-actions-x = self.absolute-position.x; root.file-actions-y = self.absolute-position.y + 36px; } }
+                                Action { text: @tr("Select host"); kind: "flat"; text-size: 12px; clicked => { root.host-picker-open = true; } }
+                                Action { text: @tr("Actions"); kind: "flat"; has-icon: true; icon: @image-url("icons/chevron-down.svg"); disabled: !root.remote-connected; clicked => { root.file-actions-pane = 2; root.file-actions-x = self.absolute-position.x; root.file-actions-y = self.absolute-position.y + 36px; } }
                             }
                         }
                         if root.remote-connected: Rectangle { height: 44px; background: Theme.high;
@@ -735,8 +735,8 @@ export component AppWindow inherits Window {
                             }
                         }
                         if !root.remote-connected: EmptyState { vertical-stretch: 1; background: Theme.base;
-                            icon: @image-url("icons/folder-filled.svg"); title: "Connect to host";
-                            description: "Select a saved host to manage files with SFTP."; action-text: "Select host";
+                            icon: @image-url("icons/folder-filled.svg"); title: @tr("Connect to host");
+                            description: @tr("Select a saved host to manage files with SFTP."); action-text: @tr("Select host");
                             action-clicked => { root.host-picker-open = true; }
                         }
                     }
@@ -746,11 +746,11 @@ export component AppWindow inherits Window {
             Rectangle { height: root.transfers.length > 0 ? 154px : 46px; background: Theme.high; clip: true;
                 VerticalLayout { padding: 8px; spacing: 4px;
                     HorizontalLayout { cross-axis-alignment: center; spacing: 8px;
-                        Text { text: "Transfers"; font-weight: 600; color: Theme.text; vertical-alignment: center; }
-                        Text { text: "8 queued maximum"; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
+                        Text { text: @tr("Transfers"); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+                        Text { text: @tr("8 queued maximum"); color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
                         Rectangle { horizontal-stretch: 1; }
-                        Action { text: "Upload file"; kind: "flat"; text-size: 12px; disabled: !root.remote-connected; clicked => { root.upload-file(); } }
-                        Action { text: "Upload folder"; kind: "flat"; text-size: 12px; disabled: !root.remote-connected; clicked => { root.upload-folder(); } }
+                        Action { text: @tr("Upload file"); kind: "flat"; text-size: 12px; disabled: !root.remote-connected; clicked => { root.upload-file(); } }
+                        Action { text: @tr("Upload folder"); kind: "flat"; text-size: 12px; disabled: !root.remote-connected; clicked => { root.upload-folder(); } }
                     }
                     if root.transfers.length > 0: ListView {
                         for transfer in root.transfers: Rectangle { height: 52px;
@@ -760,7 +760,7 @@ export component AppWindow inherits Window {
                                     Text { text: transfer.detail; color: Theme.secondary; font-size: Theme.font-caption; overflow: elide; }
                                     Rectangle { height: 3px; background: Theme.border; Rectangle { x: 0px; y: 0px; height: parent.height; width: parent.width * Math.max(0, Math.min(100, transfer.percent)) / 100; background: Theme.accent; } }
                                 }
-                                Action { kind: "secondary"; horizontal-stretch: 0; text: "Cancel"; text-size: 12px; disabled: !transfer.pending; clicked => { root.cancel-transfer(transfer.id); } }
+                                Action { kind: "secondary"; horizontal-stretch: 0; text: @tr("Cancel"); text-size: 12px; disabled: !transfer.pending; clicked => { root.cancel-transfer(transfer.id); } }
                             }
                         }
                     }
@@ -774,27 +774,27 @@ export component AppWindow inherits Window {
     }
     if root.file-actions-pane != 0: Popover { open: true; anchor-x: Math.min(root.file-actions-x, root.width - 208px); anchor-y: root.file-actions-y;
         dismissed => { root.file-actions-pane = 0; }
-        MenuItem { text: "Refresh"; clicked => { if root.file-actions-pane == 1 { root.list-local(root.local-path); } else { root.list-files(root.file-path); } root.file-actions-pane = 0; } }
-        MenuItem { text: "New folder"; clicked => { root.file-dialog-local = root.file-actions-pane == 1; root.file-dialog-source = ""; root.file-dialog-value = ""; root.file-actions-pane = 0; root.file-dialog = "mkdir"; } }
-        MenuItem { text: "Rename"; enabled: root.file-actions-pane == 1 ? root.local-selection != "" : root.remote-selection != "";
+        MenuItem { text: @tr("Refresh"); clicked => { if root.file-actions-pane == 1 { root.list-local(root.local-path); } else { root.list-files(root.file-path); } root.file-actions-pane = 0; } }
+        MenuItem { text: @tr("New folder"); clicked => { root.file-dialog-local = root.file-actions-pane == 1; root.file-dialog-source = ""; root.file-dialog-value = ""; root.file-actions-pane = 0; root.file-dialog = "mkdir"; } }
+        MenuItem { text: @tr("Rename"); enabled: root.file-actions-pane == 1 ? root.local-selection != "" : root.remote-selection != "";
             clicked => { root.file-dialog-local = root.file-actions-pane == 1; root.file-dialog-source = root.file-dialog-local ? root.local-selection : root.remote-selection; root.file-dialog-value = root.file-dialog-source; root.file-actions-pane = 0; root.file-dialog = "rename"; }
         }
-        MenuItem { text: root.file-actions-pane == 1 ? "Upload" : "Download"; enabled: root.remote-connected && (root.file-actions-pane == 1 ? root.local-selection != "" : root.remote-selection != "");
+        MenuItem { text: root.file-actions-pane == 1 ? @tr("Upload") : @tr("Download"); enabled: root.remote-connected && (root.file-actions-pane == 1 ? root.local-selection != "" : root.remote-selection != "");
             clicked => { if root.file-actions-pane == 1 { root.upload-local(root.local-selection); } else { root.download-to-local(root.remote-selection); } root.file-actions-pane = 0; }
         }
         MenuSeparator { }
-        MenuItem { text: "Delete"; danger: true; enabled: root.file-actions-pane == 1 ? root.local-selection != "" : root.remote-selection != "";
+        MenuItem { text: @tr("Delete"); danger: true; enabled: root.file-actions-pane == 1 ? root.local-selection != "" : root.remote-selection != "";
             clicked => { root.file-operation(root.file-actions-pane == 1, "delete", root.file-actions-pane == 1 ? root.local-selection : root.remote-selection, ""); root.file-actions-pane = 0; }
         }
     }
-    if root.file-dialog != "": Dialog { open: true; title: (root.file-dialog-local ? "Local / " : "Remote / ") + (root.file-dialog == "mkdir" ? "New folder" : "Rename"); confirm-text: "Save"; confirm-enabled: root.file-dialog-value != "";
-        Input { filled: true; text <=> root.file-dialog-value; placeholder-text: "Name"; init => { self.focus(); } }
+    if root.file-dialog != "": Dialog { open: true; title: (root.file-dialog-local ? @tr("Local / ") : @tr("Remote / ")) + (root.file-dialog == "mkdir" ? @tr("New folder") : @tr("Rename")); confirm-text: @tr("Save"); confirm-enabled: root.file-dialog-value != "";
+        Input { filled: true; text <=> root.file-dialog-value; placeholder-text: @tr("Name"); init => { self.focus(); } }
         cancel => { root.file-dialog = ""; }
         confirm => { root.file-operation(root.file-dialog-local, root.file-dialog, root.file-dialog-source, root.file-dialog-value); root.file-dialog = ""; }
     }
-    Dialog { open <=> root.host-picker-open; title: "Select host"; dialog-width: 440px; confirm-text: "Done"; cancel-visible: false; dismiss-on-scrim: true;
+    Dialog { open <=> root.host-picker-open; title: @tr("Select host"); dialog-width: 440px; confirm-text: @tr("Done"); cancel-visible: false; dismiss-on-scrim: true;
         confirm => { root.host-picker-open = false; }
-        if root.hosts.length == 0: Text { text: "Add a host in Hosts to connect with SFTP."; color: Theme.secondary; wrap: word-wrap; }
+        if root.hosts.length == 0: Text { text: @tr("Add a host in Hosts to connect with SFTP."); color: Theme.secondary; wrap: word-wrap; }
         ListView { height: Math.min(312px, root.hosts.length * 52px);
             for host in root.hosts: Rectangle { height: 52px; border-radius: Theme.r-control; background: select-host-touch.has-hover ? Theme.hover : transparent;
                 HorizontalLayout { padding: 8px; spacing: 12px; cross-axis-alignment: center;
@@ -815,43 +815,43 @@ export component AppWindow inherits Window {
             VerticalLayout { padding: 0px; spacing: 0px;
                 Rectangle { height: Theme.header-height; background: Theme.high;
                     HorizontalLayout { cross-axis-alignment: center; padding-left: 20px; padding-right: 14px; spacing: 10px;
-                        Text { text: root.creating-host ? "New Host" : "Host Details"; color: Theme.text; font-size: Theme.font-body; font-weight: 600; vertical-alignment: center; }
+                        Text { text: root.creating-host ? @tr("New Host") : @tr("Host Details"); color: Theme.text; font-size: Theme.font-body; font-weight: 600; vertical-alignment: center; }
                         IconButton { icon: @image-url("icons/more.svg"); clicked => { root.editor-menu-open = !root.editor-menu-open; } }
                         IconButton { icon: @image-url("icons/collapse-right.svg"); glyph-size: 18px; clicked => { if root.draft.host == "" || root.save-host(root.draft) { root.close-editor(); } } }
                     }
                 }
                 editor-scroll := ScrollView { VerticalLayout { padding: 15px; spacing: 15px;
-                    Card { title: "Address"; height: 102px;
+                    Card { title: @tr("Address"); height: 102px;
                             HorizontalLayout { cross-axis-alignment: center; spacing: 10px;
                                 Rectangle { width: 36px; height: 36px; border-radius: 8px; background: Theme.tile-host;
                                     Image { source: @image-url("icons/hosts.svg"); colorize: Theme.on-accent; x: 8px; y: 8px; width: 20px; height: 20px; }
                                 }
-                                address-input := Input { placeholder-text: "IP or Hostname"; text <=> root.draft.host; }
+                                address-input := Input { placeholder-text: @tr("IP or Hostname"); text <=> root.draft.host; }
                             }
                     }
-                    Card { title: "General";
-                            Input { placeholder-text: "Label"; text <=> root.draft.name; }
-                            group-input := Input { placeholder-text: "Parent Group"; text <=> root.draft.group; has-leading-icon: true; leading-icon: @image-url("icons/group.svg"); edited => { root.group-suggestions = root.suggest-host-groups(self.text); root.group-editing = true; } accepted => { root.group-editing = false; } }
-                            Input { placeholder-text: "Tags (comma separated)"; text <=> root.draft.tags; has-leading-icon: true; leading-icon: @image-url("icons/tag.svg"); }
-                            HorizontalLayout { cross-axis-alignment: center; spacing: 8px; Text { text: "Backspace"; color: Theme.secondary; font-size: Theme.font-caption; } Select { options: ["Default"]; current-index: 0; enabled: false; } }
+                    Card { title: @tr("General");
+                            Input { placeholder-text: @tr("Label"); text <=> root.draft.name; }
+                            group-input := Input { placeholder-text: @tr("Parent Group"); text <=> root.draft.group; has-leading-icon: true; leading-icon: @image-url("icons/group.svg"); edited => { root.group-suggestions = root.suggest-host-groups(self.text); root.group-editing = true; } accepted => { root.group-editing = false; } }
+                            Input { placeholder-text: @tr("Tags (comma separated)"); text <=> root.draft.tags; has-leading-icon: true; leading-icon: @image-url("icons/tag.svg"); }
+                            HorizontalLayout { cross-axis-alignment: center; spacing: 8px; Text { text: @tr("Backspace"); color: Theme.secondary; font-size: Theme.font-caption; } Select { options: [@tr("Default")]; current-index: 0; enabled: false; } }
                     }
                     Card {
                             HorizontalLayout { cross-axis-alignment: center; spacing: 4px; alignment: start;
-                                Text { text: "SSH on"; color: Theme.text; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; }
-                                Input { placeholder-text: "22"; text <=> root.draft.port; compact: true; min-width: 80px; max-width: 80px; }
-                                Text { text: "port"; color: Theme.text; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; }
+                                Text { text: @tr("SSH on"); color: Theme.text; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; }
+                                Input { placeholder-text: @tr("22"); text <=> root.draft.port; compact: true; min-width: 80px; max-width: 80px; }
+                                Text { text: @tr("port"); color: Theme.text; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; }
                             }
                             Rectangle { height: 1px; background: Theme.divider; }
-                            Text { text: "Credentials"; color: Theme.text; font-size: Theme.font-body; font-weight: 600; height: 20px; }
-                            Input { placeholder-text: "Username"; text <=> root.draft.username; has-leading-icon: true; leading-icon: @image-url("icons/user.svg"); }
+                            Text { text: @tr("Credentials"); color: Theme.text; font-size: Theme.font-body; font-weight: 600; height: 20px; }
+                            Input { placeholder-text: @tr("Username"); text <=> root.draft.username; has-leading-icon: true; leading-icon: @image-url("icons/user.svg"); }
                             HorizontalLayout { cross-axis-alignment: center; spacing: 8px;
-                                Action { text: "Password"; kind: root.draft.auth-index == 0 ? "primary" : "secondary"; horizontal-stretch: 1; clicked => { root.draft.auth-index = 0; root.draft.key-id = ""; } }
-                                Action { text: "Key"; kind: root.draft.auth-index == 1 ? "primary" : "secondary"; horizontal-stretch: 1; clicked => { root.draft.auth-index = 1; } }
+                                Action { text: @tr("Password"); kind: root.draft.auth-index == 0 ? "primary" : "secondary"; horizontal-stretch: 1; clicked => { root.draft.auth-index = 0; root.draft.key-id = ""; } }
+                                Action { text: @tr("Key"); kind: root.draft.auth-index == 1 ? "primary" : "secondary"; horizontal-stretch: 1; clicked => { root.draft.auth-index = 1; } }
                             }
-                            if root.draft.key-id == "": Input { placeholder-text: root.draft.auth-index == 1 ? "Passphrase" : "Password"; input-type: InputType.password; text <=> root.draft.secret; has-leading-icon: true; leading-icon: @image-url("icons/password.svg"); }
+                            if root.draft.key-id == "": Input { placeholder-text: root.draft.auth-index == 1 ? @tr("Passphrase") : @tr("Password"); input-type: InputType.password; text <=> root.draft.secret; has-leading-icon: true; leading-icon: @image-url("icons/password.svg"); }
                             if root.draft.auth-index == 1: VerticalLayout { spacing: 8px;
                                 if KeychainBridge.keys.length > 0: VerticalLayout { spacing: 4px;
-                                    Text { text: "Keychain"; color: Theme.secondary; font-size: Theme.font-caption; height: 16px; }
+                                    Text { text: @tr("Keychain"); color: Theme.secondary; font-size: Theme.font-caption; height: 16px; }
                                     Rectangle { height: Math.min(KeychainBridge.keys.length, 3) * 38px; background: Theme.base; border-radius: 8px; border-width: 1px; border-color: Theme.border;
                                         ScrollView { VerticalLayout { for key in KeychainBridge.keys: Rectangle { height: 38px; background: root.draft.key-id == key.id ? Theme.accent-soft : transparent;
                                             HorizontalLayout { cross-axis-alignment: center; padding-left: 8px; padding-right: 8px; spacing: 8px;
@@ -861,25 +861,25 @@ export component AppWindow inherits Window {
                                                     Text { text: key.fingerprint; color: Theme.secondary; font-size: Theme.font-caption; overflow: elide; }
                                                 }
                                                 Rectangle { horizontal-stretch: 1; }
-                                                if root.draft.key-id == key.id: Text { text: "✓"; color: Theme.accent; vertical-alignment: center; }
+                                                if root.draft.key-id == key.id: Text { text: @tr("✓"); color: Theme.accent; vertical-alignment: center; }
                                             }
                                             TouchArea { clicked => { root.draft.key-id = key.id; root.draft.key-path = ""; } }
                                         } } }
                                     }
                                 }
-                                if KeychainBridge.keys.length == 0: Text { text: "No keys in Keychain. Add one in the Keychain section."; color: Theme.secondary; font-size: Theme.font-caption; wrap: word-wrap; }
+                                if KeychainBridge.keys.length == 0: Text { text: @tr("No keys in Keychain. Add one in the Keychain section."); color: Theme.secondary; font-size: Theme.font-caption; wrap: word-wrap; }
                                 if root.draft.key-id == "": VerticalLayout { spacing: 8px;
-                                    Field { label: "Private key file"; text <=> root.draft.key-path; }
-                                    Action { kind: "secondary"; text: "Choose file…"; clicked => { root.draft.key-path = root.pick-key(); } }
+                                    Field { label: @tr("Private key file"); text <=> root.draft.key-path; }
+                                    Action { kind: "secondary"; text: @tr("Choose file…"); clicked => { root.draft.key-path = root.pick-key(); } }
                                 }
-                                if root.draft.key-id != "": Action { text: "Use a key file instead"; kind: "flat"; clicked => { root.draft.key-id = ""; } }
+                                if root.draft.key-id != "": Action { text: @tr("Use a key file instead"); kind: "flat"; clicked => { root.draft.key-id = ""; } }
                             }
                     }
                 } }
                 Rectangle { height: 76px; background: Theme.base;
                     Rectangle { x: 0px; y: 0px; width: 100%; height: 1px; background: Theme.divider; }
                     HorizontalLayout { cross-axis-alignment: center; padding-left: 15px; padding-right: 15px; padding-top: 20px; padding-bottom: 20px; spacing: 10px;
-                        Action { text: "Connect"; kind: "primary"; size: "l"; border-radius: Theme.r-field; disabled: root.draft.host == ""; horizontal-stretch: 1; min-height: 36px; max-height: 36px; clicked => { root.save-and-connect(root.draft); } }
+                        Action { text: @tr("Connect"); kind: "primary"; size: "l"; border-radius: Theme.r-field; disabled: root.draft.host == ""; horizontal-stretch: 1; min-height: 36px; max-height: 36px; clicked => { root.save-and-connect(root.draft); } }
                     }
                 }
             }
@@ -894,61 +894,61 @@ export component AppWindow inherits Window {
             background: Theme.highest; border-radius: Theme.r-field; border-width: 1px; border-color: Theme.border;
             ScrollView { x: 4px; y: 4px; width: parent.width - 8px; height: parent.height - 8px;
                 VerticalLayout { spacing: 0px;
-                    MenuItem { text: "No group"; clicked => { root.draft.group = ""; root.group-editing = false; } }
+                    MenuItem { text: @tr("No group"); clicked => { root.draft.group = ""; root.group-editing = false; } }
                     for group in root.group-suggestions: MenuItem { text: group.name + " (" + group.count + ")"; clicked => { root.draft.group = group.name; root.group-editing = false; } }
                 }
             }
         }
     }
     Popover { open <=> root.editor-menu-open; anchor-x: root.width - 220px; anchor-y: 99px; popover-width: 200px;
-        MenuItem { text: "Add Telnet"; enabled: false; }
-        MenuItem { text: "Remove"; danger: true; has-icon: true; icon: @image-url("icons/trash.svg"); clicked => { root.editor-menu-open = false; if !root.creating-host { root.ask-delete(root.draft.id, root.draft.name); } else { root.close-editor(); } } }
+        MenuItem { text: @tr("Add Telnet"); enabled: false; }
+        MenuItem { text: @tr("Remove"); danger: true; has-icon: true; icon: @image-url("icons/trash.svg"); clicked => { root.editor-menu-open = false; if !root.creating-host { root.ask-delete(root.draft.id, root.draft.name); } else { root.close-editor(); } } }
     }
     Popover { open <=> root.tag-menu-open; anchor-x: Math.max(8px, root.toolbar-popup-x); anchor-y: root.toolbar-popup-y; popover-width: 232px;
         popover-height: Math.min(56px + root.host-tags.length * 32px, root.height - root.toolbar-popup-y - 12px);
-        Text { text: "Filter by tag"; color: Theme.secondary; font-size: Theme.font-caption; height: 16px; }
+        Text { text: @tr("Filter by tag"); color: Theme.secondary; font-size: Theme.font-caption; height: 16px; }
         ScrollView { VerticalLayout { spacing: 0px;
-            MenuItem { text: "All hosts"; show-check: root.host-tag-filter == ""; clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.tag-menu-open = false; } }
-            for tag in root.host-tags: MenuItem { text: "#" + tag.name + " (" + tag.count + ")"; show-check: root.host-tag-filter == tag.name; clicked => { root.host-tag-filter = tag.name; root.set-host-tag-filter(tag.name); root.tag-menu-open = false; } }
+            MenuItem { text: @tr("All hosts"); show-check: root.host-tag-filter == ""; clicked => { root.host-tag-filter = ""; root.set-host-tag-filter(""); root.tag-menu-open = false; } }
+            for tag in root.host-tags: MenuItem { text: @tr("#") + tag.name + " (" + tag.count + ")"; show-check: root.host-tag-filter == tag.name; clicked => { root.host-tag-filter = tag.name; root.set-host-tag-filter(tag.name); root.tag-menu-open = false; } }
         } }
     }
     Popover { open <=> root.sort-menu-open; anchor-x: Math.max(8px, root.toolbar-popup-x); anchor-y: root.toolbar-popup-y; popover-width: 222px;
-        MenuItem { text: "Name"; show-check: root.host-sort-mode == "name"; clicked => { root.host-sort-mode = "name"; root.set-host-sort("name"); root.sort-menu-open = false; } }
-        MenuItem { text: "Last connected"; show-check: root.host-sort-mode == "last"; clicked => { root.host-sort-mode = "last"; root.set-host-sort("last"); root.sort-menu-open = false; } }
-        MenuItem { text: "Date created"; show-check: root.host-sort-mode == "created"; clicked => { root.host-sort-mode = "created"; root.set-host-sort("created"); root.sort-menu-open = false; } }
+        MenuItem { text: @tr("Name"); show-check: root.host-sort-mode == "name"; clicked => { root.host-sort-mode = "name"; root.set-host-sort("name"); root.sort-menu-open = false; } }
+        MenuItem { text: @tr("Last connected"); show-check: root.host-sort-mode == "last"; clicked => { root.host-sort-mode = "last"; root.set-host-sort("last"); root.sort-menu-open = false; } }
+        MenuItem { text: @tr("Date created"); show-check: root.host-sort-mode == "created"; clicked => { root.host-sort-mode = "created"; root.set-host-sort("created"); root.sort-menu-open = false; } }
     }
     Popover { open <=> root.host-menu-open;
         anchor-x: Math.max(8px, Math.min(root.host-menu-x, root.width - 218px)); anchor-y: Math.max(58px, Math.min(root.host-menu-y, root.height - 245px)); popover-width: 210px;
         Text { text: root.host-menu-name; color: Theme.secondary; font-size: Theme.font-caption; height: 24px; overflow: elide; }
         MenuSeparator { }
-        MenuItem { text: "Connect"; clicked => { root.host-menu-open = false; root.activate-host(root.host-menu-id); } }
-        MenuItem { text: "Edit"; clicked => { root.host-menu-open = false; root.selected-host-name = root.host-menu-name; root.open-editor(root.host-menu-id); } }
-        MenuItem { text: "Duplicate"; clicked => { root.host-menu-open = false; root.duplicate-host(root.host-menu-id); } }
-        MenuItem { text: "Open SFTP"; clicked => { root.host-menu-open = false; if root.save-current-draft() { root.close-editor(); root.open-host-sftp(root.host-menu-id); } } }
-        MenuItem { text: "Copy address"; clicked => { root.host-menu-open = false; root.copy-host-address(root.host-menu-id); } }
+        MenuItem { text: @tr("Connect"); clicked => { root.host-menu-open = false; root.activate-host(root.host-menu-id); } }
+        MenuItem { text: @tr("Edit"); clicked => { root.host-menu-open = false; root.selected-host-name = root.host-menu-name; root.open-editor(root.host-menu-id); } }
+        MenuItem { text: @tr("Duplicate"); clicked => { root.host-menu-open = false; root.duplicate-host(root.host-menu-id); } }
+        MenuItem { text: @tr("Open SFTP"); clicked => { root.host-menu-open = false; if root.save-current-draft() { root.close-editor(); root.open-host-sftp(root.host-menu-id); } } }
+        MenuItem { text: @tr("Copy address"); clicked => { root.host-menu-open = false; root.copy-host-address(root.host-menu-id); } }
         MenuSeparator { }
-        MenuItem { text: "Delete"; danger: true; clicked => { root.ask-delete(root.host-menu-id, root.host-menu-name); } }
+        MenuItem { text: @tr("Delete"); danger: true; clicked => { root.ask-delete(root.host-menu-id, root.host-menu-name); } }
     }
     if root.tab-menu-session != "": Popover { open: true; dismissed => { root.tab-menu-session = ""; terminal-focus.focus(); }
         anchor-x: Math.min(root.tab-menu-x, root.width - 208px); anchor-y: 45px;
-        MenuItem { text: "Reconnect"; enabled: root.tab-menu-reconnectable; clicked => { root.reconnect-session(root.tab-menu-session); root.tab-menu-session = ""; } }
-        MenuItem { text: "Duplicate session"; clicked => { root.duplicate-session(root.tab-menu-session); root.tab-menu-session = ""; } }
-        MenuItem { text: "Close"; danger: true; clicked => { root.close-session(root.tab-menu-session); root.tab-menu-session = ""; terminal-focus.focus(); } }
+        MenuItem { text: @tr("Reconnect"); enabled: root.tab-menu-reconnectable; clicked => { root.reconnect-session(root.tab-menu-session); root.tab-menu-session = ""; } }
+        MenuItem { text: @tr("Duplicate session"); clicked => { root.duplicate-session(root.tab-menu-session); root.tab-menu-session = ""; } }
+        MenuItem { text: @tr("Close"); danger: true; clicked => { root.close-session(root.tab-menu-session); root.tab-menu-session = ""; terminal-focus.focus(); } }
     }
     Popover { open <=> root.menu-open; anchor-x: 9px; anchor-y: 45px; popover-width: 230px;
-        Text { text: "OpenTermius"; color: Theme.secondary; font-size: Theme.font-caption; height: 20px; vertical-alignment: center; }
-        MenuItem { text: "Import hosts"; has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
-        MenuItem { text: "Import from Xshell"; has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-xshell(); } }
-        MenuItem { text: "Export hosts"; has-icon: true; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
+        Text { text: @tr("OpenTermius"); color: Theme.secondary; font-size: Theme.font-caption; height: 20px; vertical-alignment: center; }
+        MenuItem { text: @tr("Import hosts"); has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
+        MenuItem { text: @tr("Import from Xshell"); has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-xshell(); } }
+        MenuItem { text: @tr("Export hosts"); has-icon: true; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
         MenuSeparator { }
-        MenuItem { text: "Backup & Restore"; has-icon: true; icon: @image-url("icons/keychain.svg"); clicked => { root.menu-open = false; root.open-section("recovery"); } }
-        MenuItem { text: "Settings"; has-icon: true; icon: @image-url("icons/settings.svg"); clicked => { root.menu-open = false; root.open-section("settings"); } }
+        MenuItem { text: @tr("Backup & Restore"); has-icon: true; icon: @image-url("icons/keychain.svg"); clicked => { root.menu-open = false; root.open-section("recovery"); } }
+        MenuItem { text: @tr("Settings"); has-icon: true; icon: @image-url("icons/settings.svg"); clicked => { root.menu-open = false; root.open-section("settings"); } }
     }
-    Dialog { open <=> root.delete-open; title: "Delete host?"; description: "Remove \"" + root.delete-name + "\"? This cannot be undone."; confirm-text: "Delete"; confirm-kind: "danger";
+    Dialog { open <=> root.delete-open; title: @tr("Delete host?"); description: @tr("Remove \"") + root.delete-name + @tr("\"? This cannot be undone."); confirm-text: @tr("Delete"); confirm-kind: "danger";
         confirm => { if root.editor-open && root.draft.id == root.delete-id { root.close-editor(); } root.delete-host(root.delete-id); root.selected-host = ""; root.selected-host-name = ""; root.delete-open = false; }
     }
-    Dialog { open <=> root.group-rename-open; title: "Rename group"; description: "Rename the group and move its hosts with it."; confirm-text: "Rename"; confirm-enabled: root.group-rename-value != "";
-        Input { filled: true; text <=> root.group-rename-value; placeholder-text: "Group name"; init => { self.focus(); } }
+    Dialog { open <=> root.group-rename-open; title: @tr("Rename group"); description: @tr("Rename the group and move its hosts with it."); confirm-text: @tr("Rename"); confirm-enabled: root.group-rename-value != "";
+        Input { filled: true; text <=> root.group-rename-value; placeholder-text: @tr("Group name"); init => { self.focus(); } }
         confirm => { root.rename-group(root.group-rename-old, root.group-rename-value); root.group-rename-open = false; }
     }
     if RecoveryBridge.visible: Rectangle { background: Theme.scrim;
@@ -956,7 +956,7 @@ export component AppWindow inherits Window {
         RecoveryPanel { width: Math.min(880px, parent.width - 32px); height: Math.min(660px, parent.height - 32px); x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; }
     }
     if root.prompt-visible: Dialog { open: true; title: root.prompt-title; dialog-width: 520px;
-        confirm-text: root.prompt-is-key ? "Trust and connect" : "Continue";
+        confirm-text: root.prompt-is-key ? @tr("Trust and connect") : @tr("Continue");
         // Rust owns prompt visibility and may replace a cancelled prompt immediately.
         cancel => { self.open = true; root.answer-prompt(false, ""); }
         confirm => { root.answer-prompt(true, root.prompt-answer); }

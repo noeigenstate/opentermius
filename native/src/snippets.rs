@@ -36,19 +36,12 @@ impl Snippet {
     /// an id when the snippet is new.
     pub fn validate(&mut self) -> Result<()> {
         let name = self.name.trim();
-        ensure!(!name.is_empty(), "名称不能为空");
-        ensure!(
-            name.chars().count() <= MAX_NAME_CHARS,
-            "名称不能超过 {MAX_NAME_CHARS} 个字符"
-        );
-        ensure!(!name.chars().any(char::is_control), "名称包含无效字符");
+        ensure!(!name.is_empty(), "{}", crate::i18n::t("Name cannot be empty"));
+        ensure!(name.chars().count() <= MAX_NAME_CHARS, "{}", crate::tf!("Name must not exceed {MAX_NAME_CHARS} characters", "MAX_NAME_CHARS" => format!("{}", MAX_NAME_CHARS)));
+        ensure!(!name.chars().any(char::is_control), "{}", crate::i18n::t("Name contains invalid characters"));
         self.name = name.to_string();
-        ensure!(!self.script.trim().is_empty(), "脚本不能为空");
-        ensure!(
-            self.script.len() <= MAX_SCRIPT_BYTES,
-            "脚本不能超过 {} KB",
-            MAX_SCRIPT_BYTES / 1024
-        );
+        ensure!(!self.script.trim().is_empty(), "{}", crate::i18n::t("Script cannot be empty"));
+        ensure!(self.script.len() <= MAX_SCRIPT_BYTES, "{}", crate::tf!("Script must not exceed {} KB", "0" => format!("{}", MAX_SCRIPT_BYTES / 1024)));
         self.tags = normalize_tags(std::mem::take(&mut self.tags))?;
         if self.id.is_empty() {
             self.id = uuid::Uuid::new_v4().to_string();
@@ -75,11 +68,8 @@ fn normalize_tags(tags: Vec<String>) -> Result<Vec<String>> {
         if tag.is_empty() {
             continue;
         }
-        ensure!(!tag.chars().any(char::is_control), "标签包含无效字符");
-        ensure!(
-            tag.chars().count() <= MAX_TAG_CHARS,
-            "单个标签不能超过 {MAX_TAG_CHARS} 个字符"
-        );
+        ensure!(!tag.chars().any(char::is_control), "{}", crate::i18n::t("Tags contain invalid characters"));
+        ensure!(tag.chars().count() <= MAX_TAG_CHARS, "{}", crate::tf!("A tag must not exceed {MAX_TAG_CHARS} characters", "MAX_TAG_CHARS" => format!("{}", MAX_TAG_CHARS)));
         if !normalized
             .iter()
             .any(|existing| existing.to_lowercase() == tag.to_lowercase())
@@ -87,7 +77,7 @@ fn normalize_tags(tags: Vec<String>) -> Result<Vec<String>> {
             normalized.push(tag.to_string());
         }
     }
-    ensure!(normalized.len() <= MAX_TAGS, "标签不能超过 {MAX_TAGS} 个");
+    ensure!(normalized.len() <= MAX_TAGS, "{}", crate::tf!("At most {MAX_TAGS} tags are allowed", "MAX_TAGS" => format!("{}", MAX_TAGS)));
     Ok(normalized)
 }
 

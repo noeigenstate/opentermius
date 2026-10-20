@@ -50,7 +50,7 @@ component KnownHostItem inherits Rectangle {
         button-size: Theme.button-s; icon: @image-url("../icons/trash.svg"); danger: true;
         visible: row-touch.has-hover || self.hovered;
         accessible-role: button;
-        accessible-label: "Remove trusted host";
+        accessible-label: @tr("Remove trusted host");
         clicked => { root.remove(); }
     }
     Rectangle { x: Theme.space-12; y: parent.height - 1px; width: parent.width - Theme.space-24; height: 1px; background: Theme.divider; }
@@ -67,21 +67,21 @@ export component KnownHostsPage inherits Rectangle {
     init => { KnownHostsBridge.page-shown(); }
     VerticalLayout { spacing: 0px;
         PageHeader {
-            placeholder: "Search known hosts"; search <=> KnownHostsBridge.search; show-primary: false;
+            placeholder: @tr("Search known hosts"); search <=> KnownHostsBridge.search; show-primary: false;
             search-changed => { KnownHostsBridge.refresh(); }
             search-accepted => { KnownHostsBridge.refresh(); }
         }
         PageToolbar {
-            Action { kind: "secondary"; text: "Import"; has-icon: true; icon: @image-url("../icons/download.svg"); clicked => { KnownHostsBridge.import-known-hosts(); } }
-            Action { kind: "flat"; text: "Refresh"; clicked => { KnownHostsBridge.refresh(); } }
+            Action { kind: "secondary"; text: @tr("Import"); has-icon: true; icon: @image-url("../icons/download.svg"); clicked => { KnownHostsBridge.import-known-hosts(); } }
+            Action { kind: "flat"; text: @tr("Refresh"); clicked => { KnownHostsBridge.refresh(); } }
             Rectangle { horizontal-stretch: 1; }
-            Caption { text: KnownHostsBridge.search == "" ? (KnownHostsBridge.total == 1 ? "1 trusted host" : KnownHostsBridge.total + " trusted hosts") : KnownHostsBridge.entries.length + " of " + KnownHostsBridge.total + " shown"; overflow: elide; }
+            Caption { text: KnownHostsBridge.search == "" ? (KnownHostsBridge.total == 1 ? @tr("1 trusted host") : KnownHostsBridge.total + @tr(" trusted hosts")) : KnownHostsBridge.entries.length + @tr(" of ") + KnownHostsBridge.total + @tr(" shown"); overflow: elide; }
         }
         Rectangle { vertical-stretch: 1; background: Theme.base;
             if KnownHostsBridge.entries.length == 0: EmptyState {
                 icon: KnownHostsBridge.search == "" ? @image-url("../icons/known.svg") : @image-url("../icons/search.svg");
-                title: KnownHostsBridge.total == 0 ? "No known hosts" : "No matching hosts";
-                description: KnownHostsBridge.total == 0 ? "Hosts you trust on first connect appear here." : "Try another host name or fingerprint.";
+                title: KnownHostsBridge.total == 0 ? @tr("No known hosts") : @tr("No matching hosts");
+                description: KnownHostsBridge.total == 0 ? @tr("Hosts you trust on first connect appear here.") : @tr("Try another host name or fingerprint.");
                 action-visible: false;
             }
             if KnownHostsBridge.entries.length > 0: Rectangle {
@@ -92,7 +92,7 @@ export component KnownHostsPage inherits Rectangle {
                     Rectangle { height: Theme.table-header-height; background: Theme.high;
                         heading := Rectangle { x: 0px; y: 0px; width: parent.width - Theme.table-row-height; height: parent.height;
                             // Explicit cells keep intrinsic label widths from shifting columns.
-                            for label[index] in ["Host", "Port", "SHA-256 fingerprint", "Saved hosts"]: TableHeader {
+                            for label[index] in [@tr("Host"), @tr("Port"), @tr("SHA-256 fingerprint"), @tr("Saved hosts")]: TableHeader {
                                 x: heading.width * root.offsets[index]; y: 0px;
                                 width: heading.width * root.cols[index]; height: Theme.table-header-height;
                                 labels: [label]; cols: [1];
@@ -115,9 +115,9 @@ export component KnownHostsPage inherits Rectangle {
     }
     Dialog {
         open <=> root.confirm-visible;
-        title: "Remove trusted host?";
-        description: "OpenTermius will ask you to confirm the fingerprint again the next time it connects to this host.";
-        confirm-text: "Remove"; confirm-kind: "danger";
+        title: @tr("Remove trusted host?");
+        description: @tr("OpenTermius will ask you to confirm the fingerprint again the next time it connects to this host.");
+        confirm-text: @tr("Remove"); confirm-kind: "danger";
         confirm => { root.confirm-visible = false; KnownHostsBridge.remove-host(root.pending-host, root.pending-port); }
         Text { text: "\{root.pending-host}:\{root.pending-port}"; color: Theme.text; font-size: Theme.font-body; font-weight: 500; wrap: word-wrap; }
         Text { text: root.pending-fingerprint; color: Theme.secondary; font-family: Theme.mono-font; font-size: Theme.font-mono; wrap: char-wrap; }

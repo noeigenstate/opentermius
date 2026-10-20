@@ -4,7 +4,23 @@
 
 <p align="center">A lightweight, local-first SSH &amp; SFTP client.<br>Built with Rust and Slint. No account required.</p>
 
+## English
+
+OpenTermius brings host management, SSH terminals and SFTP file transfers into one native workspace. It stores configuration locally and requires no product account, subscription, cloud sync or telemetry. Windows x64 is a validated preview; macOS and Linux desktop validation is still pending.
+
+The interface uses English, with Simplified Chinese available in **Settings → Appearance → Language**. Choose **English**, **简体中文**, or **System**. System is the persisted default: it uses Chinese when the Windows UI language is Chinese (or `LANG` starts with `zh` on other platforms), otherwise English. Changes apply immediately to labels, messages and page models. Server responses, terminal output, file names and user-created labels retain their original text. All translations are bundled; no translation service is contacted.
+
+Features include saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local terminals, multiple terminal tabs, SFTP transfers, key management, port forwarding, snippets, connection history and encrypted backup/restore. Credentials are encrypted locally with Windows DPAPI, or AES-256-GCM with a platform-specific master key on macOS/Linux. Host JSON exports omit credentials and trust records.
+
+For development, run `cargo build --locked` and `cargo test --locked` **inside `native/`**. Rust/Slint sources live in `native/src/` and `native/ui/`; the Rust message catalog is `native/src/i18n_catalog.rs`, and bundled Slint translations are in `native/translations/zh_CN/LC_MESSAGES/opentermius-ui.po` (named for the UI crate). Add English source keys and Chinese translations together. Localization tests check catalog coverage and placeholder parity. Installer languages are configured separately.
+
+Windows localization screenshots: [English main window](docs/screenshots/i18n-en-main.png), [English Settings](docs/screenshots/i18n-en-settings.png), [Chinese main window](docs/screenshots/i18n-zh-main.png), [Chinese Settings](docs/screenshots/i18n-zh-settings.png).
+
+## 中文
+
 OpenTermius 面向 **Windows、macOS 和 Linux** 打造轻量原生终端体验，将主机管理、远程会话和文件传输放在同一个工作区。连接信息保存在本机，无需注册产品账号，没有云同步、订阅或遥测服务。
+
+在 **设置 → 外观 → 语言** 中选择 English、简体中文或跟随系统，即时切换界面语言。默认跟随系统：Windows 界面语言为中文时使用简体中文，其他情况使用英文；非 Windows 读取 `LANG`。服务器响应、终端输出、文件名与用户输入保留原文，翻译完全离线。
 
 | 平台 | 当前状态 |
 | --- | --- |

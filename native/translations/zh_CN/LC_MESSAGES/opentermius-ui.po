@@ -1,0 +1,2454 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "{minutes}m"
+msgstr "{minutes}分"
+
+msgid "{hours}h"
+msgstr "{hours}时"
+
+msgid "{days}d"
+msgstr "{days}天"
+
+msgid " (copy {number})"
+msgstr "（副本 {number}）"
+
+msgid " (copy)"
+msgstr "（副本）"
+
+msgid " connections"
+msgstr " 个连接"
+
+msgid " host"
+msgstr " 台主机"
+
+msgid " hosts"
+msgstr " 台主机"
+
+msgid " keys"
+msgstr " 个密钥"
+
+msgid " lines"
+msgstr " 行"
+
+msgid " of "
+msgstr " / "
+
+msgid " s"
+msgstr " 秒"
+
+msgid " sessions"
+msgstr " 个会话"
+
+msgid " shown"
+msgstr " 条显示"
+
+msgid " snippets"
+msgstr " 条片段"
+
+msgid " trusted hosts"
+msgstr " 台信任的主机"
+
+msgid " — UNLICENSED. Third-party components remain under their respective licenses (Rust, Slint, russh, vt100, and others)."
+msgstr " — UNLICENSED。第三方组件遵循其各自许可（Rust、Slint、russh、vt100 等）。"
+
+msgid ", {} already existed"
+msgstr "，{} 条已存在"
+
+msgid ", {} fingerprint conflicts kept unchanged"
+msgstr "，{} 条与已有指纹冲突未覆盖"
+
+msgid ", {} skipped"
+msgstr "，跳过 {} 条"
+
+msgid "--renderer requires an argument"
+msgstr "--renderer 缺少参数"
+
+msgid "1 host"
+msgstr "1 台主机"
+
+msgid "1 key"
+msgstr "1 个密钥"
+
+msgid "1 session"
+msgstr "1 个会话"
+
+msgid "1 snippet"
+msgstr "1 条片段"
+
+msgid "1 trusted host"
+msgstr "1 台信任的主机"
+
+msgid "8 queued maximum"
+msgstr "最多排队 8 项"
+
+msgid "; {} hosts used public keys and now use password authentication. Select a private key in Host Details"
+msgstr "；其中 {} 台原使用公钥，已暂设为密码认证，请在主机详情中选择私钥"
+
+msgid "A file with this name already exists. Overwrite it?"
+msgstr "同名文件已存在，是否覆盖？"
+
+msgid "A folder with this name already exists"
+msgstr "同名文件夹已存在"
+
+msgid "A folder with this name already exists. Merge and overwrite matching files?"
+msgstr "同名文件夹已存在，是否合并并覆盖其中的同名文件？"
+
+msgid "A rule with this name already exists"
+msgstr "规则名称已存在"
+
+msgid "A tag must not exceed {MAX_TAG_CHARS} characters"
+msgstr "单个标签不能超过 {MAX_TAG_CHARS} 个字符"
+
+msgid "About"
+msgstr "关于"
+
+msgid "Actions"
+msgstr "操作"
+
+msgid "Actions · sizes & variants"
+msgstr "操作按钮 · 尺寸与变体"
+
+msgid "Active"
+msgstr "运行中"
+
+msgid "Add Telnet"
+msgstr "添加 Telnet"
+
+msgid "Add a host in Hosts to connect with SFTP."
+msgstr "请在“主机”中添加主机以连接 SFTP。"
+
+msgid "Address"
+msgstr "地址"
+
+msgid "Address copied to clipboard"
+msgstr "地址已复制到剪贴板"
+
+msgid "All"
+msgstr "全部"
+
+msgid "All hosts"
+msgstr "全部主机"
+
+msgid "An isolated --data-dir is required when writing smoke test data"
+msgstr "写入自检资料时必须指定独立 --data-dir"
+
+msgid "Appearance"
+msgstr "外观"
+
+msgid "Applied to every terminal session"
+msgstr "应用于所有终端会话"
+
+msgid "Ask before replacing a remote file"
+msgstr "替换远程文件前询问"
+
+msgid "At most {MAX_RULES} forwarding rules are allowed"
+msgstr "转发规则最多 {MAX_RULES} 条"
+
+msgid "At most {MAX_TAGS} tags are allowed"
+msgstr "标签不能超过 {MAX_TAGS} 个"
+
+msgid "Audible bell is not used"
+msgstr "不播放提示音"
+
+msgid "Auth"
+msgstr "认证"
+
+msgid "Authentication cancelled"
+msgstr "认证已取消"
+
+msgid "Back up"
+msgstr "备份"
+
+msgid "Back up hosts, keys and settings to a recovery code, offline."
+msgstr "离线将主机、密钥与设置备份为恢复码。"
+
+msgid "Back up hosts, keys and settings to an encrypted file."
+msgstr "将主机、密钥与设置备份到加密文件。"
+
+msgid "Backup & Restore"
+msgstr "备份与恢复"
+
+msgid "Bell"
+msgstr "响铃"
+
+msgid "Bind address"
+msgstr "绑定地址"
+
+msgid "Bind address must be an IPv4 or IPv6 address"
+msgstr "绑定地址必须是 IPv4 或 IPv6 地址"
+
+msgid "Bind port must be between 1 and 65535"
+msgstr "绑定端口必须在 1–65535 之间"
+
+msgid "Body 14 / 400 · All controls support Chinese"
+msgstr "正文 14 / 400 · 所有控件支持中文"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Cancellation request was not sent; try again"
+msgstr "取消请求未发送，请重试"
+
+msgid "Cancelled"
+msgstr "已取消"
+
+msgid "Cancelling…"
+msgstr "正在取消…"
+
+msgid "Cannot access clipboard"
+msgstr "无法访问剪贴板"
+
+msgid "Cannot create a local pseudo-terminal"
+msgstr "无法创建本地伪终端"
+
+msgid "Cannot create a local pseudo-terminal; check that Windows supports ConPTY"
+msgstr "无法创建本地伪终端，请确认 Windows 版本支持 ConPTY"
+
+msgid "Cannot decrypt credentials; connect to this host and save them again"
+msgstr "无法解密凭据，请先连接此主机并重新保存凭据"
+
+msgid "Cannot decrypt private key"
+msgstr "无法解密私钥"
+
+msgid "Cannot decrypt private key passphrase"
+msgstr "无法解密私钥口令"
+
+msgid "Cannot delete: host {} is using this key"
+msgstr "无法删除：主机 {} 正在使用该密钥"
+
+msgid "Cannot export private key"
+msgstr "无法导出私钥"
+
+msgid "Cannot export public key"
+msgstr "无法导出公钥"
+
+msgid "Cannot export to the current configuration file"
+msgstr "不能导出到当前配置文件"
+
+msgid "Cannot generate secure random bytes"
+msgstr "无法生成安全随机数"
+
+msgid "Cannot initialize window or rendering context"
+msgstr "无法初始化窗口或渲染上下文"
+
+msgid "Cannot listen on the bind address and port"
+msgstr "无法监听绑定地址和端口"
+
+msgid "Cannot open SSH forwarding channel: {error:?}"
+msgstr "无法打开 SSH 转发通道：{error:?}"
+
+msgid "Cannot open configuration folder: {error}"
+msgstr "无法打开配置目录：{error}"
+
+msgid "Cannot open macOS Keychain"
+msgstr "无法打开 macOS 钥匙串"
+
+msgid "Cannot read Keychain master key"
+msgstr "无法读取钥匙串主密钥"
+
+msgid "Cannot read directory entry"
+msgstr "无法读取目录项"
+
+msgid "Cannot read import file"
+msgstr "无法读取导入文件"
+
+msgid "Cannot read local folder"
+msgstr "读取本地文件夹失败"
+
+msgid "Cannot read local master key"
+msgstr "无法读取本地主密钥"
+
+msgid "Cannot read or write connection history: {error}"
+msgstr "无法读写连接历史：{error}"
+
+msgid "Cannot read private key"
+msgstr "读取私钥失败"
+
+msgid "Cannot read private key file; no incomplete backup was generated"
+msgstr "无法读取私钥文件，未生成不完整备份"
+
+msgid "Cannot read saved credentials; enter them again: {e}"
+msgstr "无法读取已保存的凭据，请重新输入：{e}"
+
+msgid "Cannot read session directory"
+msgstr "无法读取会话目录"
+
+msgid "Cannot read session file"
+msgstr "无法读取会话文件"
+
+msgid "Cannot read session file metadata"
+msgstr "无法读取会话文件信息"
+
+msgid "Cannot record first frame timing: {error}"
+msgstr "无法记录首帧计时：{error}"
+
+msgid "Cannot save Keychain master key"
+msgstr "无法保存钥匙串主密钥"
+
+msgid "Cannot save local master key"
+msgstr "无法保存本地主密钥"
+
+msgid "Cannot save sort settings: {error}"
+msgstr "无法保存排序设置：{error}"
+
+msgid "Cannot save view settings: {error}"
+msgstr "无法保存视图设置：{error}"
+
+msgid "Cannot save; destination may already exist or may not be writable"
+msgstr "保存失败，目标可能已存在或不可写"
+
+msgid "Cannot start local PowerShell"
+msgstr "无法启动本地 PowerShell"
+
+msgid "Cannot start local shell"
+msgstr "无法启动本地 Shell"
+
+msgid "Cannot start local terminal manager thread"
+msgstr "无法启动本地终端管理线程"
+
+msgid "Cannot start software renderer fallback process"
+msgstr "无法启动软件渲染回退进程"
+
+msgid "Cannot start terminal input thread"
+msgstr "无法启动终端输入线程"
+
+msgid "Cannot start terminal reader thread"
+msgstr "无法启动终端读取线程"
+
+msgid "Cannot write restored private key"
+msgstr "无法写入恢复的私钥"
+
+msgid "Caption 12 / 400"
+msgstr "说明文字 12 / 400"
+
+msgid "Choose file…"
+msgstr "选择文件…"
+
+msgid "Choose key"
+msgstr "选择密钥"
+
+msgid "Clear connection history?"
+msgstr "清空连接历史？"
+
+msgid "Clear filters"
+msgstr "清除筛选"
+
+msgid "Clear logs"
+msgstr "清空日志"
+
+msgid "Clear search"
+msgstr "清除搜索"
+
+msgid "Clear the tag filter or add the tag to a host."
+msgstr "清除标签筛选，或为主机添加此标签。"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Close an unused session before opening more than 32 tabs"
+msgstr "打开超过 32 个标签前，请先关闭闲置会话"
+
+msgid "Close an unused terminal before opening another local session"
+msgstr "打开新的本地会话前，请先关闭闲置终端"
+
+msgid "Closed"
+msgstr "已关闭"
+
+msgid "Comma separated"
+msgstr "逗号分隔"
+
+msgid "Config folder"
+msgstr "配置目录"
+
+msgid "Configuration is not ready; cannot import"
+msgstr "配置尚未就绪，无法导入"
+
+msgid "Configuration is not ready; cannot remove"
+msgstr "配置尚未就绪，无法移除"
+
+msgid "Configuration is unavailable"
+msgstr "配置不可用"
+
+msgid "Configuration lock is unavailable"
+msgstr "配置锁不可用"
+
+msgid "Confirm deletion"
+msgstr "确认删除"
+
+msgid "Confirm multi-line paste"
+msgstr "粘贴多行时确认"
+
+msgid "Confirm overwrite on upload"
+msgstr "上传覆盖时确认"
+
+msgid "Confirm password"
+msgstr "确认密码"
+
+msgid "Confirmed"
+msgstr "已确认"
+
+msgid "Connect"
+msgstr "连接"
+
+msgid "Connect again"
+msgstr "再次连接"
+
+msgid "Connect to a host or open a terminal to see it here."
+msgstr "连接主机或打开终端后，会话将显示在这里。"
+
+msgid "Connect to a remote host first"
+msgstr "请先连接远程主机"
+
+msgid "Connect to host"
+msgstr "连接主机"
+
+msgid "Connect to this host once and trust its fingerprint first"
+msgstr "请先连接此主机一次并信任主机指纹"
+
+msgid "Connect to {}"
+msgstr "连接 {}"
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Connected, but cannot save last connection time: {error}"
+msgstr "已连接，但无法保存最近连接时间：{error}"
+
+msgid "Connecting"
+msgstr "连接中"
+
+msgid "Connection cancelled"
+msgstr "连接已取消"
+
+msgid "Connection closed; transfer cancelled"
+msgstr "连接已关闭，传输已取消"
+
+msgid "Connection failed: {e:#}"
+msgstr "连接失败：{e:#}"
+
+msgid "Connection failed; see the error in the session"
+msgstr "连接失败，请查看会话中的错误提示"
+
+msgid "Connection history file is too large"
+msgstr "连接历史文件过大"
+
+msgid "Connection timed out"
+msgstr "连接超时"
+
+msgid "Connection timeout"
+msgstr "连接超时"
+
+msgid "Continue"
+msgstr "继续"
+
+msgid "Controls"
+msgstr "控件"
+
+msgid "Copied"
+msgstr "已复制"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Copy address"
+msgstr "复制地址"
+
+msgid "Copy clicked"
+msgstr "已点击复制"
+
+msgid "Copy fingerprint"
+msgstr "复制指纹"
+
+msgid "Copy on select"
+msgstr "选中即复制"
+
+msgid "Copy public key"
+msgstr "复制公钥"
+
+msgid "Copy selected terminal text"
+msgstr "复制选中的终端文本"
+
+msgid "Create local, remote or SOCKS5 tunnels through your saved SSH hosts."
+msgstr "通过已保存的 SSH 主机创建本地、远程或 SOCKS5 隧道。"
+
+msgid "Created "
+msgstr "创建于 "
+
+msgid "Created folder {name}"
+msgstr "已新建文件夹 {name}"
+
+msgid "Creation time"
+msgstr "创建时间"
+
+msgid "Credential and host key dialogs were not exercised"
+msgstr "未覆盖凭据和主机密钥弹窗"
+
+msgid "Credential decryption failed"
+msgstr "凭据解密失败"
+
+msgid "Credential decryption failed or data was modified"
+msgstr "凭据解密失败或已被修改"
+
+msgid "Credential directory does not exist"
+msgstr "凭据目录不存在"
+
+msgid "Credential directory is already configured"
+msgstr "凭据目录已设置"
+
+msgid "Credential directory must belong to the current user and must not be writable by others"
+msgstr "凭据目录必须属于当前用户且不可由其他用户写入"
+
+msgid "Credential encryption failed"
+msgstr "凭据加密失败"
+
+msgid "Credentials"
+msgstr "凭据"
+
+msgid "Credentials are corrupted"
+msgstr "凭据已损坏"
+
+msgid "Credentials are encrypted with Windows DPAPI. No account, cloud sync or telemetry. Host JSON exports exclude saved credentials."
+msgstr "凭据使用 Windows DPAPI 加密。无需账号、无云同步和遥测。主机 JSON 导出不包含已保存的凭据。"
+
+msgid "Credentials are not valid UTF-8"
+msgstr "凭据不是有效 UTF-8"
+
+msgid "Credentials are too long"
+msgstr "凭据过长"
+
+msgid "Credentials were stored in plaintext"
+msgstr "凭据被明文保存"
+
+msgid "Cursor blink"
+msgstr "光标闪烁"
+
+msgid "Dark"
+msgstr "深色"
+
+msgid "Data"
+msgstr "数据"
+
+msgid "Date created"
+msgstr "创建时间"
+
+msgid "Default"
+msgstr "默认"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete host?"
+msgstr "删除主机？"
+
+msgid "Delete key"
+msgstr "删除密钥"
+
+msgid "Delete snippet"
+msgstr "删除片段"
+
+msgid "Delete {name}?\n{files} files, {dirs} subfolders, {}. This cannot be undone."
+msgstr "删除 {name}？\n{files} 个文件，{dirs} 个子文件夹，{}。此操作无法撤销。"
+
+msgid "Delete {}?\n{} files, {} subfolders, {}. This cannot be undone."
+msgstr "删除 {}？\n{} 个文件，{} 个子文件夹，{}。此操作无法撤销。"
+
+msgid "Delete “"
+msgstr "删除“"
+
+msgid "Deleted"
+msgstr "已删除"
+
+msgid "Deleted {name}"
+msgstr "已删除 {name}"
+
+msgid "Design foundation"
+msgstr "设计基础"
+
+msgid "Destination connection timed out"
+msgstr "目标连接超时"
+
+msgid "Destination host"
+msgstr "目标主机"
+
+msgid "Destination name already exists"
+msgstr "目标名称已存在"
+
+msgid "Destination port"
+msgstr "目标端口"
+
+msgid "Destination port must be between 1 and 65535"
+msgstr "目标端口必须在 1–65535 之间"
+
+msgid "Details"
+msgstr "详情"
+
+msgid "Development"
+msgstr "开发环境"
+
+msgid "Development database"
+msgstr "开发数据库"
+
+msgid "Disabled"
+msgstr "禁用"
+
+msgid "Disabled value"
+msgstr "禁用值"
+
+msgid "Disconnected"
+msgstr "已断开"
+
+msgid "Done"
+msgstr "完成"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Download save task failed"
+msgstr "下载保存任务失败"
+
+msgid "Downloaded folder {name}, {} files, {bytes} bytes"
+msgstr "已下载文件夹 {name}，{} 个文件，{bytes} 字节"
+
+msgid "Downloaded {name}, {size} bytes"
+msgstr "已下载 {name}，{size} 字节"
+
+msgid "Downloaded {}, {size} bytes"
+msgstr "已下载 {}，{size} 字节"
+
+msgid "Duplicate"
+msgstr "复制主机"
+
+msgid "Duplicate session"
+msgstr "复制会话"
+
+msgid "Duration"
+msgstr "时长"
+
+msgid "Dynamic"
+msgstr "动态"
+
+msgid "Ed25519 key"
+msgstr "Ed25519 密钥"
+
+msgid "Edit"
+msgstr "编辑"
+
+msgid "Edit forwarding rule"
+msgstr "编辑转发规则"
+
+msgid "Edit key"
+msgstr "编辑密钥"
+
+msgid "Edit snippet"
+msgstr "编辑片段"
+
+msgid "Encrypted credentials are missing"
+msgstr "缺少加密凭据"
+
+msgid "Enter IP or Hostname..."
+msgstr "输入 IP 或主机名…"
+
+msgid "Enter a host address"
+msgstr "请输入主机地址"
+
+msgid "Enter a key name"
+msgstr "请输入密钥名称"
+
+msgid "Enter a valid destination host"
+msgstr "请输入有效的目标主机"
+
+msgid "Enter a valid rule name (up to 128 characters)"
+msgstr "请输入有效的规则名称（最多 128 个字符）"
+
+msgid "Enter one or more commands..."
+msgstr "输入一条或多条命令…"
+
+msgid "Enter the passphrase for this encrypted private key."
+msgstr "请输入此加密私钥的口令。"
+
+msgid "Error"
+msgstr "错误"
+
+msgid "Establishing SSH tunnel…"
+msgstr "正在建立 SSH 隧道…"
+
+msgid "Export hosts"
+msgstr "导出主机"
+
+msgid "Export hosts (without credentials)"
+msgstr "导出主机（不含凭据）"
+
+msgid "Export private key"
+msgstr "导出私钥"
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "Failed to copy public key"
+msgstr "复制公钥失败"
+
+msgid "Failed to create host through the UI"
+msgstr "界面创建主机失败"
+
+msgid "Failed to reopen configuration"
+msgstr "重开配置失败"
+
+msgid "Failed to save public key: {error}"
+msgstr "保存公钥失败：{error}"
+
+msgid "Failed to save restored configuration: {error}"
+msgstr "恢复保存失败：{error}"
+
+msgid "Failed to save system-encrypted credentials"
+msgstr "系统加密凭据保存失败"
+
+msgid "Failed to write private key file"
+msgstr "写入私钥文件失败"
+
+msgid "File"
+msgstr "文件"
+
+msgid "File does not contain known_hosts records"
+msgstr "文件不包含 known_hosts 记录"
+
+msgid "File operation completed"
+msgstr "文件操作已完成"
+
+msgid "File task queue is busy"
+msgstr "文件任务队列繁忙"
+
+msgid "File task queue is busy; try again later"
+msgstr "文件任务队列繁忙，请稍后重试"
+
+msgid "Filter by tag"
+msgstr "按标签筛选"
+
+msgid "Filter logs"
+msgstr "筛选日志"
+
+msgid "Fingerprint"
+msgstr "指纹"
+
+msgid "First connection · Verify host key"
+msgstr "首次连接 · 核对主机密钥"
+
+msgid "Flat"
+msgstr "扁平"
+
+msgid "Folder"
+msgstr "文件夹"
+
+msgid "Font size"
+msgstr "字号"
+
+msgid "Forwarding connection failed; connect to this host once and save working credentials"
+msgstr "转发连接失败，请先连接此主机一次并保存可用凭据"
+
+msgid "Forwarding host does not match the saved host"
+msgstr "转发主机与已保存的主机不匹配"
+
+msgid "Forwarding requires interactive authentication; connect to this host once and save working credentials"
+msgstr "转发需要交互认证，请先连接此主机一次并保存可用凭据"
+
+msgid "Forwarding stopped"
+msgstr "转发已停止"
+
+msgid "GPU window initialization failed; falling back to software rendering: {error:#}"
+msgstr "GPU 窗口初始化失败，回退软件渲染：{error:#}"
+
+msgid "Gallery"
+msgstr "组件预览"
+
+msgid "General"
+msgstr "常规"
+
+msgid "Generate"
+msgstr "生成"
+
+msgid "Generate SSH key"
+msgstr "生成 SSH 密钥"
+
+msgid "Generate or import SSH keys and reuse them across hosts. Private keys stay encrypted on this computer."
+msgstr "生成或导入 SSH 密钥并在主机间复用。私钥加密保存在本机。"
+
+msgid "Generating key…"
+msgstr "正在生成密钥…"
+
+msgid "Group"
+msgstr "分组"
+
+msgid "Group name"
+msgstr "分组名称"
+
+msgid "Group name cannot be empty"
+msgstr "分组名称不能为空"
+
+msgid "Group renamed ({count} hosts)"
+msgstr "已重命名分组（{count} 台主机）"
+
+msgid "Groups"
+msgstr "分组"
+
+msgid "Handshake timeout for new sessions"
+msgstr "新会话的握手超时时间"
+
+msgid "Hidden: off"
+msgstr "隐藏文件：不显示"
+
+msgid "Hidden: shown"
+msgstr "隐藏文件：显示"
+
+msgid "History is stored locally. Credentials and terminal output are never recorded."
+msgstr "历史记录保存在本机，不记录凭据和终端输出。"
+
+msgid "History lines for new terminal sessions"
+msgstr "新终端会话的历史行数"
+
+msgid "Host"
+msgstr "主机"
+
+msgid "Host / address"
+msgstr "主机 / 地址"
+
+msgid "Host Details"
+msgstr "主机详情"
+
+msgid "Host address is required"
+msgstr "请输入主机地址"
+
+msgid "Host configuration exported (without credentials)"
+msgstr "已导出主机配置（不含凭据）"
+
+msgid "Host deleted"
+msgstr "主机已删除"
+
+msgid "Host duplicated"
+msgstr "主机已复制"
+
+msgid "Host fingerprint for {host}:{port} no longer exists"
+msgstr "{host}:{port} 的主机指纹已不存在"
+
+msgid "Host fingerprint was not displayed"
+msgstr "未显示主机指纹"
+
+msgid "Host is missing from UI"
+msgstr "界面主机丢失"
+
+msgid "Host key confirmation timed out"
+msgstr "主机密钥确认超时"
+
+msgid "Host list is missing"
+msgstr "缺少主机列表"
+
+msgid "Host list was not updated"
+msgstr "主机列表未更新"
+
+msgid "Host not found"
+msgstr "主机不存在"
+
+msgid "Host saved"
+msgstr "主机已保存"
+
+msgid "Host search failed"
+msgstr "主机搜索失败"
+
+msgid "Hosts"
+msgstr "主机"
+
+msgid "Hosts you trust on first connect appear here."
+msgstr "首次连接时信任的主机会显示在这里。"
+
+msgid "Hover, focus and click to inspect states"
+msgstr "悬停、聚焦及点击以查看状态"
+
+msgid "IP or Hostname"
+msgstr "IP 或主机名"
+
+msgid "Idle"
+msgstr "空闲"
+
+msgid "Import"
+msgstr "导入"
+
+msgid "Import OpenSSH known_hosts"
+msgstr "导入 OpenSSH known_hosts"
+
+msgid "Import SSH private key"
+msgstr "导入 SSH 私钥"
+
+msgid "Import failed: {error:#}"
+msgstr "导入失败：{error:#}"
+
+msgid "Import file must not exceed 16 MB"
+msgstr "导入文件不能超过 16 MB"
+
+msgid "Import file must not exceed 5 MB"
+msgstr "导入文件不能超过 5 MB"
+
+msgid "Import from Xshell"
+msgstr "从 Xshell 导入"
+
+msgid "Import from Xshell — Select Sessions folder"
+msgstr "从 Xshell 导入 — 选择 Sessions 文件夹"
+
+msgid "Import hosts"
+msgstr "导入主机"
+
+msgid "Import key"
+msgstr "导入密钥"
+
+msgid "Import sessions from {}?\nChoose No to select another folder."
+msgstr "从 {} 导入会话？\n选择“否”以选择其他文件夹。"
+
+msgid "Imported key"
+msgstr "导入的密钥"
+
+msgid "Imported {n} hosts"
+msgstr "已导入 {n} 台主机"
+
+msgid "Imported {} host fingerprints"
+msgstr "已导入 {} 条主机指纹"
+
+msgid "Imported {} hosts, {} duplicates, {} skipped; passwords were excluded. Enter credentials on first connect"
+msgstr "已导入 {} 台主机，重复 {} 台，跳过 {} 项；密码未导入，首次连接时需输入凭据"
+
+msgid "Include dotfiles and Windows hidden files"
+msgstr "包含点文件与 Windows 隐藏文件"
+
+msgid "Include keys"
+msgstr "包含密钥"
+
+msgid "Include saved passwords"
+msgstr "包含已保存密码"
+
+msgid "Include saved passwords and private keys"
+msgstr "包含已保存的密码与私钥"
+
+msgid "Inputs · enabled / disabled / error"
+msgstr "输入框 · 启用 / 禁用 / 错误"
+
+msgid "Interactive authentication confirmation timed out"
+msgstr "交互认证确认超时"
+
+msgid "Interactive authentication timed out"
+msgstr "交互认证超时"
+
+msgid "Invalid IPv6 address"
+msgstr "IPv6 地址格式无效"
+
+msgid "Invalid SOCKS5 destination port"
+msgstr "SOCKS5 目标端口无效"
+
+msgid "Invalid SOCKS5 domain name"
+msgstr "SOCKS5 域名无效"
+
+msgid "Invalid SOCKS5 request"
+msgstr "SOCKS5 请求格式无效"
+
+msgid "Invalid SSH command"
+msgstr "无效的 SSH 命令"
+
+msgid "Invalid SSH port"
+msgstr "无效的 SSH 端口"
+
+msgid "Invalid UTF-16 session encoding"
+msgstr "UTF-16 会话编码无效"
+
+msgid "Invalid address"
+msgstr "地址无效"
+
+msgid "Invalid authentication method"
+msgstr "认证方式无效"
+
+msgid "Invalid configuration directory"
+msgstr "配置目录无效"
+
+msgid "Invalid connection timestamp"
+msgstr "连接时间格式无效"
+
+msgid "Invalid credential encoding"
+msgstr "凭据编码无效"
+
+msgid "Invalid credential key"
+msgstr "凭据密钥无效"
+
+msgid "Invalid data directory"
+msgstr "无效的数据目录"
+
+msgid "Invalid file name"
+msgstr "文件名无效"
+
+msgid "Invalid fingerprint format"
+msgstr "指纹格式无效"
+
+msgid "Invalid forwarding type"
+msgstr "转发类型无效"
+
+msgid "Invalid group name"
+msgstr "分组名称无效"
+
+msgid "Invalid host address"
+msgstr "主机地址无效"
+
+msgid "Invalid host fingerprint"
+msgstr "主机指纹无效"
+
+msgid "Invalid key name"
+msgstr "密钥名称无效"
+
+msgid "Invalid key type"
+msgstr "密钥类型无效"
+
+msgid "Invalid local configuration list"
+msgstr "本机配置列表无效"
+
+msgid "Invalid local file name"
+msgstr "本地文件名无效"
+
+msgid "Invalid local file path"
+msgstr "本地文件路径无效"
+
+msgid "Invalid local fingerprint list"
+msgstr "本机指纹列表无效"
+
+msgid "Invalid local folder name"
+msgstr "本地文件夹名无效"
+
+msgid "Invalid or missing private key passphrase"
+msgstr "私钥口令无效或缺失"
+
+msgid "Invalid port; cannot remove this fingerprint"
+msgstr "端口无效，无法移除该指纹"
+
+msgid "Invalid private key file encoding"
+msgstr "私钥文件编码无效"
+
+msgid "Invalid private key or passphrase"
+msgstr "私钥或口令无效"
+
+msgid "Invalid private key passphrase"
+msgstr "私钥口令无效"
+
+msgid "Invalid private key path"
+msgstr "私钥路径无效"
+
+msgid "Invalid public key format"
+msgstr "公钥格式无效"
+
+msgid "Invalid recovery code credential location"
+msgstr "恢复码凭据位置无效"
+
+msgid "Invalid recovery code empty credential marker"
+msgstr "恢复码空凭据标记无效"
+
+msgid "Invalid recovery code encoding"
+msgstr "恢复码编码无效"
+
+msgid "Invalid recovery code prefix or version"
+msgstr "恢复码前缀或版本无效"
+
+msgid "Invalid recovery data ID"
+msgstr "恢复数据 ID 无效"
+
+msgid "Invalid recovery data format"
+msgstr "恢复数据格式无效"
+
+msgid "Invalid recovery data list"
+msgstr "恢复数据列表无效"
+
+msgid "Invalid recovery fingerprint list"
+msgstr "恢复指纹列表无效"
+
+msgid "Invalid remote file name"
+msgstr "远程文件名无效"
+
+msgid "Invalid remote folder name"
+msgstr "远程文件夹名无效"
+
+msgid "Invalid remote path"
+msgstr "远程路径无效"
+
+msgid "Invalid renderer {value:?}; use software, femtovg or skia"
+msgstr "无效的渲染器 {value:?}；请使用 software、femtovg 或 skia"
+
+msgid "Invalid restored configuration"
+msgstr "恢复配置无效"
+
+msgid "Invalid save path"
+msgstr "保存路径无效"
+
+msgid "Invalid session INI field"
+msgstr "会话 INI 字段格式无效"
+
+msgid "Invalid session INI section"
+msgstr "会话 INI 节格式无效"
+
+msgid "Invalid session encoding"
+msgstr "会话编码无效"
+
+msgid "Invalid session port"
+msgstr "会话端口无效"
+
+msgid "Invalid {label}"
+msgstr "{label}无效"
+
+msgid "Keep this code safe. It can contain saved passwords and private keys. Without a password, anyone with the code can restore them."
+msgstr "请妥善保存恢复码，其中可能包含密码和私钥。未设置密码时，持有码的任何人均可恢复这些数据。"
+
+msgid "Keepalive interval"
+msgstr "保活间隔"
+
+msgid "Key"
+msgstr "密钥"
+
+msgid "Key ID already exists"
+msgstr "密钥 ID 已存在"
+
+msgid "Key deleted"
+msgstr "密钥已删除"
+
+msgid "Key details"
+msgstr "密钥详情"
+
+msgid "Key directory must not be a symbolic link"
+msgstr "密钥目录不能是符号链接"
+
+msgid "Key exchange timed out"
+msgstr "密钥协商超时"
+
+msgid "Key generated"
+msgstr "密钥已生成"
+
+msgid "Key imported"
+msgstr "密钥已导入"
+
+msgid "Key label"
+msgstr "密钥名称"
+
+msgid "Key material is missing"
+msgstr "密钥材料缺失"
+
+msgid "Keychain"
+msgstr "密钥管理"
+
+msgid "Keychain key material is missing"
+msgstr "Keychain 密钥材料缺失"
+
+msgid "Keychain key not found"
+msgstr "Keychain 密钥不存在"
+
+msgid "Keychain master key is corrupted"
+msgstr "钥匙串主密钥已损坏"
+
+msgid "Keys"
+msgstr "密钥"
+
+msgid "Kind"
+msgstr "类型"
+
+msgid "Known Hosts"
+msgstr "已知主机"
+
+msgid "Label"
+msgstr "名称"
+
+msgid "Language"
+msgstr "语言"
+
+msgid "Last connected"
+msgstr "最近连接"
+
+msgid "Last connection time"
+msgstr "最近连接时间"
+
+msgid "Last connection time is missing"
+msgstr "缺少最近连接时间"
+
+msgid "Layouts"
+msgstr "布局"
+
+msgid "Legacy primary / flat / secondary APIs"
+msgstr "旧版主要 / 扁平 / 次要接口"
+
+msgid "License"
+msgstr "许可"
+
+msgid "Light"
+msgstr "浅色"
+
+msgid "Linked directories and files cannot be imported"
+msgstr "不导入链接目录或文件"
+
+msgid "List rows"
+msgstr "列表行"
+
+msgid "Listener accept failed"
+msgstr "监听器接收失败"
+
+msgid "Loading…"
+msgstr "正在加载…"
+
+msgid "Local"
+msgstr "本地"
+
+msgid "Local / "
+msgstr "本地 / "
+
+msgid "Local PowerShell connected"
+msgstr "本地 PowerShell 已连接"
+
+msgid "Local SOCKS5 proxy through your SSH host."
+msgstr "通过 SSH 主机提供本地 SOCKS5 代理。"
+
+msgid "Local Terminal"
+msgstr "本地终端"
+
+msgid "Local configuration file is too large"
+msgstr "本机配置文件过大"
+
+msgid "Local configuration is corrupted; keep the file and restore a backup"
+msgstr "本机配置损坏，请保留文件并从备份恢复"
+
+msgid "Local destination is not a regular folder; links cannot be followed"
+msgstr "本地目标不是常规文件夹，不能通过链接读写"
+
+msgid "Local file already exists; choose a new save location"
+msgstr "本地文件已存在，请选择新的保存位置"
+
+msgid "Local file already exists; choose a new save name"
+msgstr "本地文件已存在，请选择新的保存名称"
+
+msgid "Local file name cannot be used in a remote path"
+msgstr "本地文件名无法用于远程路径"
+
+msgid "Local file reader task failed"
+msgstr "读取本地文件任务失败"
+
+msgid "Local master key must be a 32-byte file owned by the current user with mode 0600"
+msgstr "本地主密钥必须是当前用户拥有的 0600 文件（32 字节）"
+
+msgid "Local port"
+msgstr "本地端口"
+
+msgid "Local port to a destination through your SSH host."
+msgstr "通过 SSH 主机将本地端口转发至目标。"
+
+msgid "Local shell connected"
+msgstr "本地 Shell 已连接"
+
+msgid "Local terminal closed"
+msgstr "本地终端已关闭"
+
+msgid "Local terminal exit failed"
+msgstr "本地终端退出失败"
+
+msgid "Local terminal failed to start"
+msgstr "本地终端启动失败"
+
+msgid "Local terminal input closed"
+msgstr "本地终端输入已关闭"
+
+msgid "Local terminal input queue is full; cannot answer terminal query"
+msgstr "本地终端输入队列已满，无法回复终端查询"
+
+msgid "Local terminal manager thread has exited"
+msgstr "本地终端管理线程已退出"
+
+msgid "Local terminal shutdown timed out"
+msgstr "本地终端关闭超时"
+
+msgid "Local terminals do not support SFTP. Connect to an SSH host to manage files"
+msgstr "本地终端不提供 SFTP，请连接 SSH 主机后使用文件功能"
+
+msgid "Local test server"
+msgstr "本机验证服务器"
+
+msgid "Logs"
+msgstr "连接日志"
+
+msgid "Mapping / Via host"
+msgstr "映射 / 中转主机"
+
+msgid "Medium"
+msgstr "中号"
+
+msgid "Menus & dialogs"
+msgstr "菜单与对话框"
+
+msgid "Merge keeps existing items. Replace overwrites matching IDs and settings. Host fingerprint conflicts keep the local record."
+msgstr "合并会保留已有项目；替换会覆盖相同 ID 的项目和设置。主机指纹冲突时保留本机记录。"
+
+msgid "Merged configuration is too large"
+msgstr "合并后配置过大"
+
+msgid "Missing SSH option value"
+msgstr "缺少 SSH 选项值"
+
+msgid "Modified"
+msgstr "修改时间"
+
+msgid "Monokai"
+msgstr "Monokai"
+
+msgid "More clicked"
+msgstr "已点击更多"
+
+msgid "Move your configuration between machines, offline"
+msgstr "离线在不同设备间迁移配置"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Name cannot be empty"
+msgstr "名称不能为空"
+
+msgid "Name contains invalid characters"
+msgstr "名称包含无效字符"
+
+msgid "Name must not exceed {MAX_NAME_CHARS} characters"
+msgstr "名称不能超过 {MAX_NAME_CHARS} 个字符"
+
+msgid "Name updated"
+msgstr "名称已更新"
+
+msgid "Native UI connection self-test timed out: {}"
+msgstr "原生界面连接自检超时：{}"
+
+msgid "New"
+msgstr "新建"
+
+msgid "New Host"
+msgstr "新建主机"
+
+msgid "New folder"
+msgstr "新建文件夹"
+
+msgid "New forwarding rule"
+msgstr "新建转发规则"
+
+msgid "New host"
+msgstr "新建主机"
+
+msgid "New key"
+msgstr "新建密钥"
+
+msgid "New rule"
+msgstr "新建规则"
+
+msgid "New sessions; 0 disables keepalive"
+msgstr "用于新会话；0 表示禁用保活"
+
+msgid "New snippet"
+msgstr "新建片段"
+
+msgid "No forwarding rules"
+msgstr "暂无转发规则"
+
+msgid "No group"
+msgstr "无分组"
+
+msgid "No host fingerprints imported; skipped {} invalid or unsupported records"
+msgstr "未导入主机指纹，跳过 {} 条无效或不支持的记录"
+
+msgid "No hosts with this tag"
+msgstr "没有使用此标签的主机"
+
+msgid "No hosts yet"
+msgstr "暂无主机"
+
+msgid "No keys in Keychain. Add one in the Keychain section."
+msgstr "尚无密钥，请在“密钥管理”中添加。"
+
+msgid "No keys yet"
+msgstr "暂无密钥"
+
+msgid "No known hosts"
+msgstr "暂无已知主机"
+
+msgid "No local shell is available"
+msgstr "没有可用的本地 Shell"
+
+msgid "No log entries"
+msgstr "暂无日志"
+
+msgid "No matching hosts"
+msgstr "没有匹配的主机"
+
+msgid "No matching keys"
+msgstr "没有匹配的密钥"
+
+msgid "No matching rules"
+msgstr "没有匹配的规则"
+
+msgid "No matching sessions"
+msgstr "没有匹配的会话"
+
+msgid "No matching snippets"
+msgstr "没有匹配的片段"
+
+msgid "No snippets yet"
+msgstr "暂无片段"
+
+msgid "None"
+msgstr "无"
+
+msgid "Not in saved hosts"
+msgstr "不在已保存的主机中"
+
+msgid "OK"
+msgstr "确定"
+
+msgid "Only SSH and SFTP sessions are supported"
+msgstr "仅支持 SSH 和 SFTP 会话"
+
+msgid "Only regular files can be uploaded; links cannot be followed"
+msgstr "只能上传常规文件，不能通过链接读取"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Open SFTP"
+msgstr "打开 SFTP"
+
+msgid "Open a terminal session first"
+msgstr "请先打开终端会话"
+
+msgid "Open dialog"
+msgstr "打开对话框"
+
+msgid "Open menu"
+msgstr "打开菜单"
+
+msgid "OpenTermius"
+msgstr "OpenTermius"
+
+msgid "OpenTermius "
+msgstr "OpenTermius "
+
+msgid "OpenTermius failed to start"
+msgstr "OpenTermius 启动失败"
+
+msgid "OpenTermius failed to start: {error:#}"
+msgstr "OpenTermius 启动失败：{error:#}"
+
+msgid "OpenTermius will ask you to confirm the fingerprint again the next time it connects to this host."
+msgstr "下次连接此主机时，OpenTermius 将再次要求确认指纹。"
+
+msgid "Open…"
+msgstr "打开…"
+
+msgid "Option 5"
+msgstr "选项 5"
+
+msgid "Option 6"
+msgstr "选项 6"
+
+msgid "Option 7"
+msgstr "选项 7"
+
+msgid "Option 8"
+msgstr "选项 8"
+
+msgid "Overwrite remote file"
+msgstr "覆盖远程文件"
+
+msgid "Page bands"
+msgstr "页面分区"
+
+msgid "Page title 18 / 600"
+msgstr "页面标题 18 / 600"
+
+msgid "Palette & typography · follows Theme.dark"
+msgstr "配色与排版 · 跟随深色主题"
+
+msgid "Parent Group"
+msgstr "所属分组"
+
+msgid "Passphrase"
+msgstr "私钥口令"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "Password (if required)"
+msgstr "密码（如需要）"
+
+msgid "Password (optional)"
+msgstr "密码（可选）"
+
+msgid "Password authentication timed out"
+msgstr "密码认证超时"
+
+msgid "Password is not saved; connect to this host once and save the password"
+msgstr "未保存密码，请先连接此主机一次并保存密码"
+
+msgid "Passwords do not match"
+msgstr "密码不一致"
+
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "Paste cancelled"
+msgstr "已取消粘贴"
+
+msgid "Paste multiple lines"
+msgstr "粘贴多行内容"
+
+msgid "Paste your recovery code"
+msgstr "粘贴恢复码"
+
+msgid "Pasted text must not exceed 1 MB"
+msgstr "粘贴内容不能超过 1 MB"
+
+msgid "Permissions"
+msgstr "权限"
+
+msgid "Port"
+msgstr "端口"
+
+msgid "Port Forwarding"
+msgstr "端口转发"
+
+msgid "Port must be between 1 and 65535"
+msgstr "端口必须在 1–65535 之间"
+
+msgid "Press Enter to reconnect"
+msgstr "按回车键重新连接"
+
+msgid "Privacy"
+msgstr "隐私"
+
+msgid "Private key"
+msgstr "私钥"
+
+msgid "Private key authentication timed out"
+msgstr "私钥认证超时"
+
+msgid "Private key decryption task failed"
+msgstr "私钥解密任务失败"
+
+msgid "Private key exported to {}"
+msgstr "私钥已导出到 {}"
+
+msgid "Private key file"
+msgstr "私钥文件"
+
+msgid "Private key file has no associated host"
+msgstr "私钥文件缺少关联主机"
+
+msgid "Private key file is too large"
+msgstr "私钥文件过大"
+
+msgid "Private key is still passphrase-protected"
+msgstr "私钥仍受口令保护"
+
+msgid "Private key must not exceed 1 MB"
+msgstr "私钥不能超过 1 MB"
+
+msgid "Private key passphrase"
+msgstr "私钥口令"
+
+msgid "Private key passphrase (leave empty for an unencrypted key)"
+msgstr "私钥口令（未加密的私钥可留空）"
+
+msgid "Private keys are encrypted with Windows DPAPI in local storage."
+msgstr "私钥通过 Windows DPAPI 加密保存在本机。"
+
+msgid "Production key"
+msgstr "生产密钥"
+
+msgid "Production web"
+msgstr "生产网站"
+
+msgid "Project-authored icons · 24 × 24 / stroke 1.8"
+msgstr "项目原创图标 · 24 × 24 / 描边 1.8"
+
+msgid "Protect your recovery code"
+msgstr "保护恢复码"
+
+msgid "Public key"
+msgstr "公钥"
+
+msgid "Public key copied to clipboard"
+msgstr "公钥已复制到剪贴板"
+
+msgid "Public key saved to {}"
+msgstr "公钥已保存到 {}"
+
+msgid "Queued"
+msgstr "排队中"
+
+msgid "RSA 3072 key"
+msgstr "RSA 3072 密钥"
+
+msgid "RSA 4096 key"
+msgstr "RSA 4096 密钥"
+
+msgid "Reconnect"
+msgstr "重新连接"
+
+msgid "Recovery code"
+msgstr "恢复码"
+
+msgid "Recovery code copied. The clipboard contains sensitive credentials; clear it soon."
+msgstr "已复制恢复码；剪贴板包含敏感凭据，请及时清除。"
+
+msgid "Recovery code generated. Copy it or save it to a safe location."
+msgstr "恢复码已生成，请复制或保存到安全位置。"
+
+msgid "Recovery code is corrupted or the password is incorrect"
+msgstr "恢复码已损坏或口令错误"
+
+msgid "Recovery code is incomplete"
+msgstr "恢复码不完整"
+
+msgid "Recovery code is too long"
+msgstr "恢复码过长"
+
+msgid "Recovery code saved. Keep it safe."
+msgstr "已保存恢复码，请妥善保管。"
+
+msgid "Recovery data compression is invalid or too large"
+msgstr "恢复数据压缩格式无效或过大"
+
+msgid "Recovery data contains duplicate IDs"
+msgstr "恢复数据包含重复 ID"
+
+msgid "Recovery data encryption failed"
+msgstr "恢复数据加密失败"
+
+msgid "Recovery data is missing a list"
+msgstr "恢复数据缺少列表"
+
+msgid "Recovery data is missing an ID"
+msgstr "恢复数据缺少 ID"
+
+msgid "Recovery data is too large"
+msgstr "恢复数据过大"
+
+msgid "Recovery decryption initialization failed"
+msgstr "恢复解密初始化失败"
+
+msgid "Recovery encryption initialization failed"
+msgstr "恢复加密初始化失败"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Remote"
+msgstr "远程"
+
+msgid "Remote / "
+msgstr "远程 / "
+
+msgid "Remote destination is not a regular file"
+msgstr "远程目标不是常规文件"
+
+msgid "Remote destination is not a regular folder"
+msgstr "远程目标不是常规文件夹"
+
+msgid "Remote file name cannot be used in a local path"
+msgstr "远程文件名无法用于本地路径"
+
+msgid "Remote file name contains unsafe characters: {name:?}"
+msgstr "远程文件名包含不安全字符：{name:?}"
+
+msgid "Remote files"
+msgstr "远程文件"
+
+msgid "Remote folder name contains unsafe characters"
+msgstr "远程文件夹名包含不安全字符"
+
+msgid "Remote forwarding request timed out"
+msgstr "远程转发请求超时"
+
+msgid "Remote port"
+msgstr "远程端口"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Remove \""
+msgstr "移除“"
+
+msgid "Remove key"
+msgstr "移除密钥"
+
+msgid "Remove trusted host"
+msgstr "移除信任的主机"
+
+msgid "Remove trusted host?"
+msgstr "移除信任的主机？"
+
+msgid "Removed host fingerprint for {host}:{port}; it will be confirmed on next connection"
+msgstr "已移除 {host}:{port} 的主机指纹，下次连接将重新确认"
+
+msgid "Rename"
+msgstr "重命名"
+
+msgid "Rename group"
+msgstr "重命名分组"
+
+msgid "Rename the group and move its hosts with it."
+msgstr "重命名分组并移动其中的主机。"
+
+msgid "Renamed {from} to {to}"
+msgstr "已将 {from} 重命名为 {to}"
+
+msgid "Repeat password"
+msgstr "再次输入密码"
+
+msgid "Replace data"
+msgstr "替换数据"
+
+msgid "Replace existing data"
+msgstr "替换已有数据"
+
+msgid "Restore"
+msgstr "恢复"
+
+msgid "Restore defaults"
+msgstr "恢复默认设置"
+
+msgid "Restored {} hosts, {} keys, {} snippets, {} forwarding rules, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)"
+msgstr "已恢复 {} 台主机、{} 个密钥、{} 条片段、{} 条转发、{} 个密钥文件、{} 条信任记录；跳过 {} 个已有项目，{} 个指纹冲突（保留本机指纹）"
+
+msgid "Rule"
+msgstr "规则"
+
+msgid "Rule is running"
+msgstr "规则正在运行"
+
+msgid "Rule not found"
+msgstr "规则不存在"
+
+msgid "Run snippet"
+msgstr "运行片段"
+
+msgid "SFTP"
+msgstr "SFTP"
+
+msgid "SFTP channel timed out"
+msgstr "SFTP 通道超时"
+
+msgid "SFTP handshake timed out"
+msgstr "SFTP 握手超时"
+
+msgid "SFTP is not initialized"
+msgstr "SFTP 未初始化"
+
+msgid "SFTP operation failed; the server returned an error or the connection was interrupted"
+msgstr "SFTP 操作失败，服务器返回错误或连接已中断"
+
+msgid "SHA-256 fingerprint"
+msgstr "SHA-256 指纹"
+
+msgid "SOCKS5 client does not support authentication-free access"
+msgstr "SOCKS5 客户端不支持免认证"
+
+msgid "SOCKS5 handshake timed out"
+msgstr "SOCKS5 握手超时"
+
+msgid "SOCKS5 supports CONNECT only"
+msgstr "SOCKS5 仅支持 CONNECT"
+
+msgid "SSH"
+msgstr "SSH"
+
+msgid "SSH authentication"
+msgstr "SSH 身份验证"
+
+msgid "SSH authentication failed"
+msgstr "SSH 身份验证失败"
+
+msgid "SSH authentication failed; check username and credentials"
+msgstr "SSH 认证失败，请检查用户名和凭据"
+
+msgid "SSH connection cancelled"
+msgstr "SSH 连接已取消"
+
+msgid "SSH connection timed out"
+msgstr "SSH 连接超时"
+
+msgid "SSH host"
+msgstr "SSH 主机"
+
+msgid "SSH host key changed; connection refused"
+msgstr "SSH 主机密钥已变化，拒绝连接"
+
+msgid "SSH host key changed; connection refused. Verify the server identity first."
+msgstr "SSH 主机密钥已变化，连接已拒绝。请先核实服务器身份。"
+
+msgid "SSH host key verification failed"
+msgstr "SSH 主机密钥验证失败"
+
+msgid "SSH host key was not trusted"
+msgstr "未信任 SSH 主机密钥"
+
+msgid "SSH host port to a destination through this computer."
+msgstr "通过本机将 SSH 主机端口转发至目标。"
+
+msgid "SSH host was deleted; select another host"
+msgstr "SSH 主机已删除，请重新选择主机"
+
+msgid "SSH on"
+msgstr "SSH 端口"
+
+msgid "SSH password for {}@{}:{}"
+msgstr "{}@{}:{} 的 SSH 密码"
+
+msgid "SSH private key"
+msgstr "SSH 私钥"
+
+msgid "SSH tunnel connection timed out"
+msgstr "SSH 隧道连接超时"
+
+msgid "SSH tunnel disconnected"
+msgstr "SSH 隧道已断开"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save SSH private key"
+msgstr "保存 SSH 私钥"
+
+msgid "Save SSH public key"
+msgstr "保存 SSH 公钥"
+
+msgid "Save an SSH host in Hosts and connect to it once first."
+msgstr "请先在“主机”中保存 SSH 主机并连接一次。"
+
+msgid "Save commands you run often and paste them into any session."
+msgstr "保存常用命令，并粘贴到任意会话。"
+
+msgid "Save credentials to reuse across hosts."
+msgstr "保存凭据以便在多台主机间复用。"
+
+msgid "Save downloaded file"
+msgstr "保存下载文件"
+
+msgid "Save label"
+msgstr "保存名称"
+
+msgid "Save private key..."
+msgstr "保存私钥…"
+
+msgid "Save public key..."
+msgstr "保存公钥…"
+
+msgid "Save recovery code (contains sensitive credentials)"
+msgstr "保存恢复码（包含敏感凭据）"
+
+msgid "Save to file"
+msgstr "保存到文件"
+
+msgid "Save your connection details as hosts to connect in one click."
+msgstr "将连接信息保存为主机，即可一键连接。"
+
+msgid "Saved hosts"
+msgstr "已保存主机"
+
+msgid "Script"
+msgstr "脚本"
+
+msgid "Script cannot be empty"
+msgstr "脚本不能为空"
+
+msgid "Script must not exceed {} KB"
+msgstr "脚本不能超过 {} KB"
+
+msgid "Scrollback"
+msgstr "回滚历史"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Search forwarding rules"
+msgstr "搜索转发规则"
+
+msgid "Search keys"
+msgstr "搜索密钥"
+
+msgid "Search known hosts"
+msgstr "搜索已知主机"
+
+msgid "Search snippets"
+msgstr "搜索片段"
+
+msgid "Secondary"
+msgstr "次要"
+
+msgid "Section header 14 / 600"
+msgstr "分区标题 14 / 600"
+
+msgid "Select SSH private key"
+msgstr "选择 SSH 私钥"
+
+msgid "Select a connected remote host first"
+msgstr "请先选择已连接的远程主机"
+
+msgid "Select a local folder"
+msgstr "请选择本地文件夹"
+
+msgid "Select a private key file or a Keychain key"
+msgstr "请选择私钥文件或 Keychain 密钥"
+
+msgid "Select a remote host first"
+msgstr "请先选择远程主机"
+
+msgid "Select a saved SSH host"
+msgstr "请选择已保存的 SSH 主机"
+
+msgid "Select a saved host to manage files with SFTP."
+msgstr "选择已保存的主机，通过 SFTP 管理文件。"
+
+msgid "Select host"
+msgstr "选择主机"
+
+msgid "Selected Keychain key does not exist"
+msgstr "所选 Keychain 密钥不存在"
+
+msgid "Selected option"
+msgstr "已选选项"
+
+msgid "Selection & status"
+msgstr "选择与状态"
+
+msgid "Serial"
+msgstr "串口"
+
+msgid "Server authentication {}/{}"
+msgstr "服务器身份验证 {}/{}"
+
+msgid "Server rejected remote forwarding"
+msgstr "服务器拒绝远程转发"
+
+msgid "Server rejected terminal request"
+msgstr "服务器拒绝终端请求"
+
+msgid "Server terminal queries are too frequent"
+msgstr "服务器终端查询过于频繁"
+
+msgid "Session address cannot be empty"
+msgstr "会话地址不能为空"
+
+msgid "Session directory is invalid or is a link"
+msgstr "会话目录无效或为链接"
+
+msgid "Session directory nesting is too deep"
+msgstr "会话目录过深"
+
+msgid "Session file is too large"
+msgstr "会话文件过大"
+
+msgid "Session is temporarily unavailable: {e}"
+msgstr "会话暂不可用：{e}"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Settings saved"
+msgstr "设置已保存"
+
+msgid "Show hidden files"
+msgstr "显示隐藏文件"
+
+msgid "Single line row"
+msgstr "单行条目"
+
+msgid "Size"
+msgstr "大小"
+
+msgid "Small"
+msgstr "小号"
+
+msgid "Smoother rendering (GPU)"
+msgstr "更流畅的渲染（GPU）"
+
+msgid "Snippet deleted"
+msgstr "已删除片段"
+
+msgid "Snippet not found"
+msgstr "片段不存在"
+
+msgid "Snippet saved"
+msgstr "已保存片段"
+
+msgid "Snippets"
+msgstr "代码片段"
+
+msgid "Solarized Dark"
+msgstr "Solarized 深色"
+
+msgid "Staging"
+msgstr "预发布"
+
+msgid "Start automatically at launch"
+msgstr "启动时自动运行"
+
+msgid "Started"
+msgstr "开始时间"
+
+msgid "Starting"
+msgstr "正在启动"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Status / Actions"
+msgstr "状态 / 操作"
+
+msgid "Stop the rule before deleting it"
+msgstr "请先停止规则再删除"
+
+msgid "Stop the rule before editing it"
+msgstr "请先停止规则再编辑"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Successful connection was not recorded in history"
+msgstr "成功连接未写入连接历史"
+
+msgid "System"
+msgstr "跟随系统"
+
+msgid "System credentials did not decrypt correctly"
+msgstr "系统凭据未正确解密"
+
+msgid "System random number generator is unavailable"
+msgstr "系统随机数不可用"
+
+msgid "Tab was not removed after closing session"
+msgstr "关闭会话后标签未清理"
+
+msgid "Tags"
+msgstr "标签"
+
+msgid "Tags (comma separated)"
+msgstr "标签（逗号分隔）"
+
+msgid "Tags contain invalid characters"
+msgstr "标签包含无效字符"
+
+msgid "Terminal"
+msgstr "终端"
+
+msgid "Terminal channel timed out"
+msgstr "终端通道超时"
+
+msgid "Terminal color scheme"
+msgstr "终端配色"
+
+msgid "Terminal font ({}), 10–24 px"
+msgstr "终端字体（{}），10–24 像素"
+
+msgid "Terminal input channel closed"
+msgstr "终端输入通道已关闭"
+
+msgid "Terminal input is missing"
+msgstr "缺少终端输入"
+
+msgid "Terminal request timed out"
+msgstr "终端请求超时"
+
+msgid "Terminal state is unavailable"
+msgstr "终端状态不可用"
+
+msgid "The clipboard contains {lines} lines. Paste them into the terminal?"
+msgstr "剪贴板包含 {lines} 行内容，是否粘贴到终端？"
+
+msgid "The exported file is not protected by Windows DPAPI. Save it only in a trusted location and keep it secure."
+msgstr "导出的文件不受 Windows DPAPI 保护。请仅保存到可信位置并妥善保管。"
+
+msgid "Theme"
+msgstr "主题"
+
+msgid "This SSH private key type is not supported yet"
+msgstr "暂不支持该类型的 SSH 私钥"
+
+msgid "This build does not include the {} renderer; falling back to software rendering"
+msgstr "当前构建未包含 {} 渲染器，回退软件渲染"
+
+msgid "This cannot be undone. Keep a backup of your current configuration before restoring."
+msgstr "此操作无法撤销。恢复前请备份当前配置。"
+
+msgid "This key already exists"
+msgstr "该密钥已存在"
+
+msgid "This private key is passphrase-protected; enter its passphrase"
+msgstr "该私钥受口令保护，请输入口令"
+
+msgid "This recovery code requires a password; enter it and try again"
+msgstr "此恢复码需要口令，请填写后重试"
+
+msgid "This removes every connection log stored on this computer. It cannot be undone."
+msgstr "这将删除本机保存的所有连接日志。此操作无法撤销。"
+
+msgid "Tokens & icons"
+msgstr "设计变量与图标"
+
+msgid "Too many directory entries; narrow the browsing scope"
+msgstr "目录项目过多，请缩小浏览范围"
+
+msgid "Too many directory entries; narrow the deletion scope"
+msgstr "目录项目过多，请缩小删除范围"
+
+msgid "Too many directory entries; narrow the download scope"
+msgstr "目录项目过多，请缩小下载范围"
+
+msgid "Too many directory entries; narrow the operation scope"
+msgstr "目录项目过多，请缩小操作范围"
+
+msgid "Too many directory entries; narrow the upload scope"
+msgstr "目录项目过多，请缩小上传范围"
+
+msgid "Too many forwarding rules are running"
+msgstr "同时运行的转发规则过多"
+
+msgid "Too many hosts"
+msgstr "主机数量过多"
+
+msgid "Too many interactive authentication rounds"
+msgstr "交互认证轮次过多"
+
+msgid "Too many keys"
+msgstr "密钥数量过多"
+
+msgid "Too many recovery data items"
+msgstr "恢复数据项目过多"
+
+msgid "Too many session directory entries"
+msgstr "会话目录项目过多"
+
+msgid "Total private key file size is too large"
+msgstr "私钥文件总量过大"
+
+msgid "Transfer cancelled"
+msgstr "传输已取消"
+
+msgid "Transfer queue is busy"
+msgstr "传输队列繁忙"
+
+msgid "Transfer queue is full (up to 8 tasks). Wait or cancel a task"
+msgstr "传输队列已满（最多 8 项），请等待或取消任务"
+
+msgid "Transfers"
+msgstr "传输"
+
+msgid "Trust and connect"
+msgstr "信任并连接"
+
+msgid "Try a different host, address or status."
+msgstr "请尝试其他主机、地址或状态。"
+
+msgid "Try another host name or fingerprint."
+msgstr "请尝试其他主机名或指纹。"
+
+msgid "Try another label or address."
+msgstr "请尝试其他名称或地址。"
+
+msgid "Try another label, address, or group."
+msgstr "请尝试其他名称、地址或分组。"
+
+msgid "Try another label, key type or fingerprint."
+msgstr "请尝试其他名称、密钥类型或指纹。"
+
+msgid "Try another name, command, or tag."
+msgstr "请尝试其他名称、命令或标签。"
+
+msgid "Try another search or forwarding type."
+msgstr "请尝试其他搜索词或转发类型。"
+
+msgid "Tunnel started"
+msgstr "隧道已启动"
+
+msgid "Type"
+msgstr "类型"
+
+msgid "Type \"ssh user@hostname -p port\" to connect..."
+msgstr "输入 \"ssh user@hostname -p port\" 以连接…"
+
+msgid "UI state is unavailable"
+msgstr "界面状态不可用"
+
+msgid "Unavailable"
+msgstr "不可用"
+
+msgid "Unknown session status"
+msgstr "未知的会话状态"
+
+msgid "Unknown session type"
+msgstr "未知的会话类型"
+
+msgid "Unsupported SOCKS version"
+msgstr "不支持的 SOCKS 版本"
+
+msgid "Unsupported SOCKS5 address type"
+msgstr "SOCKS5 地址类型不支持"
+
+msgid "Unsupported authentication method (such as GSSAPI)"
+msgstr "不支持此认证方式（如 GSSAPI）"
+
+msgid "Unsupported configuration version"
+msgstr "配置版本不受支持"
+
+msgid "Unsupported credential encryption format"
+msgstr "凭据加密格式不受支持"
+
+msgid "Unsupported credential encryption format (Windows DPAPI credentials cannot be decrypted on another platform)"
+msgstr "凭据加密格式不受支持（Windows DPAPI 凭据不能跨平台解密）"
+
+msgid "Unsupported file operation"
+msgstr "不支持的文件操作"
+
+msgid "Unsupported local configuration version"
+msgstr "本机配置版本不受支持"
+
+msgid "Unsupported recovery code format"
+msgstr "恢复码格式不受支持"
+
+msgid "Unsupported recovery code version"
+msgstr "恢复码版本不受支持"
+
+msgid "Upload"
+msgstr "上传"
+
+msgid "Upload file"
+msgstr "上传文件"
+
+msgid "Upload folder"
+msgstr "上传文件夹"
+
+msgid "Uploaded folder {name}, {} files, {bytes} bytes"
+msgstr "已上传文件夹 {name}，{} 个文件，{bytes} 字节"
+
+msgid "Uploaded {name}, {size} bytes"
+msgstr "已上传 {name}，{size} 字节"
+
+msgid "Use a key file instead"
+msgstr "改用密钥文件"
+
+msgid "Use ssh user@hostname -p port; remote commands are not supported here"
+msgstr "请使用 ssh user@hostname -p port；此处不支持远程命令"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Uses more memory. Takes effect after restart."
+msgstr "占用更多内存。重启后生效。"
+
+msgid "Version "
+msgstr "版本 "
+
+msgid "Via"
+msgstr "中转"
+
+msgid "Visual"
+msgstr "视觉提示"
+
+msgid "Waiting for authentication"
+msgstr "等待认证"
+
+msgid "Warn"
+msgstr "警告"
+
+msgid "Warning"
+msgstr "警告"
+
+msgid "When unchecked, credentials and private key files are excluded."
+msgstr "取消勾选后，不包含凭据与私钥文件。"
+
+msgid "Window closed"
+msgstr "界面已关闭"
+
+msgid "Windows system encryption failed: {}"
+msgstr "Windows 系统加密操作失败：{}"
+
+msgid "Working"
+msgstr "处理中"
+
+msgid "Working, please wait…"
+msgstr "正在处理，请稍候…"
+
+msgid "Your recovery code will appear here"
+msgstr "恢复码将显示在这里"
+
+msgid "\"? This cannot be undone."
+msgstr "”？此操作无法撤销。"
+
+msgid "authentication"
+msgstr "认证"
+
+msgid "base"
+msgstr "基础"
+
+msgid "cancel"
+msgstr "取消"
+
+msgid "e.g. Deploy staging"
+msgstr "例如：部署预发布环境"
+
+msgid "high"
+msgstr "高层"
+
+msgid "host key"
+msgstr "主机密钥"
+
+msgid "lowest"
+msgstr "底层"
+
+msgid "passphrase"
+msgstr "口令"
+
+msgid "port"
+msgstr "端口"
+
+msgid "private key"
+msgstr "私钥"
+
+msgid "timed out"
+msgstr "超时"
+
+msgid "{days}d {rest}h"
+msgstr "{days}天 {rest}时"
+
+msgid "{host}:{port}\n\n{fingerprint}\n\nVerify this fingerprint through a trusted channel before trusting it."
+msgstr "{host}:{port}\n\n{fingerprint}\n\n请通过可信渠道核对指纹后再信任。"
+
+msgid "{hours}h {rest}m"
+msgstr "{hours}时 {rest}分"
+
+msgid "{minutes}m {rest}s"
+msgstr "{minutes}分 {rest}秒"
+
+msgid "{seconds}s"
+msgstr "{seconds}秒"
+
+msgid "”? This cannot be undone. Hosts using this key must be changed first."
+msgstr "”？此操作无法撤销。请先修改使用此密钥的主机。"
+
+msgid "English"
+msgstr "English"
+
+msgid "简体中文"
+msgstr "简体中文"
+
+msgid "#"
+msgstr "#"
+
+msgid "×"
+msgstr "×"
+
+msgid "ssh"
+msgstr "ssh"
+
+msgid "Backspace"
+msgstr "退格"
+
+msgid "22"
+msgstr "22"
+
+msgid "✓"
+msgstr "✓"
+
+msgid "127.0.0.1"
+msgstr "127.0.0.1"
+
+msgid "8080"
+msgstr "8080"
+
+msgid "5432"
+msgstr "5432"
+
+msgid "70000"
+msgstr "70000"
+
+msgid "accent"
+msgstr "强调色"
+
+msgid "danger"
+msgstr "危险色"
+
+msgid "−"
+msgstr "−"
+
+msgid "+"
+msgstr "+"
+
+msgid "10 px"
+msgstr "10 像素"
+
+msgid "11 px"
+msgstr "11 像素"
+
+msgid "12 px"
+msgstr "12 像素"
+
+msgid "13 px"
+msgstr "13 像素"
+
+msgid "14 px"
+msgstr "14 像素"
+
+msgid "15 px"
+msgstr "15 像素"
+
+msgid "16 px"
+msgstr "16 像素"
+
+msgid "17 px"
+msgstr "17 像素"
+
+msgid "18 px"
+msgstr "18 像素"
+
+msgid "19 px"
+msgstr "19 像素"
+
+msgid "20 px"
+msgstr "20 像素"
+
+msgid "21 px"
+msgstr "21 像素"
+
+msgid "22 px"
+msgstr "22 像素"
+
+msgid "23 px"
+msgstr "23 像素"
+
+msgid "24 px"
+msgstr "24 像素"
+
+msgid "uptime && df -h\nkubectl get pods -A"
+msgstr "uptime && df -h\nkubectl get pods -A"
+
+msgid "deploy"
+msgstr "deploy"
+
+msgid "Escape"
+msgstr "Escape"
+
+msgid "12"
+msgstr "12"
+
+msgid "14"
+msgstr "14"
+
+msgid "16"
+msgstr "16"
+
+msgid "Ed25519"
+msgstr "Ed25519"
+
+msgid "RSA 3072"
+msgstr "RSA 3072"
+
+msgid "RSA 4096"
+msgstr "RSA 4096"
