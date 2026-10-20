@@ -46,8 +46,8 @@ jobs:
         with:
           workspaces: "native -> target"
 
-      - name: Test
-        run: cargo test --locked
+      - name: Test workspace (consolidated integration suite)
+        run: cargo test --workspace --locked
 
       - name: Build release
         run: cargo build --release --locked

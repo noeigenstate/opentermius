@@ -61,7 +61,7 @@ cargo build --release --locked
 cargo build --locked
 cargo test --locked
 $env:OPENTERMIUS_TEST_EXECUTABLE = (Resolve-Path target/release/opentermius.exe).Path
-cargo test --test transport native_gui_live_selftest -- --ignored --nocapture
+cargo test --locked --test all transport::native_gui_live_selftest -- --ignored --nocapture
 
 # 每次使用独立数据目录与输出目录；再用 SLINT_SCALE_FACTOR=1.5 重复。
 $env:SLINT_SCALE_FACTOR = '1'

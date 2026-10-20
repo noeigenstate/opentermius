@@ -44,6 +44,8 @@ cargo build --release --locked
 
 请在 `native/` 内执行 Cargo，以加载该目录配置。默认使用宿主目标；Windows x64 MSVC 继续使用静态 CRT。默认产物位于 `target/debug` / `target/release`（Windows 带 `.exe`）；显式 `--target` 构建则位于 `target/<triple>/...`，`CARGO_TARGET_DIR` 可覆盖根目录。
 
+工作区将 Slint 生成代码单独放在 `opentermius-ui` 中，`.slint` 源文件仍在 `native/ui/`。集成测试统一从 `native/tests/all/main.rs` 加载；新增测试文件后须在该入口声明模块。筛选测试使用 `cargo test --locked --test all transport::` 等模块前缀。测速方法及开发编译选项见 [编译速度记录](docs/build-speed.md)。
+
 Linux 需安装 X11/Wayland、fontconfig、xkbcommon 和等宽字体；文件对话框需要 XDG desktop portal 及桌面环境对应的 portal backend。终端字体为 Windows Consolas、macOS Menlo、Linux DejaVu Sans Mono，度量与渲染共享同一字体。
 
 macOS 将随机 256 位主密钥保存为默认 Keychain 的 generic password，钥匙串锁定或拒绝访问时保存凭据会失败。Linux 为避免引入额外 Secret Service 依赖，使用配置目录下当前用户拥有、权限为 `0600` 的 `master-key-v1` 文件；配置目录不可由其他用户写入。**Linux 主密钥文件未由系统钥匙串加密**，无法防御已能读取当前用户文件的攻击者。备份配置时应安全备份该文件；丢失主密钥后无法恢复已保存的密码。非 Windows 凭据带 `v1:` 前缀，不支持直接解密其他机器/平台的已有凭据；Windows 原始 DPAPI 格式保持兼容。`--data-dir` 同时隔离便携加密主密钥。
@@ -74,7 +76,7 @@ winget install -e --id NSIS.NSIS --accept-source-agreements --accept-package-agr
 cd native
 $env:OPENTERMIUS_TEST_EXECUTABLE = (Resolve-Path target/release/opentermius.exe).Path
 $env:OPENTERMIUS_SMOKE_OUTPUT = Join-Path (Get-Location) 'test-output/release-live'
-cargo test --test transport native_gui_live_selftest -- --ignored --nocapture
+cargo test --locked --test all transport::native_gui_live_selftest -- --ignored --nocapture
 ```
 
 ## 自动构建

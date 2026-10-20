@@ -32,9 +32,9 @@ Windows 下共新增 **75 个测试**：67 个集成测试和 8 个模块内测�
 
 | 文件 | 数量 | 覆盖内容 |
 | --- | ---: | --- |
-| `native/tests/store_core.rs` | 33 | 字段、端口、认证、Unicode、缺失/损坏/超限配置、原子写入与失败回滚、增删改、信任指纹变化、导入导出、重复条目和 ID、DPAPI |
-| `native/tests/terminal_core.rs` | 21 | CJK、emoji、组合字符、16/256/真彩色、样式、光标、备用屏幕、滚动、缩放、DA/DSR/CPR、输入模式、长行、分块/非法 UTF-8、选择文本 |
-| `native/tests/quick_connect.rs` | 13 | `user@host`、`ssh`、`-p/-l/-i`、IPv6、地址端口、引号、Windows 路径、Unicode、长地址、错误参数和注入样式输入 |
+| `native/tests/all/store_core.rs` | 33 | 字段、端口、认证、Unicode、缺失/损坏/超限配置、原子写入与失败回滚、增删改、信任指纹变化、导入导出、重复条目和 ID、DPAPI |
+| `native/tests/all/terminal_core.rs` | 21 | CJK、emoji、组合字符、16/256/真彩色、样式、光标、备用屏幕、滚动、缩放、DA/DSR/CPR、输入模式、长行、分块/非法 UTF-8、选择文本 |
+| `native/tests/all/quick_connect.rs` | 13 | `user@host`、`ssh`、`-p/-l/-i`、IPv6、地址端口、引号、Windows 路径、Unicode、长地址、错误参数和注入样式输入 |
 | `store.rs` 末尾 `core_regression_tests` | 5 | 缺失配置、迁移条件、损坏/版本错误的旧配置、迁移失败保留源文件、DPAPI 密文迁移 |
 | `terminal.rs` 末尾 `core_regression_tests` | 3 | 3000 行历史上限、64 KiB 响应上限、软换行标记 |
 

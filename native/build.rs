@@ -11,9 +11,4 @@ fn main() {
             .compile()
             .expect("Cannot compile Windows application icon and version resources");
     }
-    slint_build::compile_with_config(
-        "ui/main.slint",
-        slint_build::CompilerConfiguration::new().with_style("fluent-light".into()),
-    )
-    .unwrap();
 }

@@ -41,8 +41,8 @@
 | 修复前单独执行重复密钥 ID 回归测试 | 在预期断言失败，确认缺陷可复现 |
 | `cargo build --locked` | 退出码 0，无警告 |
 | `cargo test --locked` | 退出码 0，254 通过、0 失败、4 忽略，无警告；其中本次新增 7 项全部通过 |
-| `cargo test --locked --test transport native_gui_live_selftest -- --ignored --nocapture` | 使用本工作树已构建的 debug 可执行文件，退出码 0，1 通过、0 失败，无警告；其余 3 项现有桌面专用忽略测试未单独执行 |
-| `rustfmt --edition 2024 --check tests/integration_features.rs tests/integration_recovery_transport.rs` | 通过；仅检查本次新增测试文件 |
+| `cargo test --locked --test all transport::native_gui_live_selftest -- --ignored --nocapture` | 使用本工作树已构建的 debug 可执行文件，退出码 0，1 通过、0 失败，无警告；其余 3 项现有桌面专用忽略测试未单独执行（命令已按合并后的测试入口更新） |
+| `rustfmt --edition 2024 --check tests/all/integration_features.rs tests/all/integration_recovery_transport.rs` | 通过；仅检查本次新增测试文件（路径已按合并后的测试目录更新） |
 | `opentermius.exe --smoke-test --smoke-scene=section-keychain --data-dir=<fresh> --output=<output>` | 退出码 0，启动标记 `ok: true`；已查看 `native-window.png`，导航选中状态、页标题、空状态及按钮清晰，无裁切 |
 
 除上述重复密钥 ID 缺陷外，本次覆盖的恢复、导入、设置持久化、引用删除、回环认证及转发流程未发现其他缺陷。

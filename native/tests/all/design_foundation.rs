@@ -7,7 +7,7 @@ use slint::{ComponentHandle, Model};
 use std::rc::Rc;
 
 slint::slint! {
-    import { Theme, Action, Input, Toggle, Checkbox, Segmented, Select, EntityCard, ListRow, IconButton, Popover, MenuItem, Dialog } from "../ui/common.slint";
+    import { Theme, Action, Input, Toggle, Checkbox, Segmented, Select, EntityCard, ListRow, IconButton, Popover, MenuItem, Dialog } from "../../ui/common.slint";
     export { Theme }
     export component FoundationHarness inherits Window {
         width: 600px; height: 700px;
@@ -46,12 +46,12 @@ slint::slint! {
         disabled := Input { x: 10px; y: 150px; width: 180px; height: 36px; enabled: false; text: "Read only"; }
         select := Select { x: 10px; y: 200px; width: 180px; height: 36px; options: ["Local", "Remote", "Dynamic"]; }
         EntityCard { x: 10px; y: 280px; width: 300px; height: 60px; title: "Host";
-            icon: @image-url("../ui/icons/hosts.svg");
+            icon: @image-url("../../ui/icons/hosts.svg");
             clicked => { root.actions += 1; } more-clicked => { root.more-actions += 1; }
         }
         ListRow { x: 10px; y: 350px; width: 300px; height: 40px; title: "Snippet";
             clicked => { root.actions += 1; }
-            IconButton { icon: @image-url("../ui/icons/copy.svg"); clicked => { root.copies += 1; } }
+            IconButton { icon: @image-url("../../ui/icons/copy.svg"); clicked => { root.copies += 1; } }
         }
         menu := Popover { open: false; anchor-x: 350px; anchor-y: 200px;
             MenuItem { text: "Copy"; clicked => { root.copies += 1; } }
@@ -105,7 +105,7 @@ fn palette_and_control_interactions() {
     ui.show().unwrap();
 
     // Compare every live palette token in both modes with the approved specification.
-    let rows: Vec<_> = include_str!("../../docs/design-spec.md")
+    let rows: Vec<_> = include_str!("../../../docs/design-spec.md")
         .lines()
         .skip_while(|line| !line.starts_with("| `base` |"))
         .take_while(|line| line.starts_with('|'))

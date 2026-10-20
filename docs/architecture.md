@@ -5,6 +5,7 @@ OpenTermius 使用 Rust、Slint 和 Tokio，采用 winit 窗口后端和软件�
 | 模块 | 职责 |
 | --- | --- |
 | `native/ui/main.slint` | 主机、编辑器、终端、认证提示和双栏文件界面 |
+| `native/ui-crate/` | 独立编译 Slint 生成代码，向应用导出窗口、桥接全局和模型类型 |
 | `native/src/main.rs` | GUI 回调、会话状态、事件聚合、剪贴板及文件选择 |
 | `native/src/store.rs`、`native/src/store/secrets.rs` 及子模块 | 本地配置、主机指纹、DPAPI/便携加密与配置版本迁移 |
 | `native/src/ssh.rs` | SSH 认证、通道、SFTP、文件传输与取消 |
@@ -14,6 +15,8 @@ OpenTermius 使用 Rust、Slint 和 Tokio，采用 winit 窗口后端和软件�
 | `native/ui/icons/` | 项目绘制的 SVG 界面图标 |
 
 GUI 主线程只处理界面与模型。Tokio 使用两个工作线程，阻塞池上限八个。本地 PTY 使用独立读写及管理线程，关闭标签或取消任务时终止并等待回收对应进程。Windows 保留 PowerShell `-NoLogo -NoProfile`；Unix 选择可执行的绝对 `$SHELL` 路径并传入 `-l`，macOS 回退 `/bin/zsh` 再 `/bin/sh`，Linux 回退 `/bin/bash` 再 `/bin/sh`，设置 `TERM=xterm-256color`。
+
+`native/` 是 Cargo 工作区，根包仍为 `opentermius`，应用输出路径保持不变；`opentermius-ui` 的构建脚本读取原位置的 `native/ui/main.slint` 及其导入文件。应用的构建脚本只处理 Windows 图标和版本资源。集成测试集中在 `native/tests/all/main.rs` 的模块中，共用一个测试可执行文件；库和应用的单元测试仍分别执行。编译耗时、复现命令和开发选项见 [编译速度记录](build-speed.md)。
 
 SSH 输出完整解析后，以最高约每秒 30 次更新屏幕。GUI 邮箱按会话合并画面，拥塞时跳过旧画面而不丢弃网络字节。文件列表虚拟化，终端模型仅替换变化的行。
 
