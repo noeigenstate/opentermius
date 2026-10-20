@@ -6,7 +6,8 @@ import { SnippetsBridge, SnippetsPage } from "pages/snippets.slint";
 import { KnownHostsBridge, KnownHostsPage } from "pages/known_hosts.slint";
 import { LogsBridge, LogsPage } from "pages/logs.slint";
 import { SettingsBridge, SettingsPage } from "pages/settings.slint";
-export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge }
+import { RecoveryBridge, RecoveryPanel } from "pages/recovery.slint";
+export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge, RecoveryBridge }
 
 export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
 export struct TabRow { id: string, title: string, status: string }
@@ -147,7 +148,7 @@ export component AppWindow inherits Window {
         if !root.save-current-draft() { return; }
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
-    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = true; root.section = name; } }
+    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = false; root.hosts-page = true; root.section = name; } } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
     terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
     VerticalLayout { spacing: 0px;
@@ -477,10 +478,11 @@ export component AppWindow inherits Window {
             }
         }
     }
-    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 151px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 187px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
         VerticalLayout { padding: 8px; spacing: 4px;
             NavItem { text: "Import hosts"; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
             NavItem { text: "Export hosts"; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
+            NavItem { text: "Backup & Restore"; icon: @image-url("icons/keychain.svg"); clicked => { root.menu-open = false; root.open-section("recovery"); } }
             NavItem { text: "Settings"; icon: @image-url("icons/settings.svg"); clicked => { root.menu-open = false; root.open-section("settings"); } }
         }
     }
@@ -564,6 +566,10 @@ export component AppWindow inherits Window {
                 HorizontalLayout { alignment: end; Action { text: "Close"; clicked => { root.settings-open = false; } } }
             }
         }
+    }
+    if RecoveryBridge.visible: Rectangle { background: #141729bf;
+        TouchArea { }
+        RecoveryPanel { width: Math.min(880px, parent.width - 32px); height: Math.min(660px, parent.height - 32px); x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; }
     }
     if root.prompt-visible: Rectangle { background: #141729bf;
         TouchArea { }
