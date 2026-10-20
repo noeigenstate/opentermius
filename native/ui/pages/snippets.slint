@@ -1,5 +1,5 @@
-import { ScrollView, TextEdit } from "std-widgets.slint";
-import { Theme, Action, Input, Field } from "../common.slint";
+import { ListView } from "std-widgets.slint";
+import { Theme, Action, IconButton, Field, TextArea, Card, ListRow, PageHeader, PageToolbar, EmptyState, DetailPanel, Caption, Popover, MenuItem } from "../common.slint";
 
 export struct SnippetRow {
     id: string,
@@ -28,251 +28,96 @@ export global SnippetsBridge {
     callback run(string);
 }
 
+// Keep the first command in monospace while using the shared row interaction states.
+component SnippetItem inherits Rectangle {
+    in property <SnippetRow> snippet;
+    height: Theme.row-height;
+    row := ListRow {
+        height: parent.height;
+        selected: SnippetsBridge.editing && SnippetsBridge.draft-id == root.snippet.id;
+        clicked => { SnippetsBridge.edit(root.snippet.id); }
+    }
+    HorizontalLayout { padding-left: Theme.space-12; padding-right: Theme.space-12; spacing: Theme.space-12; cross-axis-alignment: center;
+        VerticalLayout { horizontal-stretch: 1; spacing: Theme.space-4;
+            Text { text: root.snippet.name; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
+            Text { text: root.snippet.preview; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; overflow: elide; }
+        }
+        IconButton {
+            button-size: Theme.button-s;
+            icon: @image-url("../icons/play.svg");
+            visible: row.hovered || self.hovered || row.selected;
+            accessible-role: button;
+            accessible-label: "Run snippet";
+            clicked => { SnippetsBridge.run(root.snippet.id); }
+        }
+    }
+}
+
 export component SnippetsPage inherits Rectangle {
     background: Theme.base;
-    property <int> columns: Math.max(1, Math.floor((list-pane.width - 40px) / 280px));
-    property <string> draft-title: SnippetsBridge.draft-id == "" ? "New snippet" : "Edit snippet";
-
-    VerticalLayout {
-        spacing: 0px;
-        Rectangle {
-            height: 56px;
-            background: Theme.high;
-            HorizontalLayout {
-                padding: 8px;
-                spacing: 8px;
-                Input {
-                    placeholder-text: "Search snippets";
-                    placeholder-color: Theme.secondary;
-                    text <=> SnippetsBridge.query;
-                    horizontal-stretch: 1;
-                    edited => { SnippetsBridge.search(self.text); }
+    property <bool> delete-menu-open: false;
+    HorizontalLayout { spacing: 0px;
+        VerticalLayout { spacing: 0px; horizontal-stretch: 1;
+            PageHeader {
+                placeholder: "Search snippets";
+                search <=> SnippetsBridge.query;
+                primary-text: "New snippet";
+                primary-has-icon: true;
+                primary-icon: @image-url("../icons/plus.svg");
+                search-changed => { SnippetsBridge.search(self.search); }
+                search-accepted => { SnippetsBridge.search(self.search); }
+                primary-clicked => { SnippetsBridge.create(); }
+            }
+            PageToolbar {
+                Action { kind: "flat"; text: "Import"; disabled: true; }
+                Rectangle { horizontal-stretch: 1; }
+                Caption { text: SnippetsBridge.snippets.length == 1 ? "1 snippet" : SnippetsBridge.snippets.length + " snippets"; }
+            }
+            content := Rectangle { background: Theme.base; vertical-stretch: 1;
+                if SnippetsBridge.snippets.length == 0: EmptyState {
+                    icon: SnippetsBridge.query == "" ? @image-url("../icons/snippets.svg") : @image-url("../icons/search.svg");
+                    title: SnippetsBridge.query == "" ? "No snippets yet" : "No matching snippets";
+                    description: SnippetsBridge.query == "" ? "Save commands you run often and paste them into any session." : "Try another name, command, or tag.";
+                    action-text: "New snippet";
+                    action-visible: SnippetsBridge.query == "" && !SnippetsBridge.editing;
+                    action-clicked => { SnippetsBridge.create(); }
                 }
-                Action {
-                    text: "New snippet";
-                    has-icon: true;
-                    icon: @image-url("../icons/plus.svg");
-                    min-width: 132px;
-                    max-width: 132px;
-                    clicked => { SnippetsBridge.create(); }
+                if SnippetsBridge.snippets.length > 0: Rectangle {
+                    x: Theme.gutter; y: Theme.gutter;
+                    width: parent.width - 2 * Theme.gutter; height: parent.height - 2 * Theme.gutter;
+                    background: Theme.highest; border-radius: Theme.r-field; clip: true;
+                    ListView { for snippet in SnippetsBridge.snippets: SnippetItem { snippet: snippet; } }
                 }
             }
         }
-        HorizontalLayout {
-            spacing: 0px;
-            list-pane := Rectangle {
-                horizontal-stretch: 1;
-                background: Theme.base;
-                clip: true;
-
-                if SnippetsBridge.snippets.length == 0 && !SnippetsBridge.editing: Rectangle {
-                    width: Math.min(500px, parent.width - 40px);
-                    height: 250px;
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
-                    Rectangle {
-                        x: (parent.width - 60px) / 2;
-                        y: 0px;
-                        width: 60px;
-                        height: 60px;
-                        border-radius: 15px;
-                        border-width: 1px;
-                        border-color: #798c940d;
-                        background: #798c941a;
-                        Image {
-                            source: @image-url("../icons/snippets.svg");
-                            x: 20px;
-                            y: 20px;
-                            width: 20px;
-                            height: 20px;
-                        }
-                    }
-                    Text {
-                        y: 90px;
-                        height: 28px;
-                        width: parent.width;
-                        text: SnippetsBridge.query == "" ? "Create snippet" : "No matching snippets";
-                        color: Theme.text;
-                        font-size: 18px;
-                        font-weight: 500;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        y: 124px;
-                        height: 24px;
-                        width: parent.width;
-                        text: SnippetsBridge.query == "" ? "Save commands you run often and run them in your active terminal." : "Try another name, command, or tag.";
-                        color: Theme.secondary;
-                        font-size: 14px;
-                        horizontal-alignment: center;
-                    }
-                    if SnippetsBridge.query == "": Action {
-                        width: 180px;
-                        height: 30px;
-                        x: (parent.width - self.width) / 2;
-                        y: 170px;
-                        text: "New snippet";
-                        primary: true;
-                        clicked => { SnippetsBridge.create(); }
-                    }
-                }
-
-                if SnippetsBridge.snippets.length > 0: ScrollView {
-                    content-width: list-pane.width;
-                    content-height: 40px + Math.ceil(SnippetsBridge.snippets.length / root.columns) * 124px;
-                    for snippet[index] in SnippetsBridge.snippets: Rectangle {
-                        x: 20px + Math.mod(index, root.columns) * ((list-pane.width - 40px) / root.columns);
-                        y: 20px + Math.floor(index / root.columns) * 124px;
-                        width: (list-pane.width - 40px) / root.columns - 20px;
-                        height: 104px;
-                        border-radius: 10px;
-                        border-width: SnippetsBridge.editing && SnippetsBridge.draft-id == snippet.id ? 2px : 0px;
-                        border-color: Theme.accent;
-                        background: card-touch.has-hover || run.hovered ? Theme.high : Theme.highest;
-
-                        VerticalLayout {
-                            padding: 12px;
-                            padding-right: 70px;
-                            spacing: 5px;
-                            HorizontalLayout {
-                                spacing: 10px;
-                                Rectangle {
-                                    width: 34px;
-                                    height: 34px;
-                                    border-radius: 9px;
-                                    background: #0f5774;
-                                    Image {
-                                        source: @image-url("../icons/snippets.svg");
-                                        colorize: white;
-                                        x: 8px;
-                                        y: 8px;
-                                        width: 18px;
-                                        height: 18px;
-                                    }
-                                }
-                                Rectangle {
-                                    horizontal-stretch: 1;
-                                    background: transparent;
-                                    Text {
-                                        text: snippet.name;
-                                        width: parent.width;
-                                        color: Theme.text;
-                                        font-size: 14px;
-                                        font-weight: 500;
-                                        overflow: elide;
-                                        vertical-alignment: center;
-                                    }
-                                }
-                            }
-                            Text {
-                                text: snippet.preview;
-                                color: Theme.secondary;
-                                font-family: "Consolas";
-                                font-size: 12px;
-                                overflow: elide;
-                            }
-                            Text {
-                                text: snippet.tags != "" && snippet.updated != "" ? snippet.tags + "  ·  " + snippet.updated : snippet.tags + snippet.updated;
-                                color: Theme.secondary;
-                                font-size: 11px;
-                                overflow: elide;
-                            }
-                        }
-
-                        card-touch := TouchArea {
-                            clicked => { SnippetsBridge.edit(snippet.id); }
-                        }
-                        run := Action {
-                            x: parent.width - 62px;
-                            y: 12px;
-                            width: 50px;
-                            height: 26px;
-                            text: "Run";
-                            primary: true;
-                            text-size: 12px;
-                            clicked => { SnippetsBridge.run(snippet.id); }
-                        }
-                    }
-                }
+        if SnippetsBridge.editing: DetailPanel {
+            title: SnippetsBridge.draft-id == "" ? "New snippet" : "Edit snippet";
+            more-visible: SnippetsBridge.draft-id != "";
+            primary-text: "Save";
+            close => { SnippetsBridge.cancel(); }
+            more-clicked => { root.delete-menu-open = true; }
+            primary-clicked => { SnippetsBridge.save(SnippetsBridge.draft-name, SnippetsBridge.draft-tags, SnippetsBridge.draft-script); }
+            Card { title: "Label";
+                Field { label: "Name"; placeholder: "e.g. Deploy staging"; text <=> SnippetsBridge.draft-name; }
+                Field { label: "Tags"; placeholder: "Comma separated"; text <=> SnippetsBridge.draft-tags; }
             }
-            if SnippetsBridge.editing: Rectangle {
-                width: 390px;
-                background: Theme.high;
-                border-width: 1px;
-                border-color: Theme.border;
-                ScrollView {
-                    content-height: 560px;
-                    VerticalLayout {
-                        width: parent.width;
-                        padding: 16px;
-                        spacing: 12px;
-                        Text {
-                            text: root.draft-title;
-                            color: Theme.text;
-                            font-size: 18px;
-                            font-weight: 500;
-                            height: 28px;
-                        }
-                        Field {
-                            label: "Name";
-                            placeholder: "e.g. Deploy staging";
-                            text <=> SnippetsBridge.draft-name;
-                        }
-                        VerticalLayout {
-                            spacing: 6px;
-                            Text { text: "Script"; color: Theme.secondary; font-size: 12px; height: 18px; }
-                            Rectangle {
-                                height: 220px;
-                                background: Theme.highest;
-                                border-width: 1px;
-                                border-color: #d5dde0;
-                                border-radius: 10px;
-                                TextEdit {
-                                    x: 8px;
-                                    y: 6px;
-                                    width: parent.width - 16px;
-                                    height: parent.height - 12px;
-                                    text <=> SnippetsBridge.draft-script;
-                                    wrap: word-wrap;
-                                    font-family: "Consolas";
-                                    font-size: 13px;
-                                    placeholder-text: "Enter one or more commands…";
-                                }
-                            }
-                        }
-                        Field {
-                            label: "Tags";
-                            placeholder: "Comma separated";
-                            text <=> SnippetsBridge.draft-tags;
-                        }
-                        Text {
-                            visible: SnippetsBridge.error-text != "";
-                            height: SnippetsBridge.error-text == "" ? 0px : 18px;
-                            text: SnippetsBridge.error-text;
-                            color: #f25e61;
-                            font-size: 11px;
-                            overflow: elide;
-                        }
-                        HorizontalLayout {
-                            spacing: 8px;
-                            Action {
-                                text: "Save";
-                                primary: true;
-                                clicked => { SnippetsBridge.save(SnippetsBridge.draft-name, SnippetsBridge.draft-tags, SnippetsBridge.draft-script); }
-                            }
-                            if SnippetsBridge.draft-id != "": Action {
-                                text: "Delete";
-                                clicked => { SnippetsBridge.delete(SnippetsBridge.draft-id); }
-                            }
-                            Action {
-                                text: "Cancel";
-                                flat: true;
-                                clicked => { SnippetsBridge.cancel(); }
-                            }
-                        }
-                    }
-                }
+            Card { title: "Script";
+                TextArea { height: 200px; mono: true; filled: false; placeholder: "Enter one or more commands..."; text <=> SnippetsBridge.draft-script; }
             }
+            if SnippetsBridge.error-text != "": Text {
+                text: SnippetsBridge.error-text; color: Theme.danger;
+                font-size: Theme.font-caption; wrap: word-wrap;
+            }
+        }
+    }
+    Popover {
+        open <=> root.delete-menu-open;
+        anchor-x: root.width - 200px - Theme.gutter;
+        anchor-y: Theme.header-height;
+        MenuItem {
+            text: "Delete snippet"; danger: true; has-icon: true;
+            icon: @image-url("../icons/trash.svg");
+            clicked => { root.delete-menu-open = false; SnippetsBridge.delete(SnippetsBridge.draft-id); }
         }
     }
 }

@@ -1,4 +1,4 @@
-import { Theme, Action, Input } from "../common.slint";
+import { Theme, Action, PageHeader, PageToolbar, EmptyState, TableHeader, StatusDot, Caption, Dialog } from "../common.slint";
 import { ListView } from "std-widgets.slint";
 
 export struct LogRow {
@@ -24,92 +24,109 @@ export global LogsBridge {
     callback connect-again(string);
 }
 
-component LogsHeading inherits Rectangle {
-    height: 34px;
-    background: Theme.base;
-    property <length> table-width: Math.max(0px, root.width - 150px);
-    Text { x: 20px; y: 0px; height: parent.height; width: root.table-width * 0.17 - 8px; text: "Label"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.17; y: 0px; height: parent.height; width: root.table-width * 0.22 - 8px; text: "Address"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.39; y: 0px; height: parent.height; width: root.table-width * 0.16 - 8px; text: "Started"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.55; y: 0px; height: parent.height; width: root.table-width * 0.09 - 8px; text: "Duration"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.64; y: 0px; height: parent.height; width: root.table-width * 0.13 - 8px; text: "Status"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.77; y: 0px; height: parent.height; width: root.table-width * 0.23 - 8px; text: "Details"; color: Theme.secondary; font-size: 12px; font-weight: 500; vertical-alignment: center; overflow: elide; }
-    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.border; }
-}
-
+// Connection history keeps its existing metadata and reconnect action. The bridge
+// has no diagnostic levels/export API, so no inert severity controls are presented.
 component LogTableRow inherits Rectangle {
     in property <LogRow> entry;
-    height: 44px;
-    background: row-touch.has-hover ? Theme.high : Theme.highest;
-    property <length> table-width: Math.max(0px, root.width - 150px);
-    property <color> status-color: root.entry.status == "Connected" ? #21b568 : root.entry.status == "Failed" ? #f25e61 : root.entry.status == "Connecting" ? #f0a43c : #8a9aa2;
+    in property <[float]> cols;
+    in property <[float]> offsets;
+    private property <length> table-width: root.width - root.action-width;
+    in property <length> action-width;
+    height: Theme.row-height;
+    background: row-touch.has-hover || reconnect.hovered ? Theme.hover : transparent;
+    animate background { duration: 100ms; }
     row-touch := TouchArea { }
-    Image { x: 20px; y: 15px; width: 14px; height: 14px; source: @image-url("../icons/history.svg"); colorize: root.entry.can-connect ? #58adf8 : Theme.secondary; }
-    Text { x: 42px; y: 0px; height: parent.height; width: root.table-width * 0.17 - 30px; text: root.entry.label; color: Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.17; y: 0px; height: parent.height; width: root.table-width * 0.22 - 8px; text: root.entry.address; color: Theme.secondary; font-size: 13px; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.39; y: 0px; height: parent.height; width: root.table-width * 0.16 - 8px; text: root.entry.started; color: Theme.secondary; font-size: 13px; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.55; y: 0px; height: parent.height; width: root.table-width * 0.09 - 8px; text: root.entry.duration; color: Theme.secondary; font-size: 13px; vertical-alignment: center; overflow: elide; }
-    Rectangle { x: 20px + root.table-width * 0.64; y: (parent.height - 8px) / 2; width: 8px; height: 8px; border-radius: 4px; background: root.status-color; }
-    Text { x: 34px + root.table-width * 0.64; y: 0px; height: parent.height; width: root.table-width * 0.13 - 22px; text: root.entry.status; color: Theme.text; font-size: 13px; vertical-alignment: center; overflow: elide; }
-    Text { x: 20px + root.table-width * 0.77; y: 0px; height: parent.height; width: root.table-width * 0.23 - 8px; text: root.entry.error; color: #c84a4d; font-size: 12px; vertical-alignment: center; overflow: elide; visible: root.entry.error != ""; }
-    if root.entry.can-connect: Action {
-        x: root.width - 126px; y: 7px; width: 106px; height: 30px; min-width: 106px; max-width: 106px;
-        text: "Connect again"; text-size: 12px; flat: true;
+    Rectangle { x: root.table-width * root.offsets[0]; y: 0px; width: root.table-width * root.cols[0]; height: parent.height;
+        VerticalLayout { padding-left: Theme.space-16; padding-right: Theme.space-8; alignment: center; spacing: Theme.space-4;
+            Text { text: root.entry.label; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
+            Text { text: root.entry.address; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; overflow: elide; }
+        }
+    }
+    Rectangle { x: root.table-width * root.offsets[1]; y: 0px; width: root.table-width * root.cols[1]; height: parent.height;
+        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.started; color: Theme.secondary; font-family: "Consolas"; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
+    }
+    Rectangle { x: root.table-width * root.offsets[2]; y: 0px; width: root.table-width * root.cols[2]; height: parent.height;
+        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.duration; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
+    }
+    Rectangle { x: root.table-width * root.offsets[3]; y: 0px; width: root.table-width * root.cols[3]; height: parent.height;
+        HorizontalLayout { padding-left: Theme.space-16; padding-right: Theme.space-8; spacing: Theme.space-8; cross-axis-alignment: center;
+            StatusDot { kind: root.entry.status == "Connected" ? "ok" : root.entry.status == "Failed" ? "error" : root.entry.status == "Connecting" ? "busy" : "idle"; }
+            Text { text: root.entry.status; color: Theme.text; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
+        }
+    }
+    Rectangle { x: root.table-width * root.offsets[4]; y: 0px; width: root.table-width * root.cols[4]; height: parent.height;
+        Text { x: Theme.space-16; width: parent.width - Theme.space-24; height: parent.height; text: root.entry.error; color: Theme.danger; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
+    }
+    reconnect := Action {
+        x: parent.width - root.action-width + Theme.space-4; y: (parent.height - self.height) / 2;
+        width: root.action-width - Theme.space-12;
+        kind: "flat"; size: "s"; text: "Connect again"; visible: root.entry.can-connect;
         clicked => { LogsBridge.connect-again(root.entry.host-id); }
     }
-    Rectangle { y: parent.height - 1px; height: 1px; background: #e7edef; }
+    Rectangle { x: Theme.space-12; y: parent.height - 1px; width: parent.width - Theme.space-24; height: 1px; background: Theme.divider; }
 }
 
 export component LogsPage inherits Rectangle {
     background: Theme.base;
     property <bool> confirm-clear: false;
+    property <[float]> offsets: [0, root.cols[0], root.cols[0] + root.cols[1], root.cols[0] + root.cols[1] + root.cols[2], root.cols[0] + root.cols[1] + root.cols[2] + root.cols[3]];
+    property <[float]> cols: [0.24, 0.25, 0.14, 0.19, 0.18];
+    // A fixed trailing slot keeps reconnect actions aligned with the table header.
+    property <length> action-width: 120px;
     VerticalLayout { spacing: 0px;
-        Rectangle { height: 56px; background: Theme.high;
-            HorizontalLayout { padding-left: 20px; padding-right: 20px; spacing: 10px;
-                Text { text: "Logs"; color: Theme.text; font-size: 18px; font-weight: 600; vertical-alignment: center; }
-                Text { text: LogsBridge.query == "" ? (LogsBridge.total == 1 ? "1 session" : LogsBridge.total + " sessions") : LogsBridge.rows.length + " of " + LogsBridge.total; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
-                Rectangle { horizontal-stretch: 1; background: transparent; }
-                Input { width: 250px; min-height: 34px; max-height: 34px; placeholder-text: "Search addresses, hosts, status"; placeholder-color: Theme.secondary; text <=> LogsBridge.query; edited => { LogsBridge.refresh(); } accepted => { LogsBridge.refresh(); } }
-                Action { text: "Clear logs"; disabled: LogsBridge.total == 0; clicked => { root.confirm-clear = true; } }
-            }
+        PageHeader {
+            placeholder: "Filter logs"; search <=> LogsBridge.query; show-primary: false;
+            search-changed => { LogsBridge.refresh(); }
+            search-accepted => { LogsBridge.refresh(); }
+        }
+        PageToolbar {
+            Caption { text: LogsBridge.query == "" ? (LogsBridge.total == 1 ? "1 session" : LogsBridge.total + " sessions") : LogsBridge.rows.length + " of " + LogsBridge.total + " shown"; }
+            Rectangle { horizontal-stretch: 1; }
+            Action { kind: "danger-flat"; text: "Clear logs"; has-icon: true; icon: @image-url("../icons/trash.svg"); disabled: LogsBridge.total == 0; clicked => { root.confirm-clear = true; } }
         }
         if LogsBridge.storage-error != "": Rectangle {
-            height: 36px; background: #fff1f1;
-            Text { x: 20px; width: parent.width - 40px; height: parent.height; text: LogsBridge.storage-error; color: #c84a4d; font-size: 13px; vertical-alignment: center; overflow: elide; }
+            height: Theme.input-height; background: Theme.danger-soft;
+            Text { x: Theme.gutter; width: parent.width - 2 * Theme.gutter; height: parent.height; text: LogsBridge.storage-error; color: Theme.danger; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; }
         }
-        LogsHeading { }
-        if LogsBridge.rows.length > 0: ListView {
-            for entry in LogsBridge.rows: LogTableRow { entry: entry; }
-        }
-        if LogsBridge.rows.length == 0: Rectangle {
-            vertical-stretch: 1;
-            Rectangle { width: Math.min(480px, parent.width - 40px); height: 210px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-                Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; background: #798c941a;
-                    Image { source: @image-url("../icons/history.svg"); colorize: Theme.secondary; x: 19px; y: 19px; width: 22px; height: 22px; }
+        Rectangle { vertical-stretch: 1; background: Theme.base;
+            if LogsBridge.rows.length == 0: EmptyState {
+                icon: LogsBridge.query == "" ? @image-url("../icons/history.svg") : @image-url("../icons/search.svg");
+                title: LogsBridge.total == 0 ? "No log entries" : "No matching sessions";
+                description: LogsBridge.total == 0 ? "Connect to a host or open a terminal to see it here." : "Try a different host, address or status.";
+                action-visible: false;
+            }
+            if LogsBridge.rows.length > 0: Rectangle {
+                x: Theme.gutter; y: Theme.gutter;
+                width: parent.width - 2 * Theme.gutter; height: parent.height - 2 * Theme.gutter;
+                background: Theme.highest; border-radius: Theme.r-field; clip: true;
+                VerticalLayout { spacing: 0px;
+                    Rectangle { height: Theme.table-header-height; background: Theme.high;
+                        heading := Rectangle { x: 0px; y: 0px; width: parent.width - root.action-width; height: parent.height;
+                            // Explicit cells keep intrinsic label widths from shifting columns.
+                            for label[index] in ["Host / address", "Started", "Duration", "Status", "Details"]: TableHeader {
+                                x: heading.width * root.offsets[index]; y: 0px;
+                                width: heading.width * root.cols[index]; height: Theme.table-header-height;
+                                labels: [label]; cols: [1];
+                            }
+                        }
+                    }
+                    ListView { vertical-stretch: 1;
+                        for entry in LogsBridge.rows: LogTableRow { entry: entry; cols: root.cols; offsets: root.offsets; action-width: root.action-width; }
+                    }
                 }
-                Text { y: 82px; height: 26px; width: parent.width; text: LogsBridge.total == 0 ? "No connection history" : "No matching sessions"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
-                Text { y: 114px; height: 22px; width: parent.width; text: LogsBridge.total == 0 ? "Connect to a host or open a terminal to see it here." : "Try a different host, address or status."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
             }
         }
-        Rectangle { height: 30px; background: Theme.high;
-            Rectangle { y: 0px; height: 1px; background: Theme.border; }
-            Text { x: 20px; y: 0px; height: parent.height; width: parent.width - 40px; text: "History is stored locally. Credentials and terminal output are never recorded."; color: Theme.secondary; font-size: 11px; vertical-alignment: center; overflow: elide; }
+        Rectangle { height: Theme.input-height; background: Theme.high;
+            Rectangle { x: 0px; y: 0px; height: 1px; width: parent.width; background: Theme.divider; }
+            Caption { x: Theme.gutter; width: parent.width - 2 * Theme.gutter; height: parent.height; text: "History is stored locally. Credentials and terminal output are never recorded."; overflow: elide; }
         }
     }
     Timer { interval: 1000ms; running: true; triggered => { LogsBridge.refresh(); } }
     init => { LogsBridge.refresh(); }
-    if root.confirm-clear: Rectangle {
-        background: #14172980;
-        TouchArea { clicked => { root.confirm-clear = false; } }
-        Rectangle { width: 430px; height: 190px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px; border-width: 1px; border-color: Theme.border;
-            VerticalLayout { padding: 22px; spacing: 12px;
-                Text { text: "Clear connection history?"; color: Theme.text; font-size: 17px; font-weight: 600; height: 24px; }
-                Text { text: "This removes every connection log stored on this computer. It cannot be undone."; color: Theme.secondary; font-size: 13px; wrap: word-wrap; vertical-stretch: 1; }
-                HorizontalLayout { alignment: end; spacing: 10px;
-                    Action { text: "Cancel"; clicked => { root.confirm-clear = false; } }
-                    Action { text: "Clear logs"; primary: true; clicked => { root.confirm-clear = false; LogsBridge.clear(); } }
-                }
-            }
-        }
+    Dialog {
+        open <=> root.confirm-clear; title: "Clear connection history?";
+        description: "This removes every connection log stored on this computer. It cannot be undone.";
+        confirm-text: "Clear logs"; confirm-kind: "danger";
+        confirm => { root.confirm-clear = false; LogsBridge.clear(); }
     }
 }
