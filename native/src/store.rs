@@ -22,6 +22,10 @@ pub struct Profile {
     pub auth_type: String,
     #[serde(default)]
     pub private_key_path: String,
+    /// Keychain key used for "key" authentication; takes precedence over the
+    /// file path when set.
+    #[serde(default)]
+    pub key_id: String,
     #[serde(default)]
     pub group: String,
     #[serde(default)]
@@ -70,8 +74,10 @@ impl Profile {
             "私钥路径无效"
         );
         ensure!(
-            self.auth_type != "key" || !self.private_key_path.is_empty(),
-            "请选择私钥文件"
+            self.auth_type != "key"
+                || !self.private_key_path.is_empty()
+                || !self.key_id.is_empty(),
+            "请选择私钥文件或 Keychain 密钥"
         );
         if self.id.is_empty() {
             self.id = Uuid::new_v4().to_string();
@@ -151,6 +157,12 @@ impl Store {
         remember: bool,
     ) -> Result<()> {
         profile.validate()?;
+        ensure!(
+            profile.key_id.is_empty()
+                || profile.auth_type != "key"
+                || self.data.keys.iter().any(|key| key.id == profile.key_id),
+            "所选 Keychain 密钥不存在"
+        );
         let old = self.data.clone();
         let previous = self.data.hosts.iter().find(|p| p.id == profile.id);
         profile.encrypted_secret = if remember {
@@ -247,6 +259,9 @@ impl Store {
         }
         let mut data = self.data.clone();
         data.known_hosts.clear();
+        // Host export must not carry keychain private material or saved
+        // credentials; hosts keep their key id but the key must be re-imported.
+        data.keys.clear();
         for p in &mut data.hosts {
             p.encrypted_secret = None;
         }
@@ -508,6 +523,7 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
             "password".into()
         },
         private_key_path,
+        key_id: String::new(),
         group: String::new(),
         encrypted_secret: None,
     };
@@ -668,6 +684,7 @@ mod tests {
             username: "tester".into(),
             auth_type: "password".into(),
             private_key_path: String::new(),
+            key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
         }
@@ -887,6 +904,7 @@ mod core_regression_tests {
             username: "tester".into(),
             auth_type: "password".into(),
             private_key_path: String::new(),
+            key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
         }

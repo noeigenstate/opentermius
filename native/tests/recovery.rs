@@ -20,6 +20,7 @@ fn data() -> Data {
             username: "alice".into(),
             auth_type: "password".into(),
             private_key_path: String::new(),
+            key_id: String::new(),
             group: "Work".into(),
             encrypted_secret: None,
         }],
@@ -190,6 +191,63 @@ fn generic_walker_handles_nested_arrays_nulls_and_future_secret_names() {
     })
     .unwrap();
     assert_eq!(value, original);
+}
+
+#[cfg(windows)]
+#[test]
+fn keychain_private_key_and_host_reference_survive_recovery() {
+    let entry =
+        opentermius::keychain::generate("recovery key", opentermius::keychain::KeyKind::Ed25519)
+            .unwrap();
+    let original_pem =
+        zeroize::Zeroizing::new(store::unprotect(&entry.encrypted_private_key).unwrap());
+    let serialized = serde_json::to_value(&entry).unwrap();
+    assert_eq!(
+        serialized["encryptedPrivateKey"],
+        entry.encrypted_private_key
+    );
+    let mut source = data();
+    source.keys = vec![entry.clone()];
+    source.hosts[0].auth_type = "key".into();
+    source.hosts[0].key_id = entry.id.clone();
+    assert!(source.hosts[0].private_key_path.is_empty());
+    for passphrase in [None, Some("recovery passphrase")] {
+        let code = recovery::generate(&source, passphrase, true).unwrap();
+        for mode in [RestoreMode::Merge, RestoreMode::Replace] {
+            let temp = tempfile::tempdir().unwrap();
+            let mut destination = Store::open(temp.path().join("config.json")).unwrap();
+            let summary = recovery::restore(&mut destination, &code, passphrase, mode).unwrap();
+            assert_eq!((summary.hosts, summary.keys, summary.key_files), (1, 1, 0));
+            let mut reopened = Store::open(destination.path.clone()).unwrap();
+            let restored = &mut reopened.data.keys[0];
+            restored.validate().unwrap();
+            assert_eq!(restored.id, entry.id);
+            assert_eq!(restored.public_key, entry.public_key);
+            assert_eq!(restored.fingerprint, entry.fingerprint);
+            assert_ne!(restored.encrypted_private_key, entry.encrypted_private_key);
+            assert_eq!(
+                store::unprotect(&restored.encrypted_private_key).unwrap(),
+                *original_pem
+            );
+            let mut host = reopened.data.hosts[0].clone();
+            host.validate().unwrap();
+            assert_eq!(host.key_id, entry.id);
+            assert!(host.private_key_path.is_empty());
+            let key = reopened
+                .key_material(&host.key_id)
+                .unwrap()
+                .into_private_key()
+                .unwrap();
+            assert_eq!(key.public_key().to_openssh().unwrap(), entry.public_key);
+            // Saving also validates that the restored key_id resolves to an entry.
+            reopened.save(host, None, false).unwrap();
+            assert!(
+                !fs::read_to_string(&reopened.path)
+                    .unwrap()
+                    .contains(original_pem.as_str())
+            );
+        }
+    }
 }
 
 #[cfg(windows)]

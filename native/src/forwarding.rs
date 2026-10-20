@@ -127,6 +127,7 @@ impl RunningRule {
         mut rule: Forward,
         profile: Profile,
         secret: Zeroizing<String>,
+        key_material: Option<crate::keychain::KeyMaterial>,
         known: String,
     ) -> Result<Self> {
         rule.validate(&[])?;
@@ -139,7 +140,16 @@ impl RunningRule {
             active_connections: 0,
         });
         let task = rt.spawn(async move {
-            let result = run(rule, profile, secret, known, rx.clone(), &status_tx).await;
+            let result = run(
+                rule,
+                profile,
+                secret,
+                key_material,
+                known,
+                rx.clone(),
+                &status_tx,
+            )
+            .await;
             if *rx.borrow() {
                 publish(&status_tx, Phase::Stopped, "已停止", 0);
                 return;
@@ -183,6 +193,7 @@ async fn run(
     rule: Forward,
     profile: Profile,
     secret: Zeroizing<String>,
+    key_material: Option<crate::keychain::KeyMaterial>,
     known: String,
     mut cancel: watch::Receiver<bool>,
     status: &watch::Sender<Status>,
@@ -196,7 +207,7 @@ async fn run(
     let ssh_cancel = cancel.clone();
     let ssh = tokio::select! {
         _ = cancelled(&mut cancel) => return Ok(()),
-        result = timeout(CONNECT_TIMEOUT, ssh::connect_forwarding(&profile, &secret, known, ssh_cancel, target)) => Arc::new(result.context("SSH 隧道连接超时")?.context("转发连接失败，请先连接此主机一次并保存可用凭据")?),
+        result = timeout(CONNECT_TIMEOUT, ssh::connect_forwarding(&profile, &secret, key_material, known, ssh_cancel, target)) => Arc::new(result.context("SSH 隧道连接超时")?.context("转发连接失败，请先连接此主机一次并保存可用凭据")?),
     };
     drop(secret);
     let mut jobs = JoinSet::new();

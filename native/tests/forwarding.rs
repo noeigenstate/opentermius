@@ -9,7 +9,7 @@ use russh::{
 };
 use std::{
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -32,6 +32,7 @@ impl Drop for Count {
 struct Server {
     peers: Arc<AtomicUsize>,
     cancelled: Arc<AtomicUsize>,
+    accepted_key: Arc<Mutex<Option<String>>>,
 }
 impl server::Server for Server {
     type Handler = Peer;
@@ -40,6 +41,7 @@ impl server::Server for Server {
         Peer {
             _count: Count(self.peers.clone()),
             cancelled: self.cancelled.clone(),
+            accepted_key: self.accepted_key.clone(),
             listener: None,
             jobs: JoinSet::new(),
         }
@@ -48,6 +50,7 @@ impl server::Server for Server {
 struct Peer {
     _count: Count,
     cancelled: Arc<AtomicUsize>,
+    accepted_key: Arc<Mutex<Option<String>>>,
     listener: Option<JoinHandle<()>>,
     jobs: JoinSet<()>,
 }
@@ -61,11 +64,31 @@ impl Drop for Peer {
 impl server::Handler for Peer {
     type Error = anyhow::Error;
     async fn auth_password(&mut self, user: &str, secret: &str) -> anyhow::Result<Auth> {
-        Ok(if user == "tester" && secret == "test-password" {
-            Auth::Accept
-        } else {
-            Auth::reject()
-        })
+        Ok(
+            if self.accepted_key.lock().unwrap().is_none()
+                && user == "tester"
+                && secret == "test-password"
+            {
+                Auth::Accept
+            } else {
+                Auth::reject()
+            },
+        )
+    }
+    async fn auth_publickey(
+        &mut self,
+        user: &str,
+        key: &russh::keys::PublicKey,
+    ) -> anyhow::Result<Auth> {
+        let fingerprint = key.fingerprint(russh::keys::HashAlg::Sha256).to_string();
+        Ok(
+            if user == "tester" && self.accepted_key.lock().unwrap().as_ref() == Some(&fingerprint)
+            {
+                Auth::Accept
+            } else {
+                Auth::reject()
+            },
+        )
     }
     async fn channel_open_direct_tcpip(
         &mut self,
@@ -180,6 +203,7 @@ fn profile(port: u16) -> Profile {
         username: "tester".into(),
         auth_type: "password".into(),
         private_key_path: String::new(),
+        key_id: String::new(),
         group: String::new(),
         encrypted_secret: None,
     }
@@ -227,8 +251,23 @@ async fn wait_zero(count: &AtomicUsize) {
     .await
     .unwrap();
 }
-async fn exercise(kind: Kind) {
+async fn exercise(kind: Kind, key: Option<opentermius::keychain::KeyEntry>) {
     let fixture = fixture().await;
+    let directory = tempfile::tempdir().unwrap();
+    let mut store = opentermius::store::Store::open(directory.path().join("config.json")).unwrap();
+    let mut host = profile(fixture.port);
+    let material = if let Some(entry) = key {
+        *fixture.state.accepted_key.lock().unwrap() = Some(entry.fingerprint.clone());
+        host.auth_type = "key".into();
+        host.key_id = entry.id.clone();
+        store.add_key(entry).unwrap();
+        store.save(host.clone(), None, false).unwrap();
+        // Load the persisted entry exactly as forwarding startup does, with no key file.
+        let reopened = opentermius::store::Store::open(store.path.clone()).unwrap();
+        Some(reopened.key_material(&host.key_id).unwrap())
+    } else {
+        None
+    };
     let echo = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let destination = echo.local_addr().unwrap().port();
     let active = Arc::new(AtomicUsize::new(0));
@@ -249,8 +288,13 @@ async fn exercise(kind: Kind) {
     let mut running = RunningRule::start(
         &tokio::runtime::Handle::current(),
         rule(kind, port, destination),
-        profile(fixture.port),
-        Zeroizing::new("test-password".into()),
+        host,
+        Zeroizing::new(if material.is_some() {
+            String::new()
+        } else {
+            "test-password".into()
+        }),
+        material,
         fixture.fingerprint.clone(),
     )
     .unwrap();
@@ -312,15 +356,26 @@ async fn exercise(kind: Kind) {
 }
 #[tokio::test]
 async fn local_forwarding_and_stop_cleanup() {
-    exercise(Kind::Local).await;
+    exercise(Kind::Local, None).await;
 }
 #[tokio::test]
 async fn dynamic_socks5_end_to_end_and_cleanup() {
-    exercise(Kind::Dynamic).await;
+    exercise(Kind::Dynamic, None).await;
 }
 #[tokio::test]
 async fn remote_forwarding_and_cancel_cleanup() {
-    exercise(Kind::Remote).await;
+    exercise(Kind::Remote, None).await;
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn keychain_key_authenticates_all_forwarding_modes_without_a_file_or_password() {
+    let entry =
+        opentermius::keychain::generate("forwarding key", opentermius::keychain::KeyKind::Ed25519)
+            .unwrap();
+    for kind in [Kind::Local, Kind::Remote, Kind::Dynamic] {
+        exercise(kind, Some(entry.clone())).await;
+    }
 }
 
 #[test]
@@ -476,6 +531,7 @@ async fn untrusted_fingerprint_and_cancel_during_handshake() {
             rule(Kind::Local, port, 22),
             profile(f.port),
             Zeroizing::new(String::new()),
+            None,
             "".into()
         )
         .is_err()
@@ -485,6 +541,7 @@ async fn untrusted_fingerprint_and_cancel_during_handshake() {
         rule(Kind::Local, port, 22),
         profile(f.port),
         Zeroizing::new("test-password".into()),
+        None,
         "SHA256:incorrect".into(),
     )
     .unwrap();
@@ -505,6 +562,7 @@ async fn untrusted_fingerprint_and_cancel_during_handshake() {
         rule(Kind::Local, port, 22),
         profile(ssh_port),
         Zeroizing::new("test-password".into()),
+        None,
         f.fingerprint.clone(),
     )
     .unwrap();
@@ -528,6 +586,7 @@ async fn dynamic_connection_limit_and_pending_handshake_cleanup() {
         rule(Kind::Dynamic, port, 0),
         profile(f.port),
         Zeroizing::new("test-password".into()),
+        None,
         f.fingerprint.clone(),
     )
     .unwrap();
@@ -573,6 +632,7 @@ async fn listener_conflict_is_reported_and_ssh_is_closed() {
         rule(Kind::Local, port, 22),
         profile(f.port),
         Zeroizing::new("test-password".into()),
+        None,
         f.fingerprint.clone(),
     )
     .unwrap();
@@ -592,6 +652,18 @@ async fn listener_conflict_is_reported_and_ssh_is_closed() {
 #[tokio::test]
 #[ignore = "requires an interactive Windows desktop"]
 async fn native_forwarding_autostart_and_exit_cleanup() {
+    exercise_autostart(false).await;
+}
+
+#[cfg(windows)]
+#[tokio::test]
+#[ignore = "requires an interactive Windows desktop"]
+async fn native_forwarding_keychain_autostart_and_exit_cleanup() {
+    exercise_autostart(true).await;
+}
+
+#[cfg(windows)]
+async fn exercise_autostart(use_keychain: bool) {
     struct ChildGuard(std::process::Child);
     impl Drop for ChildGuard {
         fn drop(&mut self) {
@@ -611,7 +683,21 @@ async fn native_forwarding_autostart_and_exit_cleanup() {
     let mut store =
         opentermius::store::Store::open(directory.path().join("opentermius-native.json")).unwrap();
     let mut host = profile(fixture.port);
-    host.encrypted_secret = Some(opentermius::store::protect("test-password").unwrap());
+    if use_keychain {
+        let entry = opentermius::keychain::generate(
+            "autostart key",
+            opentermius::keychain::KeyKind::Ed25519,
+        )
+        .unwrap();
+        *fixture.state.accepted_key.lock().unwrap() = Some(entry.fingerprint.clone());
+        host.auth_type = "key".into();
+        host.key_id = entry.id.clone();
+        store.add_key(entry).unwrap();
+        // A stale saved credential must not interfere with keychain authentication.
+        host.encrypted_secret = Some("invalid-old-credential".into());
+    } else {
+        host.encrypted_secret = Some(opentermius::store::protect("test-password").unwrap());
+    }
     store.data.hosts.push(host);
     store
         .trust("127.0.0.1", fixture.port, &fixture.fingerprint)
