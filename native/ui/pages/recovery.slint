@@ -1,5 +1,4 @@
-import { CheckBox, ComboBox, TextEdit, ScrollView } from "std-widgets.slint";
-import { Theme, Action, Input } from "../common.slint";
+import { Theme, Action, Input, Checkbox, Segmented, TextArea, Caption, StatusDot, Dialog } from "../common.slint";
 
 export global RecoveryBridge {
     in-out property <bool> visible: false;
@@ -19,55 +18,138 @@ export global RecoveryBridge {
     callback close;
 }
 
-export component RecoveryPanel inherits Rectangle {
-    background: Theme.high;
-    border-radius: 10px;
-    border-width: 1px;
-    border-color: Theme.border;
-    FocusScope {
-        width: parent.width;
-        height: parent.height;
-        init => { self.focus(); }
-        key-pressed(event) => {
-            if event.text == Key.Escape && !RecoveryBridge.busy { RecoveryBridge.close(); accept }
-            else { reject }
-        }
-    VerticalLayout { padding: 20px; spacing: 10px;
-        HorizontalLayout { spacing: 16px;
-            Text { text: "Backup & Restore"; color: Theme.text; font-size: 20px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
-            Action { text: "Close"; disabled: RecoveryBridge.busy; clicked => { RecoveryBridge.close(); } }
-        }
-        Text { text: "Keep one recovery code. Restore your configuration on another machine, offline."; color: Theme.secondary; font-size: 14px; wrap: word-wrap; }
-        Rectangle { height: 64px; background: #fff0d6; border-radius: 6px;
-            Text { x: 12px; y: 8px; width: parent.width - 24px; height: parent.height - 16px; text: "此恢复码等同于全部已保存密码和私钥，请妥善保管。未设置口令时，只需这一串即可恢复；设置口令后还必须记住口令。"; color: #795214; font-size: 14px; wrap: word-wrap; vertical-alignment: center; }
-        }
-        ScrollView { vertical-stretch: 1; HorizontalLayout { spacing: 24px;
-            VerticalLayout { spacing: 10px; alignment: start; horizontal-stretch: 1; preferred-width: 380px;
-                Text { text: "Generate recovery code"; color: Theme.text; font-size: 16px; font-weight: 600; height: 24px; }
-                Input { placeholder-text: "Optional passphrase"; input-type: InputType.password; text <=> RecoveryBridge.generation-passphrase; enabled: !RecoveryBridge.busy; }
-                CheckBox { text: "Include passwords and private keys"; checked <=> RecoveryBridge.include-secrets; enabled: !RecoveryBridge.busy; height: 30px; }
-                Text { text: "取消勾选后不包含凭据及私钥文件。"; color: Theme.secondary; font-size: 12px; wrap: word-wrap; height: 34px; }
-                Action { text: "Generate recovery code"; primary: true; disabled: RecoveryBridge.busy; clicked => { RecoveryBridge.generate(); } }
-                TextEdit { text <=> RecoveryBridge.code; read-only: true; wrap: char-wrap; height: root.height < 620px ? 64px : 120px; }
-                HorizontalLayout { spacing: 8px; alignment: start;
-                    Action { text: "Copy"; disabled: RecoveryBridge.code == "" || RecoveryBridge.busy; clicked => { RecoveryBridge.copy(); } }
-                    Action { text: "Save to file"; disabled: RecoveryBridge.code == "" || RecoveryBridge.busy; clicked => { RecoveryBridge.save-file(); } }
-                }
-            }
-            Rectangle { width: 1px; background: Theme.border; }
-            VerticalLayout { spacing: 10px; alignment: start; horizontal-stretch: 1; preferred-width: 380px;
-                Text { text: "Restore"; color: Theme.text; font-size: 16px; font-weight: 600; height: 24px; }
-                Input { placeholder-text: "Passphrase (if required)"; input-type: InputType.password; text <=> RecoveryBridge.restore-passphrase; enabled: !RecoveryBridge.busy; }
-                ComboBox { model: ["Merge", "Replace"]; current-index <=> RecoveryBridge.restore-mode; enabled: !RecoveryBridge.busy; height: 30px; }
-                Text { text: "Merge 保留已有项目；Replace 覆盖相同 ID 和设置。指纹冲突保留本机记录。"; color: Theme.secondary; font-size: 12px; wrap: word-wrap; height: 34px; }
-                Text { text: "Paste recovery code"; color: Theme.secondary; font-size: 12px; height: 30px; vertical-alignment: center; }
-                TextEdit { text <=> RecoveryBridge.pasted-code; enabled: !RecoveryBridge.busy; wrap: char-wrap; height: root.height < 620px ? 64px : 120px; }
-                Action { text: "Restore"; primary: true; disabled: RecoveryBridge.pasted-code == "" || RecoveryBridge.busy; clicked => { RecoveryBridge.restore(); } }
-            }
-        } }
-        Rectangle { height: 48px; background: transparent;
-            Text { width: parent.width; height: parent.height; text: RecoveryBridge.busy ? "正在处理，请稍候…" : RecoveryBridge.message; color: RecoveryBridge.error ? #bd3434 : Theme.secondary; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
+// TextArea has no read-only API. Keep generated codes selectable without editing them.
+component RecoveryCode inherits Rectangle {
+    in property <string> text;
+    height: 120px;
+    border-radius: Theme.r-field; border-width: 1px; border-color: Theme.border;
+    background: Theme.field-bg; clip: true;
+    if root.text == "": Text {
+        x: Theme.space-12; y: Theme.space-12; width: parent.width - Theme.space-24; height: self.preferred-height;
+        text: "Your recovery code will appear here"; color: Theme.muted; font-size: Theme.font-caption;
+        wrap: word-wrap;
+    }
+    flick := Flickable {
+        x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px;
+        content-width: self.width; content-height: Math.max(self.height, code.preferred-height + Theme.space-24);
+        code := TextInput {
+            x: Theme.space-12; y: Theme.space-12; width: flick.width - Theme.space-24; height: self.preferred-height;
+            text: root.text; read-only: true; wrap: char-wrap; color: Theme.text;
+            font-family: "Consolas"; font-size: Theme.font-caption;
+            selection-background-color: Theme.accent-soft; selection-foreground-color: Theme.text;
         }
     }
+}
+
+component RecoveryWarning inherits Rectangle {
+    in property <string> text;
+    height: warning-text.preferred-height + Theme.space-24;
+    background: Theme.warning-soft; border-radius: Theme.space-8;
+    HorizontalLayout {
+        padding: Theme.space-12; spacing: Theme.space-8; cross-axis-alignment: center;
+        Image { source: @image-url("../icons/warning.svg"); colorize: Theme.warning; width: 14px; height: 14px; }
+        warning-text := Text { text: root.text; color: Theme.text; font-size: Theme.font-caption; wrap: word-wrap; horizontal-stretch: 1; }
+    }
+}
+
+export component RecoveryPanel inherits Rectangle {
+    background: transparent;
+    private property <int> tab: 0;
+    private property <string> confirm-passphrase;
+    private property <bool> password-matches: root.confirm-passphrase == RecoveryBridge.generation-passphrase;
+    // The shared main window supplies the modal overlay and sizes this legacy panel.
+    // Expand the shared Dialog to that overlay while keeping its bridge/API unchanged.
+    Dialog {
+        x: -root.x; y: -root.y;
+        width: root.width + root.x * 2; height: root.height + root.y * 2;
+        open: true; scrim: false;
+        dialog-width: 560px; title: "Backup & Restore";
+        description: "Back up hosts, keys and settings to a recovery code, offline.";
+        confirm-text: root.tab == 0 ? "Back up" : "Restore";
+        confirm-enabled: !RecoveryBridge.busy && (root.tab == 0 ? root.password-matches : RecoveryBridge.pasted-code != "");
+        cancel-visible: !RecoveryBridge.busy;
+        confirm => {
+            if !RecoveryBridge.busy {
+                if root.tab == 0 { root.confirm-passphrase = ""; RecoveryBridge.generate(); }
+                else { RecoveryBridge.restore(); }
+            }
+        }
+        cancel => {
+            // Dialog handles Escape internally; a running operation must retain its UI.
+            self.open = true;
+            if !RecoveryBridge.busy { RecoveryBridge.close(); }
+        }
+
+        Segmented {
+            options: ["Back up", "Restore"]; current-index <=> root.tab; enabled: !RecoveryBridge.busy;
+            changed(index) => { RecoveryBridge.message = ""; RecoveryBridge.error = false; }
+        }
+
+        if root.tab == 0: VerticalLayout {
+            spacing: Theme.space-12;
+            RecoveryWarning {
+                text: "Keep this code safe. It can contain saved passwords and private keys. Without a password, anyone with the code can restore them.";
+            }
+            VerticalLayout {
+                spacing: Theme.space-4;
+                Text { text: "Password (optional)"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+                Input { filled: true; placeholder-text: "Protect your recovery code"; input-type: InputType.password; text <=> RecoveryBridge.generation-passphrase; enabled: !RecoveryBridge.busy; }
+            }
+            VerticalLayout {
+                spacing: Theme.space-4;
+                Text { text: "Confirm password"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+                Input {
+                    filled: true; placeholder-text: "Repeat password"; input-type: InputType.password;
+                    text <=> root.confirm-passphrase; enabled: !RecoveryBridge.busy;
+                    invalid: root.confirm-passphrase != "" && !root.password-matches;
+                }
+                if root.confirm-passphrase != "" && !root.password-matches: Caption { text: "口令不一致"; color: Theme.danger; }
+            }
+            Checkbox { text: "Include saved passwords and private keys"; checked <=> RecoveryBridge.include-secrets; enabled: !RecoveryBridge.busy; }
+            Caption { text: "When unchecked, credentials and private key files are excluded."; wrap: word-wrap; height: self.preferred-height; }
+            RecoveryCode { text: RecoveryBridge.code; }
+            HorizontalLayout {
+                spacing: Theme.space-8; alignment: start;
+                Action { kind: "secondary"; text: "Copy"; disabled: RecoveryBridge.code == "" || RecoveryBridge.busy; clicked => { RecoveryBridge.copy(); } }
+                Action { kind: "secondary"; text: "Save to file"; disabled: RecoveryBridge.code == "" || RecoveryBridge.busy; clicked => { RecoveryBridge.save-file(); } }
+            }
+        }
+
+        if root.tab == 1: VerticalLayout {
+            spacing: Theme.space-12;
+            VerticalLayout {
+                spacing: Theme.space-4;
+                Text { text: "Recovery code"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+                TextArea { text <=> RecoveryBridge.pasted-code; placeholder: "Paste your recovery code"; mono: true; enabled: !RecoveryBridge.busy; height: 120px; }
+            }
+            VerticalLayout {
+                spacing: Theme.space-4;
+                Text { text: "Password"; color: Theme.secondary; font-size: Theme.font-caption; font-weight: 500; }
+                Input { filled: true; placeholder-text: "Password (if required)"; input-type: InputType.password; text <=> RecoveryBridge.restore-passphrase; enabled: !RecoveryBridge.busy; }
+            }
+            Checkbox {
+                text: "Replace existing data"; checked: RecoveryBridge.restore-mode == 1; enabled: !RecoveryBridge.busy;
+                toggled => { RecoveryBridge.restore-mode = self.checked ? 1 : 0; }
+            }
+            Caption { text: "Merge keeps existing items. Replace overwrites matching IDs and settings. Host fingerprint conflicts keep the local record."; wrap: word-wrap; height: self.preferred-height; }
+            RecoveryWarning { text: "This cannot be undone. Keep a backup of your current configuration before restoring."; }
+        }
+
+        // A fixed surface reserves the result row in Dialog's scrollable body.
+        Rectangle {
+            height: Theme.space-20; background: transparent;
+            HorizontalLayout {
+                spacing: Theme.space-8; cross-axis-alignment: center;
+                StatusDot {
+                    visible: RecoveryBridge.busy || RecoveryBridge.message != "";
+                    kind: RecoveryBridge.busy ? "busy" : RecoveryBridge.error ? "error" : "ok";
+                }
+                Caption {
+                    text: RecoveryBridge.busy ? "正在处理，请稍候…" : RecoveryBridge.message;
+                    color: RecoveryBridge.busy ? Theme.accent : RecoveryBridge.error ? Theme.danger : Theme.success;
+                    overflow: elide; horizontal-stretch: 1;
+                }
+            }
+        }
     }
 }
