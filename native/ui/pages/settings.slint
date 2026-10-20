@@ -14,6 +14,7 @@ export global SettingsBridge {
     // Appearance
     in-out property <int> color-scheme: 0;
     in-out property <int> appearance: 0;
+    in-out property <bool> gpu-rendering: false;
     // SSH
     in-out property <int> keepalive-seconds: 30;
     in-out property <int> connection-timeout-seconds: 15;
@@ -97,6 +98,10 @@ export component SettingsPage inherits Rectangle {
                     }
                 }
                 SettingRow {
+                    label: "Smoother rendering (GPU)"; description: "Uses more memory. Takes effect after restart.";
+                    Toggle { checked <=> SettingsBridge.gpu-rendering; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
                     label: "Terminal color scheme"; description: "Applied to every terminal session"; divider: false;
                     Select {
                         width: 200px; options: ["Default", "Solarized Dark", "Monokai", "Light"];
@@ -109,7 +114,7 @@ export component SettingsPage inherits Rectangle {
             SettingsGroup {
                 title: "Terminal";
                 SettingRow {
-                    label: "Font size"; description: "Terminal font (Consolas), 10–24 px";
+                    label: "Font size"; description: "Terminal font (" + Theme.mono-font + "), 10–24 px";
                     Select {
                         width: 200px;
                         options: ["10 px", "11 px", "12 px", "13 px", "14 px", "15 px", "16 px", "17 px", "18 px", "19 px", "20 px", "21 px", "22 px", "23 px", "24 px"];

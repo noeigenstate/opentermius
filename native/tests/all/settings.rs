@@ -16,12 +16,14 @@ fn config_from_before_settings_loads_defaults_and_saves_preferences() {
     assert_eq!(store.data.settings, Settings::default());
     assert_eq!(store.data.settings.font_size, 14);
     assert_eq!(store.data.settings.scrollback_lines, 3000);
+    assert!(!store.data.settings.gpu_rendering);
 
     let updated = Settings {
         font_size: 22,
         copy_on_select: true,
         color_scheme: ColorScheme::Monokai,
         appearance: Appearance::Dark,
+        gpu_rendering: true,
         keepalive_seconds: 0,
         ..Settings::default()
     };
@@ -34,6 +36,7 @@ fn config_from_before_settings_loads_defaults_and_saves_preferences() {
     assert!(raw.contains("\"fontSize\": 22"));
     assert!(raw.contains("\"colorScheme\": \"monokai\""));
     assert!(raw.contains("\"appearance\": \"dark\""));
+    assert!(raw.contains("\"gpuRendering\": true"));
     assert!(raw.contains("\"keepaliveSeconds\": 0"));
 }
 
@@ -41,6 +44,7 @@ fn config_from_before_settings_loads_defaults_and_saves_preferences() {
 fn appearance_defaults_and_system_resolution() {
     let old: Settings = serde_json::from_str(r#"{"fontSize":18}"#).unwrap();
     assert_eq!(old.appearance, Appearance::Light);
+    assert!(!old.gpu_rendering);
     for (index, appearance) in [
         (0, Appearance::Light),
         (1, Appearance::Dark),

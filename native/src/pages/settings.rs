@@ -96,6 +96,7 @@ fn read(ui: &AppWindow) -> Settings {
         bell: BellMode::from_index(bridge.get_bell_mode()),
         color_scheme: ColorScheme::from_index(bridge.get_color_scheme()),
         appearance: Appearance::from_index(bridge.get_appearance()),
+        gpu_rendering: bridge.get_gpu_rendering(),
         keepalive_seconds: bridge.get_keepalive_seconds().max(0) as u32,
         connection_timeout_seconds: bridge.get_connection_timeout_seconds().max(0) as u32,
         confirm_overwrite: bridge.get_confirm_overwrite(),
@@ -116,6 +117,7 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     bridge.set_bell_mode(settings.bell.index());
     bridge.set_color_scheme(settings.color_scheme.index());
     bridge.set_appearance(settings.appearance.index());
+    bridge.set_gpu_rendering(settings.gpu_rendering);
     ui.global::<Theme>()
         .set_dark(settings.appearance.is_dark(settings::system_dark()));
     bridge.set_keepalive_seconds(settings.keepalive_seconds.min(i32::MAX as u32) as i32);
@@ -249,6 +251,16 @@ mod tests {
         );
 
         let bridge = ui.global::<SettingsBridge>();
+        assert!(!bridge.get_gpu_rendering());
+        ui.invoke_open_section("settings".into());
+        // Settings uses main's 720px column; click the GPU switch in Appearance.
+        click(&ui, 887., 235.);
+        assert!(current().gpu_rendering);
+        assert!(opentermius::store::Store::open(path.clone()).unwrap().data.settings.gpu_rendering);
+        click(&ui, 887., 235.);
+        assert!(!current().gpu_rendering);
+        click(&ui, 887., 235.);
+        assert!(current().gpu_rendering);
         for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
             bridge.set_appearance(appearance.index());
             bridge.invoke_apply();
@@ -337,6 +349,8 @@ mod tests {
         bridge.invoke_restore_defaults();
         assert!(!ui.global::<Theme>().get_dark());
         assert_eq!(bridge.get_terminal_font_size(), 14);
+        assert!(!bridge.get_gpu_rendering());
+        assert!(!opentermius::store::Store::open(path).unwrap().data.settings.gpu_rendering);
         ui.hide().unwrap();
         crate::STATE.with(|slot| *slot.borrow_mut() = None);
     }

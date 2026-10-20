@@ -1,4 +1,4 @@
-//! Renderer policy and native window polish. No network access or persistent settings.
+//! Renderer policy and native window polish. No network access.
 use anyhow::{Context, bail};
 use slint::winit_030::{CustomApplicationHandler, EventResult, winit};
 use std::{cell::Cell, path::PathBuf, rc::Rc, time::Instant};
@@ -49,7 +49,11 @@ impl Renderer {
     }
 }
 
-pub fn requested(args: &[String], environment: Option<&str>) -> anyhow::Result<Renderer> {
+pub fn requested(
+    args: &[String],
+    environment: Option<&str>,
+    gpu_rendering: bool,
+) -> anyhow::Result<Renderer> {
     let mut cli = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -61,8 +65,7 @@ pub fn requested(args: &[String], environment: Option<&str>) -> anyhow::Result<R
     }
     match cli.or(environment) {
         Some(value) => Renderer::parse(value),
-        None if cfg!(feature = "renderer-femtovg") => Ok(Renderer::Femtovg),
-        None if cfg!(feature = "renderer-skia") => Ok(Renderer::Skia),
+        None if gpu_rendering => Ok(Renderer::Femtovg),
         None => Ok(Renderer::Software),
     }
 }
@@ -291,17 +294,18 @@ mod tests {
         assert_eq!(
             requested(
                 &args(&["app", "--renderer=femtovg", "--renderer", "software"]),
-                Some("skia")
+                Some("skia"),
+                true
             )
             .unwrap(),
             Renderer::Software
         );
         assert_eq!(
-            requested(&args(&["app"]), Some("skia")).unwrap(),
+            requested(&args(&["app"]), Some("skia"), true).unwrap(),
             Renderer::Skia
         );
         assert_eq!(
-            requested(&args(&["app", "--renderer=software"]), Some("typo")).unwrap(),
+            requested(&args(&["app", "--renderer=software"]), Some("typo"), true).unwrap(),
             Renderer::Software
         );
     }
@@ -314,15 +318,33 @@ mod tests {
             &["--renderer", "--smoke-test"],
             &["--renderer=unknown"],
         ] {
-            assert!(requested(&args(values), None).is_err());
+            assert!(requested(&args(values), None, false).is_err());
         }
-        assert!(requested(&[], Some("unknown")).is_err());
+        assert!(requested(&[], Some("unknown"), true).is_err());
     }
 
     #[test]
-    fn defaults_match_compiled_features() {
-        assert!(requested(&[], None).unwrap().available());
+    fn software_default_is_independent_of_compiled_gpu_features() {
+        assert_eq!(requested(&[], None, false).unwrap(), Renderer::Software);
         assert_eq!(Renderer::Software.backend(), "winit-software");
+    }
+
+    #[test]
+    fn persisted_gpu_preference_is_overridden_by_environment_and_cli() {
+        assert_eq!(requested(&[], None, true).unwrap(), Renderer::Femtovg);
+        for gpu in [false, true] {
+            for (name, renderer) in [
+                ("software", Renderer::Software),
+                ("femtovg", Renderer::Femtovg),
+                ("skia", Renderer::Skia),
+            ] {
+                assert_eq!(requested(&[], Some(name), gpu).unwrap(), renderer);
+                assert_eq!(
+                    requested(&args(&["app", "--renderer", name]), Some("software"), gpu).unwrap(),
+                    renderer
+                );
+            }
+        }
     }
 
     #[test]

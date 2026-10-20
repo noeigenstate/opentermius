@@ -19,9 +19,11 @@ Skia 实验执行了 `cargo build --release --locked --no-default-features --fea
 
 ## 选择与回退
 
-选择 FemtoVG OpenGL 为默认，同时保留软件渲染器。相对原版本，正式二进制仅增加约 0.52 MiB，不引入 Skia 的原生二进制下载链；实测 100% / 150% 布局、字体、圆角与截图均可用。代价需要明确：相对使用平台字体的软件构建，本机空闲工作集约增加 49.36 MiB，私有字节约增加 92.06 MiB，首帧中位数约增加 540 ms。重视资源占用或处于远程桌面/旧显卡环境时，可用软件覆盖保留低占用路径。FemtoVG 三次首帧分别为 906.33 / 343.31 / 593.97 ms；软件构建为 123.83 / 53.97 / 48.01 ms，当前机器上的变动明显。
+默认选择使用平台字体的软件渲染器，以保持较低的内存占用和启动开销。FemtoVG OpenGL 作为可选 GPU 路径保留：Settings 的 Appearance 提供 “Smoother rendering (GPU)” 开关，提示 “Uses more memory. Takes effect after restart.”。偏好保存为 `settings.gpuRendering`，默认为 `false`；旧配置缺少此字段时仍使用软件渲染。开关只改变下一次启动，不在当前进程中替换渲染后端；恢复默认设置也会关闭它。
 
-支持 `--renderer=software|femtovg|skia`、`--renderer software` 和 `OPENTERMIUS_RENDERER`。命令行优先于环境变量，重复参数取最后一个，未知值明确报错。请求未编译的渲染器时回退软件并输出诊断信息。
+启动选择顺序为 **命令行 > 环境变量 > 保存的 GPU 偏好 > 软件默认值**。支持 `--renderer=software|femtovg|skia`、`--renderer software` 和 `OPENTERMIUS_RENDERER`；重复参数取最后一个，未知值明确报错。启动时先读取同一个配置存储（包括 `--data-dir` 指定的隔离配置），再创建渲染后端。GPU 偏好开启时请求 FemtoVG；请求未编译的渲染器时回退软件并输出诊断信息。
+
+上表保留此前正式 release 的对照测量：相对平台字体的软件版本，FemtoVG 的空闲工作集约增加 49.36 MiB，私有字节约增加 92.06 MiB，首帧中位数约增加 540 ms。它改善了曲线和平滑程度，但不再作为默认。当前机器的三次首帧波动明显，不能视为冷启动或其他平台的保证。
 
 Slint 在 Windows OpenGL 2.0 探测失败时可能自行选择软件；应用通过渲染通知能力识别这一情况。窗口或 GL 上下文创建的错误也可能延迟到事件循环启动时发生，因此不能仅包裹 `BackendSelector::select()`：应用识别首帧之前的平台错误，清理会话与运行时后，保留原参数再启动同一程序，并追加 `--renderer=software`。Slint 的平台是进程全局单例，这样无需尝试替换已安装的后端。软件进程不再重试，父进程等待并传递退出码。配置、文件与 SSH 错误，以及首帧后的错误不触发这条启动回退路径。
 
@@ -88,3 +90,28 @@ Skia 的 `skia-bindings` 构建脚本可能下载 GitHub 上的预编译原生�
 | `verify-install.ps1` | 成功；临时安装、覆盖重装、快捷方式、注册表、静默卸载、用户配置保留及清理均通过 |
 
 新增 5 个单元测试，覆盖 CLI/环境变量优先级、无效/缺失参数、编译 feature 对默认选择的影响、Cascadia/Consolas 选择、仅首帧前 GPU 平台错误触发一次软件重试。当前 GPU 正常工作，真实 RDP/旧驱动故障现场尚未复测；Windows 11 的原生外框、macOS/Linux 的构建及桌面表现也不属于本次 Windows 10 实测结果。Skia 的构建限制见上文。
+
+## UI 后续修正（2026-10-20）
+
+本轮使用 debug 构建验证软件默认值和深浅主题，前面的 release 性能、打包及安装记录保留为上一轮测量。本轮未重新打包发布产物。
+
+- 共享单行 Input 的编辑区域覆盖控件高度，并显式垂直居中；窄输入框的可用宽度下限为零。Field、SearchField、端口和 SFTP 路径栏共用此修正。
+- Logs 表头固定为表格完整宽度，保留与数据行相同的列比例和重连操作槽。
+- SFTP 进度条固定从左侧零点开始，宽度按限制在 0–100 的百分比计算；`section-sftp` 提供断开状态的 42% 视觉样例，不启动传输。`section-forwarding-editor` 提供含 8080/5432 端口的编辑器样例。
+- Settings 保留 main 的分组布局和共享组件，在 Appearance 中加入 GPU 偏好开关；字体提示显示实际平台等宽字体。其他页的初始页面、控件画廊及主机编辑器已检查深浅主题。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| `cargo build --locked` / `cargo test --locked` | 成功，无编译警告；281 项通过，4 项交互桌面测试默认忽略 |
+| `transport::native_gui_live_selftest -- --ignored --nocapture` | 成功，软件渲染；真实回环 SSH/SFTP、指纹、DPAPI、持久化及截图 |
+| 渲染器选择 | 单元测试覆盖默认值、CLI/环境变量/设置优先级和既有 GPU 失败重试条件；6 次实际启动检查保存的 GPU 偏好、两种覆盖和未编译 Skia 的软件回退 |
+| 偏好设置 | 旧配置默认关闭 GPU；持久化使用 `gpuRendering`；指针点击切换、恢复默认及重开配置均已测试 |
+| 视觉检查 | 原分支检查了 11 个场景 × 深浅主题，均实际使用 `winit-software`；合并后重新检查 Settings 深浅主题，GPU 提示和平台字体名称完整显示 |
+
+| 页面 | 浅色 | 深色 |
+| --- | --- | --- |
+| 端口转发编辑器 | [截图](screenshots/ui-followup-forwarding-editor-light.png) | [截图](screenshots/ui-followup-forwarding-editor-dark.png) |
+| Logs 完整表头 | [截图](screenshots/ui-followup-logs-light.png) | [截图](screenshots/ui-followup-logs-dark.png) |
+| Settings（合并后） | [截图](screenshots/settings-light.png) | [截图](screenshots/settings-dark.png) |
+
+合并后的 Settings 截图来自完整原生窗口，使用软件渲染和 Cascadia Mono。GPU 初始化故障在本机未实际复现；软件重试判定沿用已有测试。其他平台及 Windows 11 外框仍需对应环境验证。

@@ -2070,7 +2070,22 @@ fn capture(ui: &AppWindow, output: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn run(renderer: rendering::Renderer, started: std::time::Instant, first_frame: Rc<std::cell::Cell<Option<f64>>>) -> anyhow::Result<()> {
+fn startup_store(args: &[String]) -> anyhow::Result<Store> {
+    let isolated_path = args
+        .iter()
+        .find_map(|a| a.strip_prefix("--data-dir="))
+        .map(|p| PathBuf::from(p).join("opentermius-native.json"));
+    #[cfg(unix)]
+    if let Some(path) = &isolated_path {
+        store::configure_secret_directory(path.parent().context("无效的数据目录")?.to_owned())?;
+    }
+    match isolated_path {
+        Some(path) => Store::open(path),
+        None => store::open_default(),
+    }
+}
+
+fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant, first_frame: Rc<std::cell::Cell<Option<f64>>>) -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let output = args.iter().any(|a| a == "--smoke-test" || a == "--benchmark").then(|| {
         args.iter().find_map(|a| a.strip_prefix("--output=")).map(PathBuf::from)
@@ -2112,18 +2127,7 @@ fn run(renderer: rendering::Renderer, started: std::time::Instant, first_frame: 
             || args.iter().any(|a| a.starts_with("--data-dir=")),
         "写入自检资料时必须指定独立 --data-dir"
     );
-    let isolated_path = args
-        .iter()
-        .find_map(|a| a.strip_prefix("--data-dir="))
-        .map(|p| PathBuf::from(p).join("opentermius-native.json"));
-    #[cfg(unix)]
-    if let Some(path) = &isolated_path {
-        store::configure_secret_directory(path.parent().context("无效的数据目录")?.to_owned())?;
-    }
-    let store = Arc::new(Mutex::new(match isolated_path {
-        Some(path) => Store::open(path)?,
-        None => store::open_default()?,
-    }));
+    let store = Arc::new(Mutex::new(store));
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .max_blocking_threads(8)
@@ -2686,7 +2690,17 @@ fn run(renderer: rendering::Renderer, started: std::time::Instant, first_frame: 
             ui.set_tab_menu_x(410.0);
         }
     } else if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
-        if section == "xshell-import" {
+        if section == "forwarding-editor" {
+            ui.invoke_open_section("forwarding".into());
+            let bridge = ui.global::<ForwardingBridge>();
+            bridge.invoke_new_rule();
+            let mut draft = bridge.get_draft();
+            draft.label = "Development database".into();
+            draft.bind_port = "8080".into();
+            draft.destination_host = "127.0.0.1".into();
+            draft.destination_port = "5432".into();
+            bridge.set_draft(draft);
+        } else if section == "xshell-import" {
             ui.invoke_open_section("hosts".into());
             ui.set_menu_open(true);
         } else {
@@ -2704,6 +2718,14 @@ fn run(renderer: rendering::Renderer, started: std::time::Instant, first_frame: 
             s.local_path = folder;
         });
         ui.invoke_open_sftp();
+        if scene == "section-sftp" && smoke_port.is_none() {
+            // Disconnected visual fixture: exercise path input and partial progress without IO.
+            ui.set_file_path("/srv/workspace/releases".into());
+            ui.set_transfers(model(vec![TransferRow {
+                id: "smoke-transfer".into(), name: "release.tar.gz".into(),
+                detail: "42% · 4.2 MiB / 10 MiB".into(), percent: 42, pending: false,
+            }]));
+        }
     }
     let timer = slint::Timer::default();
     if smoke || benchmark {
@@ -2789,13 +2811,14 @@ fn main() {
     let started = std::time::Instant::now();
     let args: Vec<String> = std::env::args().collect();
     let result = (|| -> anyhow::Result<i32> {
-        let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref())?;
+        let store = startup_store(&args)?;
+        let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref(), store.data.settings.gpu_rendering)?;
         let renderer = if requested.available() { requested } else {
             eprintln!("当前构建未包含 {} 渲染器，回退软件渲染", requested.name());
             rendering::Renderer::Software
         };
         let first_frame = Rc::new(std::cell::Cell::new(None));
-        match run(renderer, started, first_frame.clone()) {
+        match run(store, renderer, started, first_frame.clone()) {
             Ok(()) => Ok(0),
             Err(error) if rendering::should_retry(renderer, first_frame.get(), &error) => {
                 eprintln!("GPU 窗口初始化失败，回退软件渲染：{error:#}");
