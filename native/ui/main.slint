@@ -2,7 +2,7 @@ import { LineEdit, ScrollView, ListView } from "std-widgets.slint";
 import { Theme, Action, Input, NavItem, Field } from "common.slint";
 import { KeychainBridge, KeychainPage } from "pages/keychain.slint";
 import { ForwardingBridge, ForwardingPage, ForwardRow, ForwardDraft } from "pages/forwarding.slint";
-import { SnippetsBridge, SnippetsPage } from "pages/snippets.slint";
+import { SnippetsBridge, SnippetsPage, SnippetRow } from "pages/snippets.slint";
 import { KnownHostsBridge, KnownHostsPage, KnownHostRow } from "pages/known_hosts.slint";
 import { LogsBridge, LogsPage } from "pages/logs.slint";
 import { SettingsBridge, SettingsPage } from "pages/settings.slint";
@@ -17,6 +17,7 @@ export { KnownHostRow }
 export { LogsBridge }
 export { SettingsBridge }
 export { RecoveryBridge }
+export { SnippetRow }
 
 export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
 export struct TabRow { id: string, title: string, status: string }
@@ -158,6 +159,7 @@ export component AppWindow inherits Window {
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
     public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = false; root.hosts-page = true; root.section = name; } } }
+    public function activate-session(session-id: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(session-id); terminal-focus.focus(); } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
     terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
     VerticalLayout { spacing: 0px;
@@ -193,7 +195,7 @@ export component AppWindow inherits Window {
                         Text { text: tab.title; color: white; overflow: elide; vertical-alignment: center; }
                         Action { text: "×"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.close-session(tab.id); } }
                     }
-                    TouchArea { width: parent.width - 30px; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
+                    TouchArea { width: parent.width - 30px; clicked => { root.activate-session(tab.id); } }
                 }
                 Rectangle { horizontal-stretch: 1; background: transparent;
                     TouchArea { pointer-event(event) => { if event.kind == PointerEventKind.down { root.window-drag(); } } }
