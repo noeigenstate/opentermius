@@ -5,8 +5,9 @@ mod keychain;
 mod forwarding;
 mod snippets;
 mod known_hosts;
-mod logs;
+pub(crate) mod logs;
 mod settings;
+mod recovery;
 
 pub fn install(ui: &AppWindow) {
     keychain::install(ui);
@@ -15,4 +16,5 @@ pub fn install(ui: &AppWindow) {
     known_hosts::install(ui);
     logs::install(ui);
     settings::install(ui);
+    recovery::install(ui);
 }

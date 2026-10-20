@@ -23,11 +23,13 @@ OpenTermius 面向 **Windows、macOS 和 Linux** 打造轻量原生终端体验�
 - SFTP 双栏文件浏览、流式上传与下载；上传覆盖需确认，下载不覆盖已有文件。
 - Windows DPAPI 加密保存密码和密钥口令；导出文件不含凭据或主机信任记录。
 
-## 启动
+## 安装
 
-Windows 便携程序：`native/releases/OpenTermius-0.2.0-windows-x64.exe`，双击运行。构建产物不提交到源码仓库。
+Windows 安装程序：`native/releases/OpenTermius-0.2.0-windows-x64-setup.exe`。双击安装，默认按当前用户安装到 `%LOCALAPPDATA%\Programs\OpenTermius`，无需管理员权限。安装程序提供开始菜单快捷方式，并可选择创建桌面快捷方式；安装或覆盖升级前会检查 OpenTermius 是否正在运行。
 
-配置保存在系统配置目录的 `OpenTermius/opentermius-native.json`。升级时可自动读取旧版本的本地配置，不覆盖已有的新配置。程序目前未配置发布者签名。
+卸载会删除程序文件和快捷方式，但默认保留 `%APPDATA%\OpenTermius` 中的配置。如需一并删除主机、凭据和偏好设置，请在卸载界面勾选“同时删除我的数据”。
+
+配置保存在系统配置目录的 `OpenTermius/opentermius-native.json`。升级时可自动读取旧版本的本地配置，不覆盖已有的新配置。程序目前未配置发布者签名，构建产物不提交到源码仓库。
 
 ## 开发
 
@@ -42,10 +44,22 @@ cargo build --release --locked
 
 请在 `native/` 内执行 Cargo，以加载该目录的目标配置。当前默认构建目标为 Windows MSVC；macOS 和 Linux 的打包、系统凭据及平台适配尚未完成。
 
-在仓库根目录打包 Windows 便携程序及 SHA-256 清单：
+在仓库根目录打包 Windows 安装程序及 SHA-256 清单：
 
 ```powershell
 ./native/scripts/package.ps1
+```
+
+产物为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 和 `native/releases/checksums.json`，不再生成便携 exe。打包需要 NSIS 3；脚本会从 `-MakensisPath`、`PATH`、标准安装目录或 `%LOCALAPPDATA%\electron-builder\Cache\nsis` 查找 `makensis.exe`。未安装时可执行：
+
+```powershell
+winget install -e --id NSIS.NSIS --accept-source-agreements --accept-package-agreements
+```
+
+安装程序验证会将安装目录设为独立临时目录，静默安装、检查快捷方式和 HKCU 卸载项，再静默卸载并确认用户配置保留：
+
+```powershell
+./native/installer/verify-install.ps1
 ```
 
 实际 GUI 集成测试需交互式 Windows 桌面，使用临时 SSH/SFTP 服务及隔离配置：
@@ -56,6 +70,12 @@ $env:OPENTERMIUS_TEST_EXECUTABLE = (Resolve-Path target/x86_64-pc-windows-msvc/r
 $env:OPENTERMIUS_SMOKE_OUTPUT = Join-Path (Get-Location) 'test-output/release-live'
 cargo test --test transport native_gui_live_selftest -- --ignored --nocapture
 ```
+
+## 自动构建
+
+[Windows installer 工作流](.github/workflows/windows-release.yml) 在推送到 `main`、向 `main` 提交 PR、推送 `v*` 标签时运行，也可在 GitHub Actions 中通过 **Run workflow** 手动触发。工作流使用 Windows runner 和 Rust stable，依次运行锁定依赖的测试、release 构建及 NSIS 打包；需要交互式桌面的 GUI 测试保持忽略。
+
+构建成功后，在该次运行的 **Artifacts** 中下载 `OpenTermius-windows-x64-setup`，内含 `OpenTermius-<version>-windows-x64-setup.exe` 和 `checksums.json`。推送与 `native/Cargo.toml` 版本一致的 `vX.Y.Z` 标签还会自动创建 GitHub Release，附上这两个文件并在发布说明中列出 SHA-256；版本不一致会直接失败。安装程序尚未签名，Windows SmartScreen 可能提示警告，可使用 `Get-FileHash <安装程序路径> -Algorithm SHA256` 核对清单中的哈希值。
 
 ## 设计与实现
 

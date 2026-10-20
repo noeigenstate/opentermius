@@ -1,12 +1,24 @@
 import { LineEdit, ScrollView, ListView } from "std-widgets.slint";
 import { Theme, Action, Input, NavItem, Field } from "common.slint";
 import { KeychainBridge, KeychainPage } from "pages/keychain.slint";
-import { ForwardingBridge, ForwardingPage } from "pages/forwarding.slint";
-import { SnippetsBridge, SnippetsPage } from "pages/snippets.slint";
-import { KnownHostsBridge, KnownHostsPage } from "pages/known_hosts.slint";
-import { LogsBridge, LogsPage } from "pages/logs.slint";
+import { ForwardingBridge, ForwardingPage, ForwardRow, ForwardDraft } from "pages/forwarding.slint";
+import { SnippetsBridge, SnippetsPage, SnippetRow } from "pages/snippets.slint";
+import { KnownHostsBridge, KnownHostsPage, KnownHostRow } from "pages/known_hosts.slint";
+import { LogsBridge, LogsPage, LogRow } from "pages/logs.slint";
 import { SettingsBridge, SettingsPage } from "pages/settings.slint";
-export { KeychainBridge, ForwardingBridge, SnippetsBridge, KnownHostsBridge, LogsBridge, SettingsBridge }
+import { RecoveryBridge, RecoveryPanel } from "pages/recovery.slint";
+export { KeychainBridge }
+export { ForwardingBridge }
+export { ForwardRow }
+export { ForwardDraft }
+export { SnippetsBridge }
+export { KnownHostsBridge }
+export { KnownHostRow }
+export { LogsBridge }
+export { SettingsBridge }
+export { RecoveryBridge }
+export { SnippetRow }
+export { LogRow }
 
 export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
 export struct TabRow { id: string, title: string, status: string }
@@ -79,7 +91,7 @@ export component AppWindow inherits Window {
     property <bool> creating-host: false;
     property <bool> editor-menu-open: false;
     property <bool> settings-open: false;
-    property <bool> menu-open: false;
+    in-out property <bool> menu-open: false;
     property <bool> host-picker-open: false;
     property <HostDraft> draft;
     property <string> search;
@@ -112,6 +124,7 @@ export component AppWindow inherits Window {
     callback upload-file;
     callback download-file(string);
     callback import-hosts;
+    callback import-xshell;
     callback export-hosts;
     callback search-hosts(string);
     callback select-group(string);
@@ -147,7 +160,8 @@ export component AppWindow inherits Window {
         if !root.save-current-draft() { return; }
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
-    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = true; root.section = name; } }
+    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = false; root.hosts-page = true; root.section = name; } } }
+    public function activate-session(session-id: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(session-id); terminal-focus.focus(); } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
     terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
     VerticalLayout { spacing: 0px;
@@ -183,7 +197,7 @@ export component AppWindow inherits Window {
                         Text { text: tab.title; color: white; overflow: elide; vertical-alignment: center; }
                         Action { text: "×"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.close-session(tab.id); } }
                     }
-                    TouchArea { width: parent.width - 30px; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
+                    TouchArea { width: parent.width - 30px; clicked => { root.activate-session(tab.id); } }
                 }
                 Rectangle { horizontal-stretch: 1; background: transparent;
                     TouchArea { pointer-event(event) => { if event.kind == PointerEventKind.down { root.window-drag(); } } }
@@ -477,10 +491,12 @@ export component AppWindow inherits Window {
             }
         }
     }
-    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 151px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 214px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
         VerticalLayout { padding: 8px; spacing: 4px;
             NavItem { text: "Import hosts"; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
+            NavItem { text: "Import from Xshell"; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-xshell(); } }
             NavItem { text: "Export hosts"; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
+            NavItem { text: "Backup & Restore"; icon: @image-url("icons/keychain.svg"); clicked => { root.menu-open = false; root.open-section("recovery"); } }
             NavItem { text: "Settings"; icon: @image-url("icons/settings.svg"); clicked => { root.menu-open = false; root.open-section("settings"); } }
         }
     }
@@ -588,6 +604,10 @@ export component AppWindow inherits Window {
                 HorizontalLayout { alignment: end; Action { text: "Close"; clicked => { root.settings-open = false; } } }
             }
         }
+    }
+    if RecoveryBridge.visible: Rectangle { background: #141729bf;
+        TouchArea { }
+        RecoveryPanel { width: Math.min(880px, parent.width - 32px); height: Math.min(660px, parent.height - 32px); x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; }
     }
     if root.prompt-visible: Rectangle { background: #141729bf;
         TouchArea { }
