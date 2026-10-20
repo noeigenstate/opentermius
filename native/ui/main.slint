@@ -758,7 +758,7 @@ export component AppWindow inherits Window {
                                 VerticalLayout { horizontal-stretch: 1; spacing: 2px;
                                     Text { text: transfer.name; color: Theme.text; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
                                     Text { text: transfer.detail; color: Theme.secondary; font-size: Theme.font-caption; overflow: elide; }
-                                    Rectangle { height: 3px; background: Theme.border; Rectangle { width: parent.width * Math.max(0, Math.min(100, transfer.percent)) / 100; background: Theme.accent; } }
+                                    Rectangle { height: 3px; background: Theme.border; Rectangle { x: 0px; y: 0px; height: parent.height; width: parent.width * Math.max(0, Math.min(100, transfer.percent)) / 100; background: Theme.accent; } }
                                 }
                                 Action { kind: "secondary"; horizontal-stretch: 0; text: "Cancel"; text-size: 12px; disabled: !transfer.pending; clicked => { root.cancel-transfer(transfer.id); } }
                             }

@@ -1,5 +1,5 @@
 import { ScrollView } from "std-widgets.slint";
-import { Theme, Action } from "../common.slint";
+import { Theme, Action, Toggle } from "../common.slint";
 
 // Rust reads and drives this page through the global bridge.
 export global SettingsBridge {
@@ -13,6 +13,7 @@ export global SettingsBridge {
     // Appearance
     in-out property <int> color-scheme: 0;
     in-out property <int> appearance: 0;
+    in-out property <bool> gpu-rendering: false;
     // SSH
     in-out property <int> keepalive-seconds: 30;
     in-out property <int> connection-timeout-seconds: 15;
@@ -49,8 +50,8 @@ component SettingRow inherits Rectangle {
             horizontal-stretch: 1;
             alignment: center;
             spacing: 3px;
-            Text { text: root.title; color: Theme.text; font-size: 14px; vertical-alignment: center; }
-            if root.description != "": Text { text: root.description; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+            Text { text: root.title; color: Theme.text; font-size: 14px; vertical-alignment: center; overflow: elide; }
+            if root.description != "": Text { text: root.description; color: Theme.secondary; font-size: 12px; vertical-alignment: center; overflow: elide; }
         }
         VerticalLayout {
             alignment: center;
@@ -62,7 +63,7 @@ component SettingRow inherits Rectangle {
 
 component Separator inherits Rectangle {
     height: 1px;
-    background: #798c941a;
+    background: Theme.divider;
 }
 
 component Stepper inherits Rectangle {
@@ -111,24 +112,6 @@ component Stepper inherits Rectangle {
     }
 }
 
-component ToggleSwitch inherits Rectangle {
-    in property <bool> checked;
-    callback toggled;
-    width: 38px;
-    height: 22px;
-    border-radius: 11px;
-    background: root.checked ? Theme.accent : #c3ced2;
-    Rectangle {
-        x: root.checked ? 19px : 3px;
-        y: 3px;
-        width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        background: white;
-    }
-    TouchArea { clicked => { root.toggled(); } }
-}
-
 export component SettingsPage inherits Rectangle {
     background: Theme.base;
 
@@ -149,103 +132,9 @@ export component SettingsPage inherits Rectangle {
                 vertical-alignment: center;
             }
 
-            SectionTitle { text: "Terminal"; }
-            Rectangle {
-                height: 369px;
-                background: Theme.highest;
-                border-width: 1px;
-                border-color: Theme.border;
-                border-radius: 10px;
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 0px;
-                    SettingRow {
-                        title: "Font size";
-                        description: "Terminal font (Consolas), 10–24 px";
-                        Stepper {
-                            value: SettingsBridge.terminal-font-size;
-                            minimum: 10;
-                            maximum: 24;
-                            suffix: " px";
-                            value-changed(value) => {
-                                SettingsBridge.terminal-font-size = value;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Scrollback";
-                        description: "History lines for new terminal sessions";
-                        Stepper {
-                            value: SettingsBridge.scrollback-lines;
-                            minimum: 1000;
-                            maximum: 100000;
-                            step: 1000;
-                            suffix: " lines";
-                            value-changed(value) => {
-                                SettingsBridge.scrollback-lines = value;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Cursor blink";
-                        ToggleSwitch {
-                            checked: SettingsBridge.cursor-blink;
-                            toggled => {
-                                SettingsBridge.cursor-blink = !SettingsBridge.cursor-blink;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Copy on select";
-                        ToggleSwitch {
-                            checked: SettingsBridge.copy-on-select;
-                            toggled => {
-                                SettingsBridge.copy-on-select = !SettingsBridge.copy-on-select;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Confirm multi-line paste";
-                        ToggleSwitch {
-                            checked: SettingsBridge.confirm-multiline-paste;
-                            toggled => {
-                                SettingsBridge.confirm-multiline-paste = !SettingsBridge.confirm-multiline-paste;
-                                SettingsBridge.apply();
-                            }
-                        }
-                    }
-                    Separator {}
-                    SettingRow {
-                        title: "Bell";
-                        description: "Audible bell is not used";
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Action {
-                                text: "None";
-                                primary: SettingsBridge.bell-mode == 0;
-                                clicked => { SettingsBridge.bell-mode = 0; SettingsBridge.apply(); }
-                            }
-                            Action {
-                                text: "Visual";
-                                primary: SettingsBridge.bell-mode == 1;
-                                clicked => { SettingsBridge.bell-mode = 1; SettingsBridge.apply(); }
-                            }
-                        }
-                    }
-                }
-            }
-
             SectionTitle { text: "Appearance"; }
             Rectangle {
-                height: 133px;
+                height: 198px;
                 background: Theme.highest;
                 border-width: 1px;
                 border-color: Theme.border;
@@ -276,6 +165,18 @@ export component SettingsPage inherits Rectangle {
                     }
                     Separator {}
                     SettingRow {
+                        title: "Smoother rendering (GPU)";
+                        description: "Uses more memory. Takes effect after restart.";
+                        Toggle {
+                            checked: SettingsBridge.gpu-rendering;
+                            toggled => {
+                                SettingsBridge.gpu-rendering = !SettingsBridge.gpu-rendering;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
                         title: "Terminal color scheme";
                         description: "Applied to every terminal session";
                         HorizontalLayout {
@@ -299,6 +200,100 @@ export component SettingsPage inherits Rectangle {
                                 text: "Light";
                                 primary: SettingsBridge.color-scheme == 3;
                                 clicked => { SettingsBridge.color-scheme = 3; SettingsBridge.apply(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "Terminal"; }
+            Rectangle {
+                height: 369px;
+                background: Theme.highest;
+                border-width: 1px;
+                border-color: Theme.border;
+                border-radius: 10px;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 0px;
+                    SettingRow {
+                        title: "Font size";
+                        description: "Platform monospace font, 10–24 px";
+                        Stepper {
+                            value: SettingsBridge.terminal-font-size;
+                            minimum: 10;
+                            maximum: 24;
+                            suffix: " px";
+                            value-changed(value) => {
+                                SettingsBridge.terminal-font-size = value;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Scrollback";
+                        description: "History lines for new terminal sessions";
+                        Stepper {
+                            value: SettingsBridge.scrollback-lines;
+                            minimum: 1000;
+                            maximum: 100000;
+                            step: 1000;
+                            suffix: " lines";
+                            value-changed(value) => {
+                                SettingsBridge.scrollback-lines = value;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Cursor blink";
+                        Toggle {
+                            checked: SettingsBridge.cursor-blink;
+                            toggled => {
+                                SettingsBridge.cursor-blink = !SettingsBridge.cursor-blink;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Copy on select";
+                        Toggle {
+                            checked: SettingsBridge.copy-on-select;
+                            toggled => {
+                                SettingsBridge.copy-on-select = !SettingsBridge.copy-on-select;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Confirm multi-line paste";
+                        Toggle {
+                            checked: SettingsBridge.confirm-multiline-paste;
+                            toggled => {
+                                SettingsBridge.confirm-multiline-paste = !SettingsBridge.confirm-multiline-paste;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Bell";
+                        description: "Audible bell is not used";
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                text: "None";
+                                primary: SettingsBridge.bell-mode == 0;
+                                clicked => { SettingsBridge.bell-mode = 0; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Visual";
+                                primary: SettingsBridge.bell-mode == 1;
+                                clicked => { SettingsBridge.bell-mode = 1; SettingsBridge.apply(); }
                             }
                         }
                     }
@@ -362,7 +357,7 @@ export component SettingsPage inherits Rectangle {
                     SettingRow {
                         title: "Confirm overwrite on upload";
                         description: "Ask before replacing an existing remote file";
-                        ToggleSwitch {
+                        Toggle {
                             checked: SettingsBridge.confirm-overwrite;
                             toggled => {
                                 SettingsBridge.confirm-overwrite = !SettingsBridge.confirm-overwrite;
@@ -374,7 +369,7 @@ export component SettingsPage inherits Rectangle {
                     SettingRow {
                         title: "Show hidden files";
                         description: "Dotfiles and Windows hidden files in file lists";
-                        ToggleSwitch {
+                        Toggle {
                             checked: SettingsBridge.show-hidden-files;
                             toggled => {
                                 SettingsBridge.show-hidden-files = !SettingsBridge.show-hidden-files;

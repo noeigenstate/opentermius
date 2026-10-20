@@ -258,6 +258,7 @@ pub struct Settings {
     pub bell: BellMode,
     pub color_scheme: ColorScheme,
     pub appearance: Appearance,
+    pub gpu_rendering: bool,
     pub keepalive_seconds: u32,
     pub connection_timeout_seconds: u32,
     pub confirm_overwrite: bool,
@@ -275,6 +276,7 @@ impl Default for Settings {
             bell: BellMode::Visual,
             color_scheme: ColorScheme::Default,
             appearance: Appearance::default(),
+            gpu_rendering: false,
             keepalive_seconds: KEEPALIVE_DEFAULT,
             connection_timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
             confirm_overwrite: true,
@@ -345,6 +347,7 @@ mod tests {
         assert!(settings.confirm_multiline_paste);
         assert_eq!(settings.bell, BellMode::Visual);
         assert_eq!(settings.color_scheme, ColorScheme::Default);
+        assert!(!settings.gpu_rendering);
         assert_eq!(settings.keepalive_seconds, 30);
         assert_eq!(settings.connection_timeout_seconds, 15);
         assert!(settings.confirm_overwrite);

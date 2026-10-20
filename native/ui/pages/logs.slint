@@ -100,7 +100,7 @@ export component LogsPage inherits Rectangle {
                 width: parent.width - 2 * Theme.gutter; height: parent.height - 2 * Theme.gutter;
                 background: Theme.highest; border-radius: Theme.r-field; clip: true;
                 VerticalLayout { spacing: 0px;
-                    Rectangle { height: Theme.table-header-height; background: Theme.high;
+                    Rectangle { width: parent.width; height: Theme.table-header-height; background: Theme.high;
                         heading := Rectangle { x: 0px; y: 0px; width: parent.width - root.action-width; height: parent.height;
                             // Explicit cells keep intrinsic label widths from shifting columns.
                             for label[index] in ["Host / address", "Started", "Duration", "Status", "Details"]: TableHeader {
