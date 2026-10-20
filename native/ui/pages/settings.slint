@@ -12,6 +12,7 @@ export global SettingsBridge {
     in-out property <int> bell-mode: 1;
     // Appearance
     in-out property <int> color-scheme: 0;
+    in-out property <int> appearance: 0;
     // SSH
     in-out property <int> keepalive-seconds: 30;
     in-out property <int> connection-timeout-seconds: 15;
@@ -244,13 +245,36 @@ export component SettingsPage inherits Rectangle {
 
             SectionTitle { text: "Appearance"; }
             Rectangle {
-                height: 80px;
+                height: 133px;
                 background: Theme.highest;
                 border-width: 1px;
                 border-color: Theme.border;
                 border-radius: 10px;
                 VerticalLayout {
                     padding: 8px;
+                    spacing: 0px;
+                    SettingRow {
+                        title: "App appearance";
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                text: "Light";
+                                primary: SettingsBridge.appearance == 0;
+                                clicked => { SettingsBridge.appearance = 0; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Dark";
+                                primary: SettingsBridge.appearance == 1;
+                                clicked => { SettingsBridge.appearance = 1; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "System";
+                                primary: SettingsBridge.appearance == 2;
+                                clicked => { SettingsBridge.appearance = 2; SettingsBridge.apply(); }
+                            }
+                        }
+                    }
+                    Separator {}
                     SettingRow {
                         title: "Terminal color scheme";
                         description: "Applied to every terminal session";

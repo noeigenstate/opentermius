@@ -1,6 +1,6 @@
 //! Wires the Settings page bridge to the persisted preferences.
-use crate::{AppWindow, SettingsBridge};
-use opentermius::settings::{self, BellMode, ColorScheme, Settings};
+use crate::{AppWindow, SettingsBridge, Theme};
+use opentermius::settings::{self, Appearance, BellMode, ColorScheme, Settings};
 use slint::ComponentHandle;
 
 pub fn install(ui: &AppWindow) {
@@ -40,6 +40,22 @@ fn current() -> Settings {
     crate::with_state(|state| state.settings.clone()).unwrap_or_default()
 }
 
+pub(super) fn reload(ui: &AppWindow) {
+    let saved = crate::with_state(|state| {
+        state
+            .store
+            .lock()
+            .ok()
+            .map(|store| store.data.settings.clone().normalized())
+    })
+    .flatten();
+    if let Some(saved) = saved {
+        crate::with_state(|state| state.settings = saved.clone());
+        apply_to_ui(ui, &saved, &config_path());
+        crate::with_state(|state| state.display());
+    }
+}
+
 fn config_path() -> String {
     crate::with_state(|state| {
         state
@@ -75,6 +91,7 @@ fn read(ui: &AppWindow) -> Settings {
         confirm_multiline_paste: bridge.get_confirm_multiline_paste(),
         bell: BellMode::from_index(bridge.get_bell_mode()),
         color_scheme: ColorScheme::from_index(bridge.get_color_scheme()),
+        appearance: Appearance::from_index(bridge.get_appearance()),
         keepalive_seconds: bridge.get_keepalive_seconds().max(0) as u32,
         connection_timeout_seconds: bridge.get_connection_timeout_seconds().max(0) as u32,
         confirm_overwrite: bridge.get_confirm_overwrite(),
@@ -94,6 +111,9 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     bridge.set_confirm_multiline_paste(settings.confirm_multiline_paste);
     bridge.set_bell_mode(settings.bell.index());
     bridge.set_color_scheme(settings.color_scheme.index());
+    bridge.set_appearance(settings.appearance.index());
+    ui.global::<Theme>()
+        .set_dark(settings.appearance.is_dark(settings::system_dark()));
     bridge.set_keepalive_seconds(settings.keepalive_seconds.min(i32::MAX as u32) as i32);
     bridge.set_connection_timeout_seconds(
         settings.connection_timeout_seconds.min(i32::MAX as u32) as i32
@@ -160,5 +180,131 @@ fn open_config_folder() {
         .spawn();
     if let Err(error) = result {
         crate::with_state(|state| state.status(format!("无法打开配置目录：{error}"), true));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+    use slint::platform::{
+        Platform, PlatformError, PointerEventButton, WindowAdapter, WindowEvent,
+    };
+    use std::rc::Rc;
+
+    struct TestPlatform(Rc<MinimalSoftwareWindow>);
+    impl Platform for TestPlatform {
+        fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter>, PlatformError> {
+            Ok(self.0.clone())
+        }
+    }
+
+    fn click(ui: &AppWindow, x: f32, y: f32) {
+        slint::platform::update_timers_and_animations();
+        let position = slint::LogicalPosition::new(x, y);
+        ui.window()
+            .dispatch_event(WindowEvent::PointerMoved { position });
+        ui.window().dispatch_event(WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        });
+        ui.window().dispatch_event(WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        });
+    }
+
+    #[test]
+    fn appearance_callbacks_navigation_and_terminal_metrics() {
+        let window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+        slint::platform::set_platform(Box::new(TestPlatform(window.clone()))).unwrap();
+        window.set_size(slint::PhysicalSize::new(1240, 800));
+        let ui = AppWindow::new().unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("settings.json");
+        let mut store = opentermius::store::Store::open(path.clone()).unwrap();
+        let saved = Settings {
+            appearance: Appearance::Dark,
+            ..Settings::default()
+        };
+        settings::persist(&mut store, saved.clone()).unwrap();
+        let mut state = crate::terminal_ux_tests::state();
+        state.ui = ui.as_weak();
+        state.store = std::sync::Arc::new(std::sync::Mutex::new(store));
+        state.settings = saved;
+        crate::STATE.with(|slot| *slot.borrow_mut() = Some(state));
+        install(&ui);
+        ui.show().unwrap();
+        assert!(
+            ui.global::<Theme>().get_dark(),
+            "saved appearance applies at startup"
+        );
+
+        let bridge = ui.global::<SettingsBridge>();
+        for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
+            bridge.set_appearance(appearance.index());
+            bridge.invoke_apply();
+            assert_eq!(
+                ui.global::<Theme>().get_dark(),
+                appearance.is_dark(settings::system_dark())
+            );
+            assert_eq!(
+                opentermius::store::Store::open(path.clone())
+                    .unwrap()
+                    .data
+                    .settings
+                    .appearance,
+                appearance
+            );
+        }
+
+        // Both visible Settings entries must navigate away from a terminal.
+        ui.invoke_activate_session("test".into());
+        ui.set_menu_open(true);
+        click(&ui, 70., 231.);
+        assert!(!ui.get_menu_open());
+        assert_eq!(ui.get_section(), "settings");
+        ui.invoke_open_section("hosts".into());
+        ui.invoke_activate_session("test".into());
+        click(&ui, 70., 744.);
+        assert_eq!(ui.get_section(), "settings");
+
+        ui.invoke_activate_session("test".into());
+        slint::platform::update_timers_and_animations();
+        let width = ui.get_cell_width();
+        let height = ui.get_cell_height();
+        let cols = ui.get_terminal_cols();
+        let rows = ui.get_terminal_rows();
+        bridge.set_terminal_font_size(22);
+        bridge.invoke_apply();
+        slint::platform::update_timers_and_animations();
+        assert!((ui.get_cell_width() / width - 22. / 14.).abs() < 0.05);
+        assert!(ui.get_cell_height() > height);
+        assert!(ui.get_terminal_cols() < cols);
+        assert!(ui.get_terminal_rows() < rows);
+
+        // Recovery changes the store directly; reload must refresh live preferences.
+        crate::with_state(|state| {
+            let mut store = state.store.lock().unwrap();
+            settings::persist(
+                &mut store,
+                Settings {
+                    appearance: Appearance::Dark,
+                    font_size: 18,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        });
+        reload(&ui);
+        assert!(ui.global::<Theme>().get_dark());
+        assert_eq!(bridge.get_terminal_font_size(), 18);
+        assert_eq!(current().font_size, 18);
+
+        bridge.invoke_restore_defaults();
+        assert!(!ui.global::<Theme>().get_dark());
+        assert_eq!(bridge.get_terminal_font_size(), 14);
+        ui.hide().unwrap();
+        crate::STATE.with(|slot| *slot.borrow_mut() = None);
     }
 }

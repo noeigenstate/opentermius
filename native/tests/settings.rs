@@ -1,7 +1,7 @@
 //! Persisted preferences: older configs must keep loading and new values must
 //! survive a store round-trip.
 use opentermius::{
-    settings::{self, ColorScheme, Settings},
+    settings::{self, Appearance, ColorScheme, Settings},
     store::Store,
     terminal::Terminal,
 };
@@ -21,6 +21,7 @@ fn config_from_before_settings_loads_defaults_and_saves_preferences() {
         font_size: 22,
         copy_on_select: true,
         color_scheme: ColorScheme::Monokai,
+        appearance: Appearance::Dark,
         keepalive_seconds: 0,
         ..Settings::default()
     };
@@ -32,7 +33,32 @@ fn config_from_before_settings_loads_defaults_and_saves_preferences() {
     let raw = std::fs::read_to_string(&reopened.path).unwrap();
     assert!(raw.contains("\"fontSize\": 22"));
     assert!(raw.contains("\"colorScheme\": \"monokai\""));
+    assert!(raw.contains("\"appearance\": \"dark\""));
     assert!(raw.contains("\"keepaliveSeconds\": 0"));
+}
+
+#[test]
+fn appearance_defaults_and_system_resolution() {
+    let old: Settings = serde_json::from_str(r#"{"fontSize":18}"#).unwrap();
+    assert_eq!(old.appearance, Appearance::Light);
+    for (index, appearance) in [
+        (0, Appearance::Light),
+        (1, Appearance::Dark),
+        (2, Appearance::System),
+    ] {
+        assert_eq!(Appearance::from_index(index), appearance);
+        assert_eq!(appearance.index(), index);
+        let json = serde_json::to_string(&appearance).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Appearance>(&json).unwrap(),
+            appearance
+        );
+    }
+    for system_dark in [false, true] {
+        assert!(!Appearance::Light.is_dark(system_dark));
+        assert!(Appearance::Dark.is_dark(system_dark));
+        assert_eq!(Appearance::System.is_dark(system_dark), system_dark);
+    }
 }
 
 #[test]

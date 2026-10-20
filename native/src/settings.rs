@@ -19,6 +19,72 @@ pub const CONNECTION_TIMEOUT_DEFAULT: u32 = 15;
 pub const CONNECTION_TIMEOUT_MIN: u32 = 1;
 pub const CONNECTION_TIMEOUT_MAX: u32 = 300;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Appearance {
+    #[default]
+    Light,
+    Dark,
+    System,
+}
+
+impl Appearance {
+    pub const fn index(self) -> i32 {
+        match self {
+            Self::Light => 0,
+            Self::Dark => 1,
+            Self::System => 2,
+        }
+    }
+
+    pub const fn from_index(index: i32) -> Self {
+        match index {
+            1 => Self::Dark,
+            2 => Self::System,
+            _ => Self::Light,
+        }
+    }
+
+    pub const fn is_dark(self, system_dark: bool) -> bool {
+        match self {
+            Self::Light => false,
+            Self::Dark => true,
+            Self::System => system_dark,
+        }
+    }
+}
+
+/// Resolve Windows app appearance; unavailable preferences default to light.
+pub fn system_dark() -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Registry::{
+            HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW,
+        };
+        let key: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\0"
+            .encode_utf16()
+            .collect();
+        let name: Vec<u16> = "AppsUseLightTheme\0".encode_utf16().collect();
+        let mut value = 1u32;
+        let mut size = std::mem::size_of_val(&value) as u32;
+        // The registry API writes at most `size` bytes into this DWORD buffer.
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                key.as_ptr(),
+                name.as_ptr(),
+                RRF_RT_REG_DWORD,
+                std::ptr::null_mut(),
+                (&mut value as *mut u32).cast(),
+                &mut size,
+            )
+        };
+        result == 0 && value == 0
+    }
+    #[cfg(not(windows))]
+    false
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ColorScheme {
@@ -191,6 +257,7 @@ pub struct Settings {
     pub confirm_multiline_paste: bool,
     pub bell: BellMode,
     pub color_scheme: ColorScheme,
+    pub appearance: Appearance,
     pub keepalive_seconds: u32,
     pub connection_timeout_seconds: u32,
     pub confirm_overwrite: bool,
@@ -207,6 +274,7 @@ impl Default for Settings {
             confirm_multiline_paste: true,
             bell: BellMode::Visual,
             color_scheme: ColorScheme::Default,
+            appearance: Appearance::default(),
             keepalive_seconds: KEEPALIVE_DEFAULT,
             connection_timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
             confirm_overwrite: true,

@@ -14,22 +14,24 @@ base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 dirs = "6"
 image = { version = "0.25", default-features = false, features = ["png"] }
+miniz_oxide = "=0.8.9"
 portable-pty = "0.9"
 rfd = { version = "0.17", default-features = false }
 raw-window-handle = "0.6"
+ring = "=0.17.14"
 shlex = "2"
 russh = { version = "0.64.1", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "3.0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-software", "compat-1-18", "raw-window-handle-06"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-software", "compat-1-18", "raw-window-handle-06", "unstable-winit-030"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util", "fs"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 vt100 = "0.18.1"
 zeroize = "1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_System_Environment"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"

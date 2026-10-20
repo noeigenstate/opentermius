@@ -1,0 +1,192 @@
+// Smoke-only showcase: --smoke-test --smoke-scene=section-gallery.
+// Sheets keep samples readable at normal desktop sizes; Light/Dark applies to all samples.
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Action, IconButton, Input, SearchField, TextArea, Field, Toggle, Checkbox, Segmented, Select, Popover, MenuItem, MenuSeparator, Card, EntityCard, ListRow, TableHeader, StatusDot, Badge, SectionHeader, Caption, PageHeader, PageToolbar, EmptyState, DetailPanel, SettingRow, Dialog, NavItem } from "../common.slint";
+
+component Sample inherits Rectangle {
+    in property <string> title;
+    background: Theme.highest; border-radius: Theme.r-field;
+    VerticalLayout { padding: 20px; spacing: 12px;
+        SectionHeader { text: root.title; height: 20px; }
+        @children
+    }
+}
+
+export component GalleryPage inherits Rectangle {
+    background: Theme.base;
+    property <int> sheet: 0;
+    property <bool> menu-open: false;
+    property <bool> dialog-open: false;
+    property <string> feedback: "Hover, focus and click to inspect states";
+    private property <length> sample-width: (scroller.visible-width - 56px) / 2;
+    property <[string]> icon-names: ["check", "search", "trash", "copy", "play", "stop", "edit", "download", "menu", "chevron-right", "chevron-left", "info", "warning", "eye"];
+    property <[image]> icons: [@image-url("../icons/check.svg"), @image-url("../icons/search.svg"), @image-url("../icons/trash.svg"), @image-url("../icons/copy.svg"), @image-url("../icons/play.svg"), @image-url("../icons/stop.svg"), @image-url("../icons/edit.svg"), @image-url("../icons/download.svg"), @image-url("../icons/menu.svg"), @image-url("../icons/chevron-right.svg"), @image-url("../icons/chevron-left.svg"), @image-url("../icons/info.svg"), @image-url("../icons/warning.svg"), @image-url("../icons/eye.svg")];
+
+    VerticalLayout { spacing: 0px;
+        Rectangle { height: 56px; background: Theme.high;
+            HorizontalLayout { padding-left: Theme.gutter; padding-right: Theme.gutter; spacing: 12px; cross-axis-alignment: center;
+                Text { text: "Design foundation"; color: Theme.text; font-size: 18px; font-weight: 600; vertical-alignment: center; horizontal-stretch: 1; }
+                Segmented { options: ["Light", "Dark"]; current-index: Theme.dark ? 1 : 0; changed(index) => { Theme.dark = index == 1; } }
+            }
+        }
+        PageToolbar {
+            Segmented { options: ["Controls", "Layouts", "Tokens & icons"]; segment-min-width: 96px; current-index <=> root.sheet; }
+            Rectangle { horizontal-stretch: 1; }
+            Caption { text: root.feedback; overflow: elide; }
+        }
+        scroller := ScrollView { vertical-stretch: 1;
+            content-height: samples.preferred-height;
+            samples := VerticalLayout { width: scroller.visible-width; spacing: 16px; padding: 20px;
+                if root.sheet == 0: HorizontalLayout { spacing: 16px; cross-axis-alignment: start;
+                    VerticalLayout { spacing: 16px; width: root.sample-width;
+                        Sample { title: "Actions · sizes & variants";
+                            HorizontalLayout { spacing: 8px; cross-axis-alignment: center;
+                                Action { kind: "primary"; size: "s"; text: "Small"; }
+                                Action { kind: "primary"; text: "Medium"; }
+                                Action { kind: "primary"; size: "l"; text: "New host"; has-icon: true; icon: @image-url("../icons/plus.svg"); }
+                            }
+                            HorizontalLayout { spacing: 8px;
+                                Action { kind: "secondary"; text: "Secondary"; }
+                                Action { kind: "flat"; text: "Flat"; }
+                                Action { kind: "primary"; disabled: true; text: "Disabled"; }
+                            }
+                            HorizontalLayout { spacing: 8px; cross-axis-alignment: center;
+                                Action { kind: "danger"; text: "Delete"; }
+                                Action { kind: "danger-flat"; text: "Remove"; }
+                                IconButton { icon: @image-url("../icons/copy.svg"); }
+                                IconButton { icon: @image-url("../icons/trash.svg"); button-size: 24px; danger: true; }
+                                IconButton { icon: @image-url("../icons/play.svg"); enabled: false; }
+                            }
+                            Caption { text: "Legacy primary / flat / secondary APIs"; }
+                            HorizontalLayout { spacing: 8px;
+                                Action { primary: true; text: "Connect"; }
+                                Action { flat: true; secondary: true; text: "Choose key"; }
+                                Action { disabled: true; text: "Disabled"; }
+                            }
+                        }
+                        Sample { title: "Selection & status";
+                            HorizontalLayout { spacing: 16px; cross-axis-alignment: center;
+                                Toggle { checked: true; } Toggle { } Toggle { enabled: false; }
+                                Checkbox { text: "Include keys"; checked: true; }
+                            }
+                            HorizontalLayout { spacing: 16px;
+                                Checkbox { text: "Replace data"; }
+                                Checkbox { text: "Disabled"; enabled: false; checked: true; }
+                            }
+                            Segmented { options: ["Local", "Remote", "Dynamic"]; current-index: 1; }
+                            Select { options: ["Backspace", "Delete", "Escape", "Default", "Option 5", "Option 6", "Option 7", "Option 8"]; current-index: 0; }
+                            HorizontalLayout { spacing: 8px; cross-axis-alignment: center;
+                                StatusDot { kind: "ok"; } Caption { text: "Connected"; }
+                                StatusDot { kind: "warn"; } Caption { text: "Warning"; }
+                                StatusDot { kind: "error"; } Caption { text: "Error"; }
+                            }
+                            HorizontalLayout { spacing: 8px; cross-axis-alignment: center;
+                                StatusDot { } Caption { text: "Idle"; }
+                                StatusDot { kind: "busy"; } Caption { text: "Working"; }
+                            }
+                            HorizontalLayout { spacing: 8px;
+                                Badge { text: "Key"; kind: "accent"; } Badge { text: "OK"; kind: "success"; }
+                                Badge { text: "Warn"; kind: "warning"; } Badge { text: "Error"; kind: "danger"; } Badge { text: "Local"; }
+                            }
+                        }
+                    }
+                    VerticalLayout { spacing: 16px; width: root.sample-width;
+                        Sample { title: "Inputs · enabled / disabled / error";
+                            SearchField { placeholder: "Search keys"; }
+                            HorizontalLayout { spacing: 8px;
+                                Input { placeholder-text: "IP or Hostname"; }
+                                Input { compact: true; text: "22"; width: 72px; }
+                            }
+                            Input { text: "Disabled value"; enabled: false; }
+                            Input { text: "Passphrase"; input-type: InputType.password; filled: true; }
+                            Field { label: "Destination port"; text: "70000"; invalid: true; helper: "Port must be between 1 and 65535"; }
+                            TextArea { mono: true; text: "uptime && df -h\nkubectl get pods -A"; height: 120px; }
+                        }
+                        Sample { title: "Menus & dialogs";
+                            HorizontalLayout { spacing: 8px;
+                                Action { text: "Open menu"; clicked => { root.menu-open = true; } }
+                                Action { text: "Open dialog"; clicked => { root.dialog-open = true; } }
+                            }
+                            MenuItem { text: "Copy fingerprint"; has-icon: true; icon: @image-url("../icons/copy.svg"); }
+                            MenuItem { text: "Selected option"; show-check: true; }
+                            MenuSeparator { }
+                            MenuItem { text: "Remove key"; danger: true; has-icon: true; icon: @image-url("../icons/trash.svg"); }
+                            MenuItem { text: "Unavailable"; enabled: false; }
+                        }
+                    }
+                }
+                if root.sheet == 1: VerticalLayout { spacing: 16px;
+                    Sample { title: "Page bands";
+                        PageHeader { placeholder: "Search keys"; primary-text: "New key"; primary-has-icon: true; primary-icon: @image-url("../icons/plus.svg"); }
+                        PageToolbar { Action { text: "Import key"; } Rectangle { horizontal-stretch: 1; } IconButton { icon: @image-url("../icons/more.svg"); } }
+                    }
+                    HorizontalLayout { spacing: 16px; cross-axis-alignment: start;
+                        VerticalLayout { spacing: 16px; horizontal-stretch: 1;
+                            EntityCard { title: "Production web"; subtitle: "tester@10.0.0.4:22"; icon: @image-url("../icons/hosts.svg"); more-clicked => { root.feedback = "More clicked"; } }
+                            EntityCard { title: "Staging"; subtitle: "1 host"; selected: true; icon: @image-url("../icons/group.svg"); }
+                            Card { title: "Address"; Input { placeholder-text: "IP or Hostname"; } }
+                            Sample { title: "List rows";
+                                ListRow { title: "deploy.sh"; subtitle: "cd /srv/app && git pull"; selected: true;
+                                    IconButton { icon: @image-url("../icons/copy.svg"); clicked => { root.feedback = "Copy clicked"; } }
+                                }
+                                ListRow { title: "Single line row"; StatusDot { kind: "ok"; } }
+                            }
+                            Rectangle { background: Theme.highest; border-radius: Theme.r-field;
+                                VerticalLayout { spacing: 0px;
+                                    SettingRow { label: "Copy on select"; description: "Copy selected terminal text"; Toggle { checked: true; } }
+                                    SettingRow { label: "Font size"; divider: false; Select { width: 120px; options: ["12", "14", "16"]; current-index: 1; } }
+                                }
+                            }
+                            TableHeader { labels: ["Name", "Type", "Status"]; cols: [0.5, 0.25, 0.25]; }
+                            NavItem { text: "Hosts"; icon: @image-url("../icons/hosts.svg"); }
+                            NavItem { text: "Keychain"; icon: @image-url("../icons/keychain.svg"); active: true; }
+                            NavItem { text: "Logs"; icon: @image-url("../icons/history.svg"); enabled: false; }
+                        }
+                        DetailPanel { title: "New key"; height: 560px;
+                            Card { title: "Label"; Field { label: "Name"; placeholder: "Production key"; } }
+                            Card { title: "Credentials"; Field { label: "Username"; text: "deploy"; } }
+                        }
+                    }
+                    Rectangle { height: 300px; EmptyState { icon: @image-url("../icons/keychain.svg"); title: "No keys yet"; description: "Save credentials to reuse across hosts."; action-text: "New key"; } }
+                    Rectangle { height: 200px; EmptyState { icon: @image-url("../icons/search.svg"); title: "No matching hosts"; description: "Try another label or address."; action-visible: false; } }
+                }
+                if root.sheet == 2: VerticalLayout { spacing: 16px;
+                    Sample { title: "Palette & typography · follows Theme.dark";
+                        HorizontalLayout { spacing: 12px;
+                            Rectangle { height: 56px; background: Theme.base; border-width: 1px; border-color: Theme.border; Text { text: "base"; color: Theme.text; horizontal-alignment: center; vertical-alignment: center; } }
+                            Rectangle { background: Theme.high; Text { text: "high"; color: Theme.text; horizontal-alignment: center; vertical-alignment: center; } }
+                            Rectangle { background: Theme.lowest; Text { text: "lowest"; color: Theme.on-accent; horizontal-alignment: center; vertical-alignment: center; } }
+                            Rectangle { background: Theme.accent; Text { text: "accent"; color: Theme.on-accent; horizontal-alignment: center; vertical-alignment: center; } }
+                            Rectangle { background: Theme.danger; Text { text: "danger"; color: Theme.on-accent; horizontal-alignment: center; vertical-alignment: center; } }
+                        }
+                        Text { text: "Page title 18 / 600"; font-size: Theme.font-title; font-weight: 600; color: Theme.text; }
+                        SectionHeader { text: "Section header 14 / 600"; }
+                        Text { text: "Body 14 / 400 · 所有控件支持中文"; font-size: Theme.font-body; color: Theme.text; }
+                        Caption { text: "Caption 12 / 400"; }
+                        Text { text: "SHA256:8f2adc0b19e7c4a1b6d3f9e2085c7a4b"; font-family: "Consolas"; font-size: Theme.font-mono; color: Theme.text; }
+                    }
+                    Sample { title: "Project-authored icons · 24 × 24 / stroke 1.8";
+                        for glyph[index] in root.icons: HorizontalLayout { spacing: 16px; cross-axis-alignment: center;
+                            Image { source: glyph; colorize: Theme.text; width: 24px; height: 24px; }
+                            Caption { text: root.icon-names[index]; }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Last children: full-page overlay layers for click-away and modal input capture.
+    Popover { open <=> root.menu-open; anchor-x: 24px; anchor-y: 140px;
+        MenuItem { text: "Copy fingerprint"; has-icon: true; icon: @image-url("../icons/copy.svg"); clicked => { root.menu-open = false; root.feedback = "Copied"; } }
+        MenuItem { text: "Edit key"; has-icon: true; icon: @image-url("../icons/edit.svg"); }
+        MenuSeparator { }
+        MenuItem { text: "Remove key"; danger: true; has-icon: true; icon: @image-url("../icons/trash.svg"); }
+    }
+    Dialog { open <=> root.dialog-open; title: "Backup & Restore"; dialog-width: 560px;
+        description: "Back up hosts, keys and settings to an encrypted file."; confirm-text: "Back up";
+        confirm => { root.dialog-open = false; root.feedback = "Confirmed"; }
+        cancel => { root.feedback = "Cancelled"; }
+        Field { label: "Password"; secret: true; placeholder: "Password"; }
+        Checkbox { text: "Include saved passwords"; checked: true; }
+    }
+}
