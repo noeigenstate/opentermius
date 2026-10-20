@@ -1,4 +1,10 @@
+pub mod forwarding;
+pub mod keychain;
 pub mod local;
+pub mod logs;
+pub mod recovery;
+pub mod settings;
+pub mod snippets;
 pub mod ssh;
 pub mod store;
 pub mod terminal;

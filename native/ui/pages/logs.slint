@@ -1,0 +1,10 @@
+import { Theme, Action, Input, Field } from "../common.slint";
+
+// Rust reads and drives this page through the global bridge.
+export global LogsBridge {
+}
+
+export component LogsPage inherits Rectangle {
+    background: Theme.base;
+    Text { text: "Logs"; color: Theme.secondary; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+}

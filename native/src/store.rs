@@ -73,6 +73,14 @@ pub struct Data {
     pub hosts: Vec<Profile>,
     #[serde(default)]
     pub known_hosts: BTreeMap<String, String>,
+    #[serde(default)]
+    pub keys: Vec<crate::keychain::KeyEntry>,
+    #[serde(default)]
+    pub forwards: Vec<crate::forwarding::Forward>,
+    #[serde(default)]
+    pub snippets: Vec<crate::snippets::Snippet>,
+    #[serde(default)]
+    pub settings: crate::settings::Settings,
 }
 pub struct Store {
     pub path: PathBuf,

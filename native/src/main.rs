@@ -18,6 +18,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 use zeroize::Zeroize;
 slint::include_modules!();
+mod pages;
 
 struct SessionView {
     local: bool,
@@ -1476,6 +1477,7 @@ fn run() -> anyhow::Result<()> {
             });
         }
     });
+    pages::install(&ui);
     ui.on_show_settings(|| {
         with_state(|s| {
             let path = s
