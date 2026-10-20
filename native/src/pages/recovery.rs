@@ -85,6 +85,7 @@ pub fn install(ui: &AppWindow) {
                     let result = result.map(|summary| summary.to_string());
                     if result.is_ok() {
                         ui.global::<RecoveryBridge>().set_pasted_code("".into());
+                        super::settings::reload(&ui);
                         with_state(|s| s.hosts());
                     }
                     message(&ui, result);

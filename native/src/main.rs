@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use anyhow::Context;
 use opentermius::{
+    settings::{BellMode, Settings},
     hosts,
     ssh::{self, Command, Event},
     store::{self, Profile, Store},
@@ -64,6 +65,7 @@ impl Prompt {
 struct State {
     ui: slint::Weak<AppWindow>,
     store: Arc<Mutex<Store>>,
+    settings: Settings,
     runtime: tokio::runtime::Runtime,
     events: mpsc::Sender<Event>,
     sessions: BTreeMap<String, SessionView>,
@@ -261,6 +263,7 @@ impl State {
                 ui.set_remote_connected(view.connected && !view.local);
                 ui.set_local_session(view.local);
                 ui.set_active_host(view.profile.name.clone().into());
+                let scheme = self.settings.color_scheme;
                 let rows: Vec<TerminalRun> = view
                     .snapshot
                     .runs
@@ -270,8 +273,8 @@ impl State {
                         row: r.row as i32,
                         col: r.col as i32,
                         width: r.width as i32,
-                        fg: ui_color(r.fg),
-                        bg: ui_color(r.bg),
+                        fg: ui_color(scheme.map_color(r.fg, r.fg_source)),
+                        bg: ui_color(scheme.map_color(r.bg, r.bg_source)),
                         bold: r.bold,
                         underline: r.underline,
                     })
@@ -593,7 +596,12 @@ impl State {
                 local: false,
                 profile,
                 transport: None,
-                snapshot: Terminal::new(self.rows, self.cols).snapshot(),
+                snapshot: Terminal::with_scrollback(
+                    self.rows,
+                    self.cols,
+                    self.settings.scrollback_lines,
+                )
+                .snapshot(),
                 status: "等待认证".into(),
                 connected: false,
                 ended: false,
@@ -675,7 +683,7 @@ impl State {
         let events = self.events.clone();
         if let Some(view) = self.sessions.get_mut(id) {
             view.status = "连接中".into();
-            view.transport = Some(ssh::spawn_with_key_material(
+            view.transport = Some(ssh::spawn_with_key_material_and_options(
                 &runtime,
                 id.to_string(),
                 profile,
@@ -683,6 +691,11 @@ impl State {
                 key_material,
                 known,
                 events,
+                ssh::ConnectOptions {
+                    keepalive_seconds: self.settings.keepalive_seconds,
+                    timeout_seconds: self.settings.connection_timeout_seconds,
+                    scrollback_lines: self.settings.scrollback_lines,
+                },
             ));
         }
         self.tabs();
@@ -720,7 +733,12 @@ impl State {
                 local: true,
                 profile,
                 transport: Some(transport),
-                snapshot: Terminal::new(self.rows, self.cols).snapshot(),
+                snapshot: Terminal::with_scrollback(
+                    self.rows,
+                    self.cols,
+                    self.settings.scrollback_lines,
+                )
+                .snapshot(),
                 status: "Starting".into(),
                 connected: false,
                 ended: false,
@@ -859,7 +877,11 @@ impl State {
                     self.selecting = true;
                     self.select(row, col, shift);
                 }
-                1 | 3 => self.selecting = false,
+                1 | 3 => {
+                    let was_selecting = self.selecting;
+                    self.selecting = false;
+                    if was_selecting { self.end_selection(); }
+                },
                 2 => {
                     if self.selecting {
                         self.select(row, col, true);
@@ -1150,9 +1172,9 @@ impl State {
         let id = match &event {
             Event::Status { id, .. } | Event::Screen { id, .. } | Event::HostKey { id, .. }
             | Event::AuthPrompt { id, .. } | Event::Files { id, .. } | Event::Transfer { id, .. }
-            | Event::OverwriteRequired { id, .. } | Event::DeleteRequired { id, .. }
-            | Event::TransferProgress { id, .. } | Event::TransferFinished { id, .. }
-            | Event::Closed { id } => id,
+            | Event::OverwriteRequired { id, .. } | Event::Closed { id } | Event::Bell { id }
+            | Event::DeleteRequired { id, .. } | Event::TransferProgress { id, .. }
+            | Event::TransferFinished { id, .. } => id,
         };
         if !self.sessions.contains_key(id) {
             return;
@@ -1246,6 +1268,14 @@ impl State {
                 if let Some(s) = self.sessions.get_mut(&id) {
                     if s.snapshot.lines != snapshot.lines {
                         s.selection = None;
+                    }
+                    if snapshot.bell_count != s.snapshot.bell_count
+                        && self.settings.bell == BellMode::Visual
+                        && self.active.as_deref() == Some(&id)
+                    {
+                        if let Some(ui) = self.ui.upgrade() {
+                            ui.set_bell_flash(true);
+                        }
                     }
                     s.snapshot = snapshot;
                     if self.active.as_deref() == Some(&id) {
@@ -1347,6 +1377,13 @@ impl State {
                     self.finish_transfer(transfer, "传输已取消".into(), false, true);
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_busy(false)
+                    }
+                }
+            }
+            Event::Bell { id } => {
+                if self.settings.bell == BellMode::Visual && self.active.as_deref() == Some(&id) {
+                    if let Some(ui) = self.ui.upgrade() {
+                        ui.set_bell_flash(true);
                     }
                 }
             }
@@ -1538,12 +1575,45 @@ impl State {
             }
         }
     }
+    fn end_selection(&self) {
+        if !self.settings.copy_on_select {
+            return;
+        }
+        let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get(id)) else {
+            return;
+        };
+        let Some((start, end)) = view.selection.filter(|(a, b)| a != b) else {
+            return;
+        };
+        let text = view.snapshot.selected_text(start, end);
+        if text.is_empty() {
+            return;
+        }
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Err(e) = clipboard.set_text(text) {
+                self.status(e.to_string(), true)
+            }
+        }
+    }
     fn paste(&self) {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if let Ok(text) = clipboard.get_text() {
                 if text.len() > 1024 * 1024 {
                     self.status("粘贴内容不能超过 1 MB", true);
                     return;
+                }
+                let lines = opentermius::settings::paste_line_count(&text);
+                if self.settings.confirm_multiline_paste && lines > 1 {
+                    let confirmed = rfd::MessageDialog::new()
+                        .set_title("粘贴多行内容")
+                        .set_description(format!("剪贴板包含 {lines} 行内容，是否粘贴到终端？"))
+                        .set_buttons(rfd::MessageButtons::YesNo)
+                        .show()
+                        == rfd::MessageDialogResult::Yes;
+                    if !confirmed {
+                        self.status("已取消粘贴", false);
+                        return;
+                    }
                 }
                 let bracketed = self
                     .active
@@ -1588,11 +1658,25 @@ impl State {
         };
         self.local_request += 1;
         let generation = self.local_request;
+        let show_hidden = self.settings.show_hidden_files;
         let weak = self.ui.clone();
         self.runtime.spawn_blocking(move || {
             let result = (|| -> anyhow::Result<(PathBuf, Vec<ssh::LocalFile>)> {
                 let path = path.canonicalize()?;
-                let files = ssh::read_local_dir(&path)?;
+                let mut files = ssh::read_local_dir(&path)?;
+                if !show_hidden {
+                    files.retain(|file| {
+                        if ssh::is_hidden_name(&file.name) { return false; }
+                        #[cfg(windows)]
+                        {
+                            use std::os::windows::fs::MetadataExt;
+                            if file.path.metadata().is_ok_and(|meta| meta.file_attributes() & 0x2 != 0) {
+                                return false;
+                            }
+                        }
+                        true
+                    });
+                }
                 Ok((path, files))
             })();
             let _ = weak.upgrade_in_event_loop(move |ui| {
@@ -1733,20 +1817,21 @@ impl State {
             .to_string();
         let directory = self.file_path.clone();
         let folder = local.is_dir();
+        let overwrite = !self.settings.confirm_overwrite;
         self.queue_transfer(&name, "Upload", |transfer| {
             if folder {
                 Command::UploadTree {
                     transfer,
                     directory,
                     local,
-                    overwrite: false,
+                    overwrite,
                 }
             } else {
                 Command::UploadFile {
                     transfer,
                     directory,
                     local,
-                    overwrite: false,
+                    overwrite,
                 }
             }
         });
@@ -2065,10 +2150,15 @@ fn run() -> anyhow::Result<()> {
             }
         }
     });
+    let initial_settings = store
+        .lock()
+        .map(|s| s.data.settings.clone().normalized())
+        .unwrap_or_default();
     STATE.with(|s| {
         *s.borrow_mut() = Some(State {
             ui: ui.as_weak(),
             store,
+            settings: initial_settings,
             runtime,
             events: tx,
             sessions: BTreeMap::new(),
@@ -2301,6 +2391,9 @@ fn run() -> anyhow::Result<()> {
     ui.on_copy_terminal(|| {
         with_state(|s| s.copy());
     });
+    ui.on_end_terminal_selection(|| {
+        with_state(|s| s.end_selection());
+    });
     ui.on_paste_terminal(|| {
         with_state(|s| s.paste());
     });
@@ -2500,16 +2593,6 @@ fn run() -> anyhow::Result<()> {
         }
     });
     pages::install(&ui);
-    ui.on_show_settings(|| {
-        with_state(|s| {
-            let path = s
-                .store
-                .lock()
-                .map(|s| s.path.display().to_string())
-                .unwrap_or_default();
-            if let Some(ui)=s.ui.upgrade(){ui.set_settings_text(format!("OpenTermius 0.2.0 · Rust + Slint\n\n本机配置：{path}\n\n凭据由 Windows DPAPI 加密。无产品账号、云同步和遥测。\n支持导入和导出本地主机 JSON；导出文件不含保存的凭据。").into())}
-        });
-    });
     with_state(|s| {
         let view = s
             .store
@@ -2695,6 +2778,7 @@ mod terminal_ux_tests {
             ui: slint::Weak::default(),
             store: Arc::new(Mutex::new(Store { path: PathBuf::new(), data: store::Data::default() })),
             runtime: tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap(),
+            settings: Settings::default(),
             events, sessions: BTreeMap::new(), order: Vec::new(), active: None,
             queue: VecDeque::new(), prompt: None, cols: 80, rows: 24,
             file_path: String::new(), search: String::new(), group_filter: String::new(),
@@ -2737,6 +2821,23 @@ mod terminal_ux_tests {
             Command::Input(bytes) => bytes,
             other => panic!("expected input, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn queued_uploads_apply_overwrite_preference_to_files_and_folders() {
+        let mut s = state();
+        let mut rx = session(&mut s);
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("upload.txt");
+        std::fs::write(&file, b"settings upload").unwrap();
+        for confirm in [true, false] {
+            s.settings.confirm_overwrite = confirm;
+            s.upload_path(file.clone());
+            assert!(matches!(rx.try_recv().unwrap(), Command::UploadFile { overwrite, .. } if overwrite == !confirm));
+            s.upload_path(temp.path().to_path_buf());
+            assert!(matches!(rx.try_recv().unwrap(), Command::UploadTree { overwrite, .. } if overwrite == !confirm));
+        }
+        assert_eq!(s.transfers.len(), 4);
     }
 
     #[test]

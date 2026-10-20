@@ -172,7 +172,7 @@ async fn keychain_key_authenticates_without_a_file_or_prompt() {
     let mut profile = profile;
     profile.port = port;
     let (tx, mut rx) = mpsc::channel(128);
-    let session = ssh::spawn_with_key_material(
+    let session = ssh::spawn_with_key_material_and_options(
         &tokio::runtime::Handle::current(),
         "keychain-auth".into(),
         profile,
@@ -180,6 +180,11 @@ async fn keychain_key_authenticates_without_a_file_or_prompt() {
         Some(material),
         Some(host_fingerprint),
         tx,
+        ssh::ConnectOptions {
+            keepalive_seconds: 0,
+            timeout_seconds: 5,
+            scrollback_lines: 1000,
+        },
     );
     timeout(Duration::from_secs(15), async {
         loop {

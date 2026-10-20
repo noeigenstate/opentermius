@@ -1,10 +1,439 @@
-import { Theme, Action, Input, Field } from "../common.slint";
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Action } from "../common.slint";
 
 // Rust reads and drives this page through the global bridge.
 export global SettingsBridge {
+    // Terminal
+    in-out property <int> terminal-font-size: 14;
+    in-out property <int> scrollback-lines: 3000;
+    in-out property <bool> cursor-blink: true;
+    in-out property <bool> copy-on-select: false;
+    in-out property <bool> confirm-multiline-paste: true;
+    in-out property <int> bell-mode: 1;
+    // Appearance
+    in-out property <int> color-scheme: 0;
+    in-out property <int> appearance: 0;
+    // SSH
+    in-out property <int> keepalive-seconds: 30;
+    in-out property <int> connection-timeout-seconds: 15;
+    // SFTP
+    in-out property <bool> confirm-overwrite: true;
+    in-out property <bool> show-hidden-files: true;
+    // About
+    in-out property <string> version: "";
+    in-out property <string> config-path: "";
+
+    callback apply;
+    callback restore-defaults;
+    callback open-config-folder;
+}
+
+component SectionTitle inherits Text {
+    color: Theme.text;
+    font-size: 16px;
+    font-weight: 600;
+    height: 22px;
+    vertical-alignment: center;
+}
+
+component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> description: "";
+    height: root.description == "" ? 52px : 64px;
+    background: transparent;
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 12px;
+        spacing: 14px;
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 3px;
+            Text { text: root.title; color: Theme.text; font-size: 14px; vertical-alignment: center; }
+            if root.description != "": Text { text: root.description; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+            @children
+        }
+    }
+}
+
+component Separator inherits Rectangle {
+    height: 1px;
+    background: #798c941a;
+}
+
+component Stepper inherits Rectangle {
+    in property <int> value;
+    in property <int> minimum: 0;
+    in property <int> maximum: 100;
+    in property <int> step: 1;
+    in property <string> suffix: "";
+    callback value-changed(int);
+    width: 156px;
+    height: 32px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Theme.border;
+    background: Theme.high;
+    HorizontalLayout {
+        spacing: 0px;
+        Action {
+            text: "−";
+            flat: true;
+            min-width: 30px;
+            max-width: 30px;
+            min-height: 30px;
+            max-height: 30px;
+            disabled: root.value <= root.minimum;
+            clicked => { root.value-changed(Math.max(root.minimum, root.value - root.step)); }
+        }
+        Text {
+            text: root.value + root.suffix;
+            color: Theme.text;
+            font-size: 13px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Action {
+            text: "+";
+            flat: true;
+            min-width: 30px;
+            max-width: 30px;
+            min-height: 30px;
+            max-height: 30px;
+            disabled: root.value >= root.maximum;
+            clicked => { root.value-changed(Math.min(root.maximum, root.value + root.step)); }
+        }
+    }
+}
+
+component ToggleSwitch inherits Rectangle {
+    in property <bool> checked;
+    callback toggled;
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background: root.checked ? Theme.accent : #c3ced2;
+    Rectangle {
+        x: root.checked ? 19px : 3px;
+        y: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: white;
+    }
+    TouchArea { clicked => { root.toggled(); } }
 }
 
 export component SettingsPage inherits Rectangle {
     background: Theme.base;
-    Text { text: "Settings"; color: Theme.secondary; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+
+    ScrollView {
+        VerticalLayout {
+            padding-left: 28px;
+            padding-right: 28px;
+            padding-top: 22px;
+            padding-bottom: 28px;
+            spacing: 16px;
+
+            Text {
+                text: "Settings";
+                color: Theme.text;
+                font-size: 20px;
+                font-weight: 600;
+                height: 30px;
+                vertical-alignment: center;
+            }
+
+            SectionTitle { text: "Terminal"; }
+            Rectangle {
+                height: 369px;
+                background: Theme.highest;
+                border-width: 1px;
+                border-color: Theme.border;
+                border-radius: 10px;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 0px;
+                    SettingRow {
+                        title: "Font size";
+                        description: "Terminal font (Consolas), 10–24 px";
+                        Stepper {
+                            value: SettingsBridge.terminal-font-size;
+                            minimum: 10;
+                            maximum: 24;
+                            suffix: " px";
+                            value-changed(value) => {
+                                SettingsBridge.terminal-font-size = value;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Scrollback";
+                        description: "History lines for new terminal sessions";
+                        Stepper {
+                            value: SettingsBridge.scrollback-lines;
+                            minimum: 1000;
+                            maximum: 100000;
+                            step: 1000;
+                            suffix: " lines";
+                            value-changed(value) => {
+                                SettingsBridge.scrollback-lines = value;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Cursor blink";
+                        ToggleSwitch {
+                            checked: SettingsBridge.cursor-blink;
+                            toggled => {
+                                SettingsBridge.cursor-blink = !SettingsBridge.cursor-blink;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Copy on select";
+                        ToggleSwitch {
+                            checked: SettingsBridge.copy-on-select;
+                            toggled => {
+                                SettingsBridge.copy-on-select = !SettingsBridge.copy-on-select;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Confirm multi-line paste";
+                        ToggleSwitch {
+                            checked: SettingsBridge.confirm-multiline-paste;
+                            toggled => {
+                                SettingsBridge.confirm-multiline-paste = !SettingsBridge.confirm-multiline-paste;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Bell";
+                        description: "Audible bell is not used";
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                text: "None";
+                                primary: SettingsBridge.bell-mode == 0;
+                                clicked => { SettingsBridge.bell-mode = 0; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Visual";
+                                primary: SettingsBridge.bell-mode == 1;
+                                clicked => { SettingsBridge.bell-mode = 1; SettingsBridge.apply(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "Appearance"; }
+            Rectangle {
+                height: 133px;
+                background: Theme.highest;
+                border-width: 1px;
+                border-color: Theme.border;
+                border-radius: 10px;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 0px;
+                    SettingRow {
+                        title: "App appearance";
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                text: "Light";
+                                primary: SettingsBridge.appearance == 0;
+                                clicked => { SettingsBridge.appearance = 0; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Dark";
+                                primary: SettingsBridge.appearance == 1;
+                                clicked => { SettingsBridge.appearance = 1; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "System";
+                                primary: SettingsBridge.appearance == 2;
+                                clicked => { SettingsBridge.appearance = 2; SettingsBridge.apply(); }
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Terminal color scheme";
+                        description: "Applied to every terminal session";
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                text: "Default";
+                                primary: SettingsBridge.color-scheme == 0;
+                                clicked => { SettingsBridge.color-scheme = 0; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Solarized Dark";
+                                primary: SettingsBridge.color-scheme == 1;
+                                clicked => { SettingsBridge.color-scheme = 1; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Monokai";
+                                primary: SettingsBridge.color-scheme == 2;
+                                clicked => { SettingsBridge.color-scheme = 2; SettingsBridge.apply(); }
+                            }
+                            Action {
+                                text: "Light";
+                                primary: SettingsBridge.color-scheme == 3;
+                                clicked => { SettingsBridge.color-scheme = 3; SettingsBridge.apply(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "SSH"; }
+            Rectangle {
+                height: 145px;
+                background: Theme.highest;
+                border-width: 1px;
+                border-color: Theme.border;
+                border-radius: 10px;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 0px;
+                    SettingRow {
+                        title: "Keepalive interval";
+                        description: "New SSH sessions; seconds, 0 disables";
+                        Stepper {
+                            value: SettingsBridge.keepalive-seconds;
+                            minimum: 0;
+                            maximum: 3600;
+                            step: 5;
+                            suffix: " s";
+                            value-changed(value) => {
+                                SettingsBridge.keepalive-seconds = value;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Connection timeout";
+                        description: "New SSH sessions; handshake timeout in seconds";
+                        Stepper {
+                            value: SettingsBridge.connection-timeout-seconds;
+                            minimum: 1;
+                            maximum: 300;
+                            step: 1;
+                            suffix: " s";
+                            value-changed(value) => {
+                                SettingsBridge.connection-timeout-seconds = value;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "SFTP"; }
+            Rectangle {
+                height: 145px;
+                background: Theme.highest;
+                border-width: 1px;
+                border-color: Theme.border;
+                border-radius: 10px;
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 0px;
+                    SettingRow {
+                        title: "Confirm overwrite on upload";
+                        description: "Ask before replacing an existing remote file";
+                        ToggleSwitch {
+                            checked: SettingsBridge.confirm-overwrite;
+                            toggled => {
+                                SettingsBridge.confirm-overwrite = !SettingsBridge.confirm-overwrite;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                    Separator {}
+                    SettingRow {
+                        title: "Show hidden files";
+                        description: "Dotfiles and Windows hidden files in file lists";
+                        ToggleSwitch {
+                            checked: SettingsBridge.show-hidden-files;
+                            toggled => {
+                                SettingsBridge.show-hidden-files = !SettingsBridge.show-hidden-files;
+                                SettingsBridge.apply();
+                            }
+                        }
+                    }
+                }
+            }
+
+            SectionTitle { text: "About"; }
+            Rectangle {
+                height: 330px;
+                background: Theme.highest;
+                border-width: 1px;
+                border-color: Theme.border;
+                border-radius: 10px;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 9px;
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text { text: "OpenTermius"; color: Theme.text; font-size: 17px; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "Version " + SettingsBridge.version; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                        Action {
+                            text: "Restore defaults";
+                            flat: true;
+                            clicked => { SettingsBridge.restore-defaults(); }
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        Text { text: "Config"; color: Theme.secondary; font-size: 12px; width: 48px; vertical-alignment: center; }
+                        Text { text: SettingsBridge.config-path; color: Theme.text; font-size: 12px; horizontal-stretch: 1; overflow: elide; vertical-alignment: center; }
+                        Action {
+                            text: "Open config folder";
+                            clicked => { SettingsBridge.open-config-folder(); }
+                        }
+                    }
+                    Separator {}
+                    Text { text: "Privacy"; color: Theme.text; font-size: 13px; font-weight: 600; height: 18px; vertical-alignment: center; }
+                    Text {
+                        text: "凭据由 Windows DPAPI 加密。无产品账号、云同步和遥测。\n支持导入和导出本地主机 JSON；导出文件不含保存的凭据。";
+                        color: Theme.secondary;
+                        font-size: 12px;
+                        height: 36px;
+                        wrap: word-wrap;
+                    }
+                    Text { text: "License"; color: Theme.text; font-size: 13px; font-weight: 600; height: 18px; vertical-alignment: center; }
+                    Text {
+                        text: "OpenTermius " + SettingsBridge.version + " — UNLICENSED. Third-party components remain under their respective licenses (Rust, Slint, russh, vt100, and others).";
+                        color: Theme.secondary;
+                        font-size: 12px;
+                        height: 52px;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+        }
+    }
 }

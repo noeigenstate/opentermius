@@ -1,6 +1,38 @@
 use serde::Serialize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use vt100::{MouseProtocolEncoding, MouseProtocolMode};
 
+/// Default terminal colors. Settings maps these to the selected color scheme
+/// before handing runs to the UI.
+pub const DEFAULT_FG: u32 = 0xffffff;
+pub const DEFAULT_BG: u32 = 0x141729;
+pub const DEFAULT_SCROLLBACK: usize = 3000;
+static SCROLLBACK: AtomicUsize = AtomicUsize::new(DEFAULT_SCROLLBACK);
+
+/// Preference used by newly created local terminal parsers. Existing sessions
+/// retain their history until they are reopened.
+pub fn set_default_scrollback(lines: usize) {
+    SCROLLBACK.store(lines.clamp(1000, 100_000), Ordering::Relaxed);
+}
+pub const ANSI_COLORS: [u32; 16] = [
+    0x1a202a, 0xe2939c, 0x92ccac, 0xe5c58b, 0x8baedb, 0xb7a0d7, 0x84c9cf, 0xd3deec, 0x687c93,
+    0xf3a9b1, 0xb2e3bf, 0xf0d6ab, 0xaccaf0, 0xd3baed, 0xa5e0df, 0xf2f6fc,
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub enum ColorSource {
+    DefaultForeground,
+    DefaultBackground,
+    Ansi(u8),
+    Explicit,
+}
+fn color_source(color: vt100::Color, default: ColorSource) -> ColorSource {
+    match color {
+        vt100::Color::Default => default,
+        vt100::Color::Idx(index) if index < 16 => ColorSource::Ansi(index),
+        _ => ColorSource::Explicit,
+    }
+}
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct KeyMods {
     pub ctrl: bool,
@@ -410,6 +442,8 @@ pub struct Run {
     pub text: String,
     pub fg: u32,
     pub bg: u32,
+    pub fg_source: ColorSource,
+    pub bg_source: ColorSource,
     pub bold: bool,
     pub underline: bool,
 }
@@ -426,6 +460,7 @@ pub struct Snapshot {
     pub mouse_encoding: MouseProtocolEncoding,
     pub rows: u16,
     pub cols: u16,
+    pub bell_count: u32,
     pub wrapped_rows: Vec<bool>,
 }
 impl Snapshot {
@@ -492,6 +527,7 @@ pub struct Terminal {
 #[derive(Default)]
 struct Responses {
     bytes: Vec<u8>,
+    bells: u32,
 }
 impl Responses {
     fn push(&mut self, value: &[u8]) {
@@ -501,6 +537,12 @@ impl Responses {
     }
 }
 impl vt100::Callbacks for Responses {
+    fn audible_bell(&mut self, _: &mut vt100::Screen) {
+        self.bells = self.bells.saturating_add(1);
+    }
+    fn visual_bell(&mut self, _: &mut vt100::Screen) {
+        self.bells = self.bells.saturating_add(1);
+    }
     fn unhandled_csi(
         &mut self,
         screen: &mut vt100::Screen,
@@ -543,11 +585,14 @@ impl vt100::Callbacks for Responses {
 }
 impl Terminal {
     pub fn new(rows: u16, cols: u16) -> Self {
+        Self::with_scrollback(rows, cols, SCROLLBACK.load(Ordering::Relaxed))
+    }
+    pub fn with_scrollback(rows: u16, cols: u16, scrollback: usize) -> Self {
         Self {
             parser: vt100::Parser::new_with_callbacks(
                 rows.clamp(2, 300).try_into().unwrap(),
                 cols.clamp(2, 500).try_into().unwrap(),
-                3000,
+                scrollback.min(100_000),
                 Responses::default(),
             ),
         }
@@ -557,6 +602,10 @@ impl Terminal {
     }
     pub fn take_responses(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.parser.callbacks_mut().bytes)
+    }
+    /// Terminal bell requests since the last call (BEL and ESC `g`).
+    pub fn take_bells(&mut self) -> u32 {
+        std::mem::take(&mut self.parser.callbacks_mut().bells)
     }
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.parser.set_size(
@@ -591,10 +640,13 @@ impl Terminal {
                     cell.contents()
                 };
                 line.push_str(text);
-                let mut fg = color(cell.fgcolor(), 0xffffff);
-                let mut bg = color(cell.bgcolor(), 0x141729);
+                let mut fg = color(cell.fgcolor(), DEFAULT_FG);
+                let mut bg = color(cell.bgcolor(), DEFAULT_BG);
+                let mut fg_source = color_source(cell.fgcolor(), ColorSource::DefaultForeground);
+                let mut bg_source = color_source(cell.bgcolor(), ColorSource::DefaultBackground);
                 if cell.inverse() {
-                    std::mem::swap(&mut fg, &mut bg)
+                    std::mem::swap(&mut fg, &mut bg);
+                    std::mem::swap(&mut fg_source, &mut bg_source);
                 }
                 let width = if cell.is_wide() { 2 } else { 1 };
                 if let Some(last) = runs.last_mut().filter(|last| {
@@ -602,6 +654,8 @@ impl Terminal {
                         && last.col + last.width == col
                         && last.fg == fg
                         && last.bg == bg
+                        && last.fg_source == fg_source
+                        && last.bg_source == bg_source
                         && last.bold == cell.bold()
                         && last.underline == cell.underline()
                         && width == 1
@@ -618,6 +672,8 @@ impl Terminal {
                         text: text.into(),
                         fg,
                         bg,
+                        fg_source,
+                        bg_source,
                         bold: cell.bold(),
                         underline: cell.underline(),
                     })
@@ -637,6 +693,7 @@ impl Terminal {
             mouse_encoding: screen.mouse_protocol_encoding(),
             rows,
             cols,
+            bell_count: self.parser.callbacks().bells,
             wrapped_rows: (0..rows).map(|row| screen.row_wrapped(row)).collect(),
         }
     }
@@ -646,12 +703,8 @@ fn color(value: vt100::Color, default: u32) -> u32 {
         vt100::Color::Default => default,
         vt100::Color::Rgb(r, g, b) => (r as u32) << 16 | (g as u32) << 8 | b as u32,
         vt100::Color::Idx(i) => {
-            const COLORS: [u32; 16] = [
-                0x1a202a, 0xe2939c, 0x92ccac, 0xe5c58b, 0x8baedb, 0xb7a0d7, 0x84c9cf, 0xd3deec,
-                0x687c93, 0xf3a9b1, 0xb2e3bf, 0xf0d6ab, 0xaccaf0, 0xd3baed, 0xa5e0df, 0xf2f6fc,
-            ];
             if i < 16 {
-                COLORS[i as usize]
+                ANSI_COLORS[i as usize]
             } else if i >= 232 {
                 let c = 8 + (i as u32 - 232) * 10;
                 c << 16 | c << 8 | c
@@ -717,6 +770,31 @@ mod tests {
         assert!(t.snapshot().lines[0].starts_with("你好"));
         t.feed(b"\x1b[2J\x1b[H");
         assert!(t.snapshot().lines.iter().all(|l| l.is_empty()));
+    }
+    #[test]
+    fn scrollback_capacity_follows_the_configured_limit() {
+        let mut t = Terminal::with_scrollback(4, 20, 1000);
+        for _ in 0..5000 {
+            t.feed(b"line\r\n")
+        }
+        t.scroll(100000);
+        assert_eq!(t.parser.screen().scrollback(), 1000);
+        let mut t = Terminal::with_scrollback(4, 20, usize::MAX);
+        assert_eq!(t.parser.screen().scrollback_capacity(), 100_000);
+        for _ in 0..5000 {
+            t.feed(b"line\r\n")
+        }
+        t.scroll(100000);
+        assert_eq!(t.parser.screen().scrollback(), 4997);
+    }
+    #[test]
+    fn bell_requests_are_reported_once() {
+        let mut t = Terminal::new(4, 20);
+        t.feed(b"bell\x07");
+        assert_eq!(t.take_bells(), 1);
+        assert_eq!(t.take_bells(), 0);
+        t.feed(b"\x1bg");
+        assert_eq!(t.take_bells(), 1);
     }
 
     fn mods(ctrl: bool, alt: bool, shift: bool) -> KeyMods {
