@@ -178,7 +178,11 @@ fn open_config_folder() {
     let result = std::process::Command::new("explorer")
         .arg(&directory)
         .spawn();
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open")
+        .arg(&directory)
+        .spawn();
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     let result = std::process::Command::new("xdg-open")
         .arg(&directory)
         .spawn();

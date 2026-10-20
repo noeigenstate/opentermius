@@ -1032,8 +1032,11 @@ async fn native_gui_sftp_section_live_selftest() {
     let output = std::env::var_os("OPENTERMIUS_SFTP_SMOKE_OUTPUT")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| dir.path().join("output"));
+    let executable = std::env::var_os("OPENTERMIUS_TEST_EXECUTABLE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_opentermius").into());
     let mut child = ChildGuard(
-        std::process::Command::new(env!("CARGO_BIN_EXE_opentermius"))
+        std::process::Command::new(executable)
             .arg("--smoke-test")
             .arg("--smoke-scene=section-sftp")
             .arg(format!("--smoke-port={port}"))

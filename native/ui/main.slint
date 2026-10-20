@@ -62,6 +62,7 @@ export component AppWindow inherits Window {
     in property <[GroupRow]> groups;
     in property <[TabRow]> tabs;
     in property <[TerminalRun]> terminal-runs;
+    in property <string> terminal-font: "Consolas";
     in property <[SelectionRun]> selection-runs;
     in property <int> cursor-row;
     in property <int> cursor-col;
@@ -265,8 +266,8 @@ export component AppWindow inherits Window {
             else if event.text == Key.Escape && root.group-editing { root.group-editing = false; accept }
             else { reject }
         }
-    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: root.terminal-font-size; font-weight: 400; opacity: 0; }
-    terminal-line-metric := Text { text: "M\nM\nM\nM\nM\nM\nM\nM\nM\nM"; font-family: "Consolas"; font-size: root.terminal-font-size; font-weight: 400; opacity: 0; }
+    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: root.terminal-font; font-size: root.terminal-font-size; font-weight: 400; opacity: 0; }
+    terminal-line-metric := Text { text: "M\nM\nM\nM\nM\nM\nM\nM\nM\nM"; font-family: root.terminal-font; font-size: root.terminal-font-size; font-weight: 400; opacity: 0; }
     Timer { interval: 500ms; running: root.terminal-cursor-blink && root.cursor-visible && !root.hosts-page; triggered => { root.cursor-phase = !root.cursor-phase; } }
     Timer { interval: 150ms; running: root.bell-flash; triggered => { root.bell-flash = false; } }
     VerticalLayout { spacing: 0px;
@@ -593,7 +594,7 @@ export component AppWindow inherits Window {
                         terminal-area := Rectangle { horizontal-stretch: 1; background: root.terminal-background; clip: true;
                             for run in root.terminal-runs: Rectangle {
                                 x: 10px + run.col * root.cell-advance; y: 8px + run.row * root.cell-height-px; width: run.width * root.cell-advance; height: root.cell-height-px; background: run.bg;
-                                Text { text: run.text; color: run.fg; font-family: "Consolas"; font-size: root.terminal-font-size; font-weight: run.bold ? 700 : 400; height: parent.height; vertical-alignment: center; }
+                                Text { text: run.text; color: run.fg; font-family: root.terminal-font; font-size: root.terminal-font-size; font-weight: run.bold ? 700 : 400; height: parent.height; vertical-alignment: center; }
                                 if run.underline: Rectangle { y: parent.height - 2px; height: 1px; background: run.fg; }
                             }
                             for selection in root.selection-runs: Rectangle { x: 10px + selection.col * root.cell-advance; y: 8px + selection.row * root.cell-height-px; width: selection.width * root.cell-advance; height: root.cell-height-px; background: #2091f640; }
@@ -604,7 +605,7 @@ export component AppWindow inherits Window {
                             terminal-focus := TextInput {
                                 x: 10px + root.cursor-col * root.cell-advance; y: 8px + root.cursor-row * root.cell-height-px;
                                 width: Math.max(1px, parent.width - self.x); height: root.cell-height-px;
-                                font-family: "Consolas"; font-size: root.terminal-font-size; single-line: true; opacity: 0;
+                                font-family: root.terminal-font; font-size: root.terminal-font-size; single-line: true; opacity: 0;
                                 edited => { if self.text != "" { root.terminal-ime(self.text); self.text = ""; } }
                                 key-pressed(event) => {
                                     root.terminal-key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift);

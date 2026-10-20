@@ -1,7 +1,7 @@
 //! SSH key pairs stored in the local keychain.
 //!
-//! Private key material is kept as an OpenSSH PEM string encrypted with Windows
-//! DPAPI (`store::protect`). Plaintext exists only while a key is generated,
+//! Private key material is kept as an OpenSSH PEM string encrypted with the
+//! platform secret backend (`store::protect`). Plaintext exists while a key is generated,
 //! imported, exported or used to authenticate.
 use crate::store::{Store, protect, unprotect};
 use anyhow::{Context, Result, bail, ensure};
@@ -37,10 +37,10 @@ pub struct KeyEntry {
     /// OpenSSH SHA-256 fingerprint (`SHA256:...`).
     #[serde(default)]
     pub fingerprint: String,
-    /// DPAPI-protected OpenSSH PEM private key. Never log this value.
+    /// OpenSSH PEM private key protected by `store::protect`. Never log this value.
     #[serde(default)]
     pub encrypted_private_key: String,
-    /// DPAPI-protected passphrase supplied when the key was imported.
+    /// Passphrase protected by `store::protect` when the key was imported.
     #[serde(default)]
     pub encrypted_passphrase: Option<String>,
     /// UTC creation timestamp (RFC 3339, second precision).
@@ -438,6 +438,7 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use super::*;
     use crate::store::Profile;
 

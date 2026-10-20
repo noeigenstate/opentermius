@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, ensure};
+#[cfg(windows)]
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,6 +8,11 @@ use std::{
     path::{Path, PathBuf},
 };
 use uuid::Uuid;
+
+#[cfg(any(not(windows), test))]
+mod secrets;
+#[cfg(unix)]
+pub use secrets::configure_directory as configure_secret_directory;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -151,6 +157,12 @@ impl Store {
         let parent = self.path.parent().context("无效的数据目录")?;
         let encoded = serde_json::to_vec_pretty(&self.data)?;
         ensure!(encoded.len() < 16 * 1024 * 1024, "本机配置文件过大");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            fs::DirBuilder::new().recursive(true).mode(0o700).create(parent)?;
+        }
+        #[cfg(not(unix))]
         fs::create_dir_all(parent)?;
         let temporary = parent.join(format!("opentermius-{}.tmp", Uuid::new_v4()));
         let result = (|| -> Result<()> {
@@ -659,7 +671,7 @@ pub fn protect(secret: &str) -> Result<String> {
     }
     #[cfg(not(windows))]
     {
-        anyhow::bail!("此版本仅支持 Windows 系统加密")
+        secrets::protect(secret)
     }
 }
 pub fn unprotect(secret: &str) -> Result<String> {
@@ -669,13 +681,22 @@ pub fn unprotect(secret: &str) -> Result<String> {
     }
     #[cfg(not(windows))]
     {
-        anyhow::bail!("此版本仅支持 Windows 系统加密")
+        secrets::unprotect(secret)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    #[test]
+    fn new_configuration_directory_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("config/data.json");
+        Store::open(path.clone()).unwrap().persist().unwrap();
+        assert_eq!(fs::metadata(path.parent().unwrap()).unwrap().permissions().mode() & 0o077, 0);
+    }
     #[test]
     fn product_rename_preserves_profiles_and_does_not_replace_current_data() {
         let temp = tempfile::tempdir().unwrap();

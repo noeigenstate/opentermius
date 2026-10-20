@@ -78,6 +78,7 @@ jobs:
         working-directory: .
         env:
           MAKENSIS_PATH: ${{ steps.nsis.outputs.path }}
+          OPENTERMIUS_TEST_EXECUTABLE: ${{ github.workspace }}/native/target/release/opentermius.exe
         run: ./native/scripts/package.ps1 -SkipBuild -MakensisPath $env:MAKENSIS_PATH
 
       - name: Upload installer and SHA-256 manifest

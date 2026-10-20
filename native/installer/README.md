@@ -2,6 +2,8 @@
 
 OpenTermius 的发布产物是 NSIS 3 安装程序，不再提供便携 exe。安装程序脚本为 `installer.nsi`，由 `../scripts/package.ps1` 负责读取 `Cargo.toml` 版本、暂存 release 可执行文件并调用 `makensis.exe`。
 
+默认构建输入为 `native/target/release/opentermius.exe`。显式设置 `CARGO_BUILD_TARGET` 时，输入改为 `target/<triple>/release/opentermius.exe`；也可用 `OPENTERMIUS_TEST_EXECUTABLE` 指定已验证的可执行文件。验证脚本读取 `native/releases/` 中的安装包，不依赖 Cargo 的目标目录布局。
+
 ## 构建
 
 ```powershell

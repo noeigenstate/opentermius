@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 use anyhow::Context;
 use opentermius::{
     settings::{BellMode, Settings},
@@ -115,6 +115,11 @@ fn ui_color(rgb: u32) -> slint::Color {
     slint::Color::from_rgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
 }
 fn drag_window(window: &slint::Window) {
+    #[cfg(unix)]
+    {
+        use slint::winit_030::WinitWindowAccessor;
+        window.with_winit_window(|window| { let _ = window.drag_window(); });
+    }
     #[cfg(windows)]
     {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -2070,6 +2075,10 @@ fn run() -> anyhow::Result<()> {
         .renderer_name("software".into())
         .select()?;
     let ui = AppWindow::new()?;
+    #[cfg(target_os = "macos")]
+    ui.set_terminal_font("Menlo".into());
+    #[cfg(target_os = "linux")]
+    ui.set_terminal_font("DejaVu Sans Mono".into());
     let args: Vec<String> = std::env::args().collect();
     let smoke = args.iter().any(|a| a == "--smoke-test");
     let benchmark = args.iter().any(|a| a == "--benchmark");
@@ -2093,6 +2102,10 @@ fn run() -> anyhow::Result<()> {
         .iter()
         .find_map(|a| a.strip_prefix("--data-dir="))
         .map(|p| PathBuf::from(p).join("opentermius-native.json"));
+    #[cfg(unix)]
+    if let Some(path) = &isolated_path {
+        store::configure_secret_directory(path.parent().context("无效的数据目录")?.to_owned())?;
+    }
     let store = Arc::new(Mutex::new(match isolated_path {
         Some(path) => Store::open(path)?,
         None => store::open_default()?,
@@ -2720,8 +2733,9 @@ fn run() -> anyhow::Result<()> {
                         with_state(|s|->anyhow::Result<()>{let store=s.store.lock().unwrap();let p=&store.data.hosts[0];anyhow::ensure!(store::unprotect(p.encrypted_secret.as_deref().context("缺少加密凭据")?)?=="test-password","系统凭据未正确解密");anyhow::ensure!(!std::fs::read_to_string(&store.path)?.contains("test-password"),"凭据被明文保存");anyhow::ensure!(Store::open(store.path.clone())?.data.hosts.len()==1,"重开配置失败");Ok(())}).unwrap()?;
                         ui.invoke_search_hosts("absent-search".into());anyhow::ensure!(ui.get_hosts().row_count()==0,"主机搜索失败");ui.invoke_search_hosts("".into());
                         anyhow::ensure!(credentials&&fingerprint,"未覆盖凭据和主机密钥弹窗");
+                        #[cfg(windows)]
                         anyhow::ensure!((ui.get_cell_width()-7.6972656).abs()<0.05,"Terminal cell metric does not match Consolas 14px");
-                        std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup","Windows DPAPI","no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":std::process::id()}).to_string())?;
+                        std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup",if cfg!(windows){"Windows DPAPI"}else{"AES-256-GCM"},"no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":std::process::id()}).to_string())?;
                         return Ok(true)
                     }
                     Ok(false)
