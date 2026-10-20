@@ -1,0 +1,669 @@
+{
+  "baselineCommit": "3d0c031",
+  "platform": "Windows 10 x64 19045 / i7-11700 / 64 GB / Rust 1.97.1 MSVC / Slint 1.18.1",
+  "cargoBuildJobs": 4,
+  "selectedStage": "ui-no-debug",
+  "retainedIntegrationTestsIncludingIgnored": 173,
+  "stages": [
+    {
+      "label": "baseline",
+      "directory": "native/test-output/build-speed/baseline-20261020-163345",
+      "runs": [
+        {
+          "name": "A-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:36:18.1244176Z",
+          "seconds": 14.589,
+          "cpuSamples": 15,
+          "cpuAverage": 18.96897503117228,
+          "cpuMax": 26.5599239004889,
+          "exitCode": 0
+        },
+        {
+          "name": "A-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:36:32.7240936Z",
+          "seconds": 14.829,
+          "cpuSamples": 14,
+          "cpuAverage": 19.938612603277885,
+          "cpuMax": 31.5153977023298,
+          "exitCode": 0
+        },
+        {
+          "name": "A-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:36:47.5568715Z",
+          "seconds": 18.695,
+          "cpuSamples": 19,
+          "cpuAverage": 15.826456311483744,
+          "cpuMax": 23.8302891511844,
+          "exitCode": 0
+        },
+        {
+          "name": "B-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:37:06.2568974Z",
+          "seconds": 16.173,
+          "cpuSamples": 16,
+          "cpuAverage": 18.11093093373923,
+          "cpuMax": 39.4829139357248,
+          "exitCode": 0
+        },
+        {
+          "name": "B-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:37:22.4384061Z",
+          "seconds": 16.598,
+          "cpuSamples": 16,
+          "cpuAverage": 21.73836292083282,
+          "cpuMax": 28.6156713750089,
+          "exitCode": 0
+        },
+        {
+          "name": "B-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:37:39.0395286Z",
+          "seconds": 14.947,
+          "cpuSamples": 15,
+          "cpuAverage": 20.49912494402454,
+          "cpuMax": 27.4839782649214,
+          "exitCode": 0
+        },
+        {
+          "name": "C-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:37:53.9918762Z",
+          "seconds": 22.021,
+          "cpuSamples": 22,
+          "cpuAverage": 14.635198574109978,
+          "cpuMax": 20.7769545921491,
+          "exitCode": 0
+        },
+        {
+          "name": "C-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:38:16.0186105Z",
+          "seconds": 21.416,
+          "cpuSamples": 21,
+          "cpuAverage": 20.56689401427454,
+          "cpuMax": 39.1360187212319,
+          "exitCode": 0
+        },
+        {
+          "name": "C-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:38:37.4408107Z",
+          "seconds": 21.505,
+          "cpuSamples": 22,
+          "cpuAverage": 19.681069500221838,
+          "cpuMax": 25.7637036588482,
+          "exitCode": 0
+        },
+        {
+          "name": "D-1",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:38:58.9510567Z",
+          "seconds": 44.484,
+          "cpuSamples": 34,
+          "cpuAverage": 30.157278256504668,
+          "cpuMax": 55.2718559671166,
+          "exitCode": 0
+        },
+        {
+          "name": "D-2",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:39:43.4439637Z",
+          "seconds": 38.551,
+          "cpuSamples": 33,
+          "cpuAverage": 28.82423361846622,
+          "cpuMax": 47.1056627807358,
+          "exitCode": 0
+        },
+        {
+          "name": "D-3",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:40:22.0028923Z",
+          "seconds": 48.076,
+          "cpuSamples": 45,
+          "cpuAverage": 16.74368385648485,
+          "cpuMax": 35.1603299802614,
+          "exitCode": 0
+        },
+        {
+          "name": "E-1",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:41:10.0846651Z",
+          "seconds": 46.791,
+          "cpuSamples": 43,
+          "cpuAverage": 15.613662544338666,
+          "cpuMax": 37.0707546298677,
+          "exitCode": 0
+        },
+        {
+          "name": "E-2",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:41:56.8866902Z",
+          "seconds": 26.113,
+          "cpuSamples": 25,
+          "cpuAverage": 23.222425321013283,
+          "cpuMax": 38.7908926811725,
+          "exitCode": 0
+        },
+        {
+          "name": "E-3",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:42:23.0087157Z",
+          "seconds": 31.087,
+          "cpuSamples": 31,
+          "cpuAverage": 27.05176116256556,
+          "cpuMax": 46.4028634336184,
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "label": "split-ui",
+      "directory": "native/test-output/build-speed/split-ui-20261020-164502",
+      "runs": [
+        {
+          "name": "A-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:03.3995656Z",
+          "seconds": 4.715,
+          "cpuSamples": 5,
+          "cpuAverage": 16.20152337472178,
+          "cpuMax": 21.3888706039476,
+          "exitCode": 0
+        },
+        {
+          "name": "A-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:08.1357794Z",
+          "seconds": 5.328,
+          "cpuSamples": 5,
+          "cpuAverage": 18.096913235645697,
+          "cpuMax": 23.3748802029844,
+          "exitCode": 0
+        },
+        {
+          "name": "A-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:13.4661129Z",
+          "seconds": 5.329,
+          "cpuSamples": 6,
+          "cpuAverage": 15.953331674997466,
+          "cpuMax": 21.0847879566229,
+          "exitCode": 0
+        },
+        {
+          "name": "B-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:18.7976730Z",
+          "seconds": 5.441,
+          "cpuSamples": 5,
+          "cpuAverage": 30.689607195334,
+          "cpuMax": 53.480187118495,
+          "exitCode": 0
+        },
+        {
+          "name": "B-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:24.2417373Z",
+          "seconds": 5.6,
+          "cpuSamples": 6,
+          "cpuAverage": 24.857313384699463,
+          "cpuMax": 27.7097705030711,
+          "exitCode": 0
+        },
+        {
+          "name": "B-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:29.8461989Z",
+          "seconds": 6.014,
+          "cpuSamples": 6,
+          "cpuAverage": 24.990882922873066,
+          "cpuMax": 29.6530183833515,
+          "exitCode": 0
+        },
+        {
+          "name": "C-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:45:35.8683915Z",
+          "seconds": 24.74,
+          "cpuSamples": 24,
+          "cpuAverage": 24.226612534869332,
+          "cpuMax": 32.2737642555372,
+          "exitCode": 0
+        },
+        {
+          "name": "C-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:46:00.6114626Z",
+          "seconds": 27.144,
+          "cpuSamples": 27,
+          "cpuAverage": 21.922941655213336,
+          "cpuMax": 37.2487319083261,
+          "exitCode": 0
+        },
+        {
+          "name": "C-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:46:27.7600261Z",
+          "seconds": 27.426,
+          "cpuSamples": 27,
+          "cpuAverage": 20.204502163374908,
+          "cpuMax": 53.7999999802055,
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "label": "ui-no-debug",
+      "directory": "native/test-output/build-speed/ui-no-debug-20261020-164725",
+      "runs": [
+        {
+          "name": "A-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:48:53.9722933Z",
+          "seconds": 5.254,
+          "cpuSamples": 5,
+          "cpuAverage": 18.062828178542834,
+          "cpuMax": 27.0087103518769,
+          "exitCode": 0
+        },
+        {
+          "name": "A-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:48:59.2351390Z",
+          "seconds": 5.075,
+          "cpuSamples": 5,
+          "cpuAverage": 17.77914368638072,
+          "cpuMax": 21.2586275585392,
+          "exitCode": 0
+        },
+        {
+          "name": "A-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:49:04.3179961Z",
+          "seconds": 5.984,
+          "cpuSamples": 6,
+          "cpuAverage": 16.414059078251352,
+          "cpuMax": 25.6068661227629,
+          "exitCode": 0
+        },
+        {
+          "name": "B-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:49:10.3055380Z",
+          "seconds": 4.813,
+          "cpuSamples": 5,
+          "cpuAverage": 18.77219220121622,
+          "cpuMax": 19.5469923749029,
+          "exitCode": 0
+        },
+        {
+          "name": "B-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:49:15.1224429Z",
+          "seconds": 5.718,
+          "cpuSamples": 5,
+          "cpuAverage": 16.524835637548183,
+          "cpuMax": 18.478754713406,
+          "exitCode": 0
+        },
+        {
+          "name": "B-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:49:20.8439500Z",
+          "seconds": 4.666,
+          "cpuSamples": 5,
+          "cpuAverage": 18.82978950265636,
+          "cpuMax": 24.3675634210797,
+          "exitCode": 0
+        },
+        {
+          "name": "C-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:49:25.5150060Z",
+          "seconds": 22.818,
+          "cpuSamples": 23,
+          "cpuAverage": 16.46754995734799,
+          "cpuMax": 29.5687782624576,
+          "exitCode": 0
+        },
+        {
+          "name": "C-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:49:48.3537109Z",
+          "seconds": 25.075,
+          "cpuSamples": 25,
+          "cpuAverage": 18.524013887557768,
+          "cpuMax": 36.1129275123439,
+          "exitCode": 0
+        },
+        {
+          "name": "C-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:50:13.4341258Z",
+          "seconds": 26.304,
+          "cpuSamples": 26,
+          "cpuAverage": 18.820326055880614,
+          "cpuMax": 32.041027470248,
+          "exitCode": 0
+        },
+        {
+          "name": "D-1",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:50:39.7451349Z",
+          "seconds": 10.513,
+          "cpuSamples": 10,
+          "cpuAverage": 25.3998674678441,
+          "cpuMax": 40.0265672341612,
+          "exitCode": 0
+        },
+        {
+          "name": "D-2",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:50:50.2657348Z",
+          "seconds": 10.693,
+          "cpuSamples": 11,
+          "cpuAverage": 24.662151420195343,
+          "cpuMax": 41.6856033572325,
+          "exitCode": 0
+        },
+        {
+          "name": "D-3",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:51:00.9669315Z",
+          "seconds": 10.182,
+          "cpuSamples": 10,
+          "cpuAverage": 25.39929102358143,
+          "cpuMax": 38.8360450289469,
+          "exitCode": 0
+        },
+        {
+          "name": "E-1",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:51:11.1560628Z",
+          "seconds": 22.681,
+          "cpuSamples": 22,
+          "cpuAverage": 23.57165261309531,
+          "cpuMax": 56.9513211577617,
+          "exitCode": 0
+        },
+        {
+          "name": "E-2",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:51:33.8435006Z",
+          "seconds": 15.463,
+          "cpuSamples": 16,
+          "cpuAverage": 27.66359693823514,
+          "cpuMax": 62.8689579586749,
+          "exitCode": 0
+        },
+        {
+          "name": "E-3",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:51:49.3144551Z",
+          "seconds": 12.872,
+          "cpuSamples": 13,
+          "cpuAverage": 28.96307683368898,
+          "cpuMax": 51.0659025298949,
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "label": "lld-stable",
+      "directory": "native/test-output/build-speed/lld-stable-20261020-165256",
+      "runs": [
+        {
+          "name": "A-1",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:01.0512464Z",
+          "seconds": 4.287,
+          "cpuSamples": 4,
+          "cpuAverage": 24.5219982444649,
+          "cpuMax": 31.2534587318311,
+          "exitCode": 0
+        },
+        {
+          "name": "A-2",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:05.3490569Z",
+          "seconds": 4.152,
+          "cpuSamples": 4,
+          "cpuAverage": 21.623331821575274,
+          "cpuMax": 25.2869996650997,
+          "exitCode": 0
+        },
+        {
+          "name": "A-3",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:09.5038070Z",
+          "seconds": 4.57,
+          "cpuSamples": 5,
+          "cpuAverage": 22.026069822553858,
+          "cpuMax": 27.864467554511,
+          "exitCode": 0
+        },
+        {
+          "name": "B-1",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:14.0770509Z",
+          "seconds": 4.504,
+          "cpuSamples": 4,
+          "cpuAverage": 21.368458980813777,
+          "cpuMax": 25.1479494444667,
+          "exitCode": 0
+        },
+        {
+          "name": "B-2",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:18.5839559Z",
+          "seconds": 4.393,
+          "cpuSamples": 5,
+          "cpuAverage": 20.28839848737552,
+          "cpuMax": 23.9725631377983,
+          "exitCode": 0
+        },
+        {
+          "name": "B-3",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:23.0196219Z",
+          "seconds": 4.387,
+          "cpuSamples": 4,
+          "cpuAverage": 24.5977650691313,
+          "cpuMax": 27.9343435035669,
+          "exitCode": 0
+        },
+        {
+          "name": "C-1",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:27.4094825Z",
+          "seconds": 21.404,
+          "cpuSamples": 21,
+          "cpuAverage": 19.109284883391048,
+          "cpuMax": 26.2503571841094,
+          "exitCode": 0
+        },
+        {
+          "name": "C-2",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:53:48.8181690Z",
+          "seconds": 22.938,
+          "cpuSamples": 23,
+          "cpuAverage": 18.965375481067053,
+          "cpuMax": 33.9978253313958,
+          "exitCode": 0
+        },
+        {
+          "name": "C-3",
+          "command": "cargo rustc --locked --bin opentermius -- -C linker=\"D:\\DevCache\\rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\rust-lld.exe\" -C linker-flavor=lld-link",
+          "startedUtc": "2026-10-20T08:54:11.7597263Z",
+          "seconds": 24.123,
+          "cpuSamples": 24,
+          "cpuAverage": 16.301100338556513,
+          "cpuMax": 29.0876867224414,
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "label": "ui-cgu16",
+      "directory": "native/test-output/build-speed/ui-cgu16-20261020-165445",
+      "runs": [
+        {
+          "name": "A-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:11.5028470Z",
+          "seconds": 4.989,
+          "cpuSamples": 5,
+          "cpuAverage": 18.52091544479076,
+          "cpuMax": 22.4470076060004,
+          "exitCode": 0
+        },
+        {
+          "name": "A-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:16.5009284Z",
+          "seconds": 5.07,
+          "cpuSamples": 5,
+          "cpuAverage": 19.28666500796954,
+          "cpuMax": 22.7399001077363,
+          "exitCode": 0
+        },
+        {
+          "name": "A-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:21.5790014Z",
+          "seconds": 5.322,
+          "cpuSamples": 5,
+          "cpuAverage": 19.31165137928442,
+          "cpuMax": 22.6866421239828,
+          "exitCode": 0
+        },
+        {
+          "name": "B-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:26.9048520Z",
+          "seconds": 4.745,
+          "cpuSamples": 5,
+          "cpuAverage": 18.32909014627842,
+          "cpuMax": 22.0409678326399,
+          "exitCode": 0
+        },
+        {
+          "name": "B-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:31.6538776Z",
+          "seconds": 4.952,
+          "cpuSamples": 5,
+          "cpuAverage": 18.473402645157,
+          "cpuMax": 21.7750831753785,
+          "exitCode": 0
+        },
+        {
+          "name": "B-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:36.6094645Z",
+          "seconds": 4.642,
+          "cpuSamples": 4,
+          "cpuAverage": 21.055866235695923,
+          "cpuMax": 25.9252426588398,
+          "exitCode": 0
+        },
+        {
+          "name": "C-1",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:56:41.2565908Z",
+          "seconds": 23.791,
+          "cpuSamples": 24,
+          "cpuAverage": 16.237663473560357,
+          "cpuMax": 26.418483262238,
+          "exitCode": 0
+        },
+        {
+          "name": "C-2",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:57:05.0663143Z",
+          "seconds": 22.813,
+          "cpuSamples": 22,
+          "cpuAverage": 17.087539195218582,
+          "cpuMax": 45.8829497633832,
+          "exitCode": 0
+        },
+        {
+          "name": "C-3",
+          "command": "cargo build --locked",
+          "startedUtc": "2026-10-20T08:57:27.8848214Z",
+          "seconds": 24.604,
+          "cpuSamples": 25,
+          "cpuAverage": 18.214011736004082,
+          "cpuMax": 25.9255641447213,
+          "exitCode": 0
+        },
+        {
+          "name": "D-1",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:57:52.4962945Z",
+          "seconds": 9.889,
+          "cpuSamples": 10,
+          "cpuAverage": 24.16752357106821,
+          "cpuMax": 41.0898360276409,
+          "exitCode": 0
+        },
+        {
+          "name": "D-2",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:58:02.3914386Z",
+          "seconds": 14.223,
+          "cpuSamples": 14,
+          "cpuAverage": 19.548206481234157,
+          "cpuMax": 40.6818302527097,
+          "exitCode": 0
+        },
+        {
+          "name": "D-3",
+          "command": "cargo test --locked --no-run",
+          "startedUtc": "2026-10-20T08:58:16.6214112Z",
+          "seconds": 12.159,
+          "cpuSamples": 12,
+          "cpuAverage": 21.689954349675176,
+          "cpuMax": 34.9925963377528,
+          "exitCode": 0
+        },
+        {
+          "name": "E-1",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:58:28.7863735Z",
+          "seconds": 21.374,
+          "cpuSamples": 21,
+          "cpuAverage": 20.701505213629577,
+          "cpuMax": 47.9288919964668,
+          "exitCode": 0
+        },
+        {
+          "name": "E-2",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:58:50.1661598Z",
+          "seconds": 17.003,
+          "cpuSamples": 17,
+          "cpuAverage": 23.000648642565366,
+          "cpuMax": 47.4007030783484,
+          "exitCode": 0
+        },
+        {
+          "name": "E-3",
+          "command": "cargo test --locked",
+          "startedUtc": "2026-10-20T08:59:07.1763449Z",
+          "seconds": 16.102,
+          "cpuSamples": 16,
+          "cpuAverage": 25.9948441255734,
+          "cpuMax": 50.5458942014467,
+          "exitCode": 0
+        }
+      ]
+    }
+  ]
+}

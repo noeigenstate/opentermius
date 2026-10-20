@@ -4,7 +4,7 @@
 
 ## 发现与修复
 
-| 编号 / 严重性 | 攻击场景 | 修复 | 回归测试（`native/tests/security.rs`） |
+| 编号 / 严重性 | 攻击场景 | 修复 | 回归测试（`native/tests/all/security.rs`） |
 | --- | --- | --- | --- |
 | S1 / 中 | 恶意 SFTP 目录项使用 `COM¹`、`LPT²`、`CONIN$` 等 Windows 设备别名，绕过已有普通设备名过滤。旧 `Download` 命令也未采用新下载路径的文件名检查。 | 补全设备别名规则；两种下载入口均在创建临时文件、打开远程文件之前验证目标名。 | `windows_download_names_reject_device_aliases_and_path_escapes`、`loopback::legacy_download_rejects_unsafe_names_before_remote_open` |
 | S2 / 高 | 选择的本地上传路径含目录 junction/reparse point 或文件链接时，单文件上传会跟随链接，读取所选目录之外的文件。目录扫描后文件被替换成链接也可能发生同类问题。 | 打开上传文件时重新检查路径及所有祖先，拒绝链接和非常规文件；Windows 最终文件使用 `FILE_FLAG_OPEN_REPARSE_POINT`，并检查已打开句柄元数据。旧、新单文件入口及递归上传共享检查。 | `loopback::uploads_reject_junction_ancestors_before_opening_remote_files` |
@@ -36,7 +36,7 @@
 
 ## 验证记录
 
-- 修复前回归：19 项中 10 项失败、9 项通过；修复后 `cargo test --locked --test security`：19 项全部通过，无编译警告。
+- 修复前回归：19 项中 10 项失败、9 项通过；修复后 19 项全部通过，无编译警告。合并测试后的等价命令为 `cargo test --locked --test all security::`。
 - 原生截图：使用独立临时数据目录运行 `--smoke-test --smoke-scene=section-known-hosts`，退出码 0；已查看 `native/test-output/security-review/smoke/native-window.png`，页面标题、导航、导入与搜索控件、空状态完整可见，无裁切或错误覆盖层。
 - `native/` 中 `cargo build --locked`：退出码 0，无警告；`cargo test --locked`：退出码 0，合计 266 通过、0 失败、4 项桌面测试默认忽略，日志中无编译警告。完整测试再次执行并通过全部 19 项安全回归（包括加强后的深度拒绝和远端错误确实返回的断言）。
 - 额外执行编译后的 `transport` 测试程序：`--ignored --exact native_gui_live_selftest --nocapture`，1 项通过、退出码 0，验证当前 debug 可执行文件的原生 GUI 回调、实际 SSH/SFTP、DPAPI 及截图。其余 3 项默认忽略的桌面测试未单独执行。此轮未验证 release 安装包。

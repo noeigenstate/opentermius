@@ -12,7 +12,7 @@
     "failures": 0
   },
   "release_gui": {
-    "command": "cargo test --release --locked --test transport native_gui_live_selftest -- --ignored --nocapture",
+    "command": "cargo test --release --locked --test all transport::native_gui_live_selftest -- --ignored --nocapture",
     "passed": true,
     "checks": [
       "native profile callback",

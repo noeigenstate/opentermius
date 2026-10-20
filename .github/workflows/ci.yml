@@ -31,9 +31,9 @@ jobs:
         if: runner.os == 'Linux'
         run: shellcheck scripts/package-macos.sh scripts/package-linux.sh
       - name: Build
-        run: cargo build --locked
-      - name: Test (interactive desktop tests stay ignored)
-        run: cargo test --locked
+        run: cargo build --workspace --locked
+      - name: Test workspace (consolidated integration suite; desktop tests stay ignored)
+        run: cargo test --workspace --locked
       - name: Build release
         run: cargo build --release --locked
       - name: Upload release executable

@@ -19,7 +19,7 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 use zeroize::Zeroize;
-slint::include_modules!();
+use opentermius_ui::*;
 mod pages;
 mod rendering;
 
