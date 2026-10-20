@@ -1,0 +1,648 @@
+import { LineEdit, ScrollView, ListView } from "std-widgets.slint";
+
+export struct HostRow { id: string, name: string, address: string, group: string, auth: string, has-secret: bool }
+export struct TabRow { id: string, title: string, status: string }
+export struct TerminalRun { text: string, row: int, col: int, width: int, fg: color, bg: color, bold: bool, underline: bool }
+export struct SelectionRun { row: int, col: int, width: int }
+export struct FileRow { name: string, is-directory: bool, size: string, modified: string, kind: string }
+export struct GroupRow { name: string, count: int }
+export struct HostDraft { id: string, name: string, host: string, port: string, username: string, group: string, auth-index: int, key-path: string, secret: string, remember: bool }
+
+global Theme {
+    out property <color> base: #edf1f2;
+    out property <color> lowest: #282b3d;
+    out property <color> high: #f7f9fa;
+    out property <color> highest: #ffffff;
+    out property <color> border: #d5dde0;
+    out property <color> secondary: #798c94;
+    out property <color> text: #141729;
+    out property <color> accent: #2091f6;
+}
+component Action inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> disabled: false;
+    in property <bool> flat: false;
+    in property <bool> has-icon: false;
+    in property <image> icon;
+    in property <bool> secondary: false;
+    in property <bool> left-aligned: false;
+    in property <length> text-size: 14px;
+    out property <bool> hovered: touch.has-hover;
+    callback clicked;
+    min-height: 30px; max-height: 30px; min-width: label.preferred-width + 22px + (root.has-icon ? 20px : 0px); border-radius: 5px;
+    background: root.disabled ? (root.flat ? transparent : #798c9426) : touch.has-hover ? (root.primary ? #58adf8 : Theme.border) : root.primary ? Theme.accent : root.flat ? transparent : #798c9426;
+    HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 6px;
+        if root.has-icon: Rectangle { width: 14px; background: transparent;
+            Image { source: root.icon; colorize: root.disabled ? #a4b3ba : root.primary ? white : root.secondary ? Theme.secondary : Theme.text; width: 14px; height: 14px; x: 0px; y: (parent.height - 14px) / 2; }
+        }
+        label := Text { text: root.text; color: root.disabled ? #a4b3ba : root.primary ? white : root.secondary ? Theme.secondary : Theme.text; font-size: root.text-size; font-weight: root.secondary ? 450 : 500; horizontal-alignment: root.left-aligned ? left : center; vertical-alignment: center; }
+    }
+    touch := TouchArea { enabled: !root.disabled; clicked => { root.clicked(); } }
+}
+component Input inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder-text;
+    in property <color> placeholder-color: #a4b3ba;
+    in property <InputType> input-type: InputType.text;
+    in property <bool> enabled: true;
+    in property <bool> has-leading-icon: false;
+    in property <image> leading-icon;
+    property <bool> secret-visible: false;
+    callback accepted;
+    callback edited;
+    forward-focus: edit;
+    min-height: 36px; max-height: 36px; preferred-height: 36px; min-width: 0px;
+    border-width: 1px; border-color: edit.has-focus ? Theme.accent : #d5dde0;
+    border-radius: 10px; background: transparent;
+    Image { source: root.leading-icon; colorize: #a4b3ba; visible: root.has-leading-icon; x: 10px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+    Text { x: root.has-leading-icon ? 32px : 10px; width: parent.width - self.x - 10px; text: root.placeholder-text; color: root.placeholder-color; vertical-alignment: center; visible: root.text == ""; }
+    edit := TextInput { x: root.has-leading-icon ? 32px : 10px; width: parent.width - self.x - (root.input-type == InputType.password ? 34px : 10px); y: (parent.height - self.height) / 2; height: 22px;
+        text <=> root.text; color: Theme.text; font-size: 14px; single-line: true; input-type: root.secret-visible ? InputType.text : root.input-type; enabled: root.enabled;
+        selection-background-color: #2091f640; selection-foreground-color: Theme.text;
+        accepted => { root.accepted(); } edited => { root.edited(); }
+    }
+    if root.input-type == InputType.password: Rectangle { x: parent.width - 30px; width: 28px; background: transparent;
+        Image { source: @image-url("icons/eye-off.svg"); width: 14px; height: 14px; x: 7px; y: (parent.height - 14px) / 2; }
+        TouchArea { enabled: root.enabled; clicked => { root.secret-visible = !root.secret-visible; edit.focus(); } }
+    }
+}
+component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> active;
+    in property <bool> enabled: true;
+    callback clicked;
+    height: 36px; border-radius: 5px;
+    background: root.active ? #798c941a : area.has-hover && root.enabled ? #798c941a : transparent;
+    HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 13px;
+        Rectangle { width: 14px; background: transparent;
+            Image { source: root.icon; colorize: Theme.text; image-fit: contain; x: 0px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+        }
+        Text { text: root.text; color: Theme.text; font-size: 14px; min-width: 100px; vertical-alignment: center; }
+    }
+    area := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
+}
+component Field inherits VerticalLayout {
+    in property <string> label;
+    in property <string> placeholder;
+    in property <bool> secret: false;
+    in property <bool> auto-focus: false;
+    in-out property <string> text;
+    spacing: 6px;
+    Text { text: root.label; color: Theme.secondary; font-size: 12px; height: 18px; }
+    Input { text <=> root.text; placeholder-text: root.placeholder; input-type: root.secret ? InputType.password : InputType.text; height: 36px; init => { if root.auto-focus { self.focus(); } } }
+}
+component FileTableRow inherits Rectangle {
+    in property <FileRow> file;
+    in property <bool> heading: false;
+    height: root.heading ? 44px : 40px;
+    background: Theme.base;
+    border-width: root.heading ? 1px : 0px; border-color: #d5dde0;
+    if !root.heading: Image { source: root.file.is-directory ? @image-url("icons/folder-filled.svg") : @image-url("icons/file.svg"); colorize: root.file.is-directory ? #66ccef : Theme.secondary; x: 20px; y: 11px; width: 18px; height: 18px; }
+    Text { x: root.heading ? 20px : 46px; width: parent.width * 0.44 - self.x - 10px; text: root.heading ? "Name" : root.file.name; color: Theme.text; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
+    Text { x: parent.width * 0.44 + 20px; width: parent.width * 0.24 - 30px; text: root.heading ? "Date Modified" : root.file.modified; color: root.heading ? Theme.text : Theme.secondary; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
+    Text { x: parent.width * 0.68 + 20px; width: parent.width * 0.16 - 30px; text: root.heading ? "Size" : root.file.size; color: root.heading ? Theme.text : Theme.secondary; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
+    Text { x: parent.width * 0.84 + 20px; width: parent.width * 0.16 - 30px; text: root.heading ? "Kind" : root.file.kind; color: root.heading ? Theme.text : Theme.secondary; font-weight: root.heading ? 500 : 450; font-size: 14px; overflow: elide; vertical-alignment: center; }
+    if root.heading: Rectangle { x: parent.width * 0.44; width: 1px; background: #d5dde0; }
+    if root.heading: Rectangle { x: parent.width * 0.68; width: 1px; background: #d5dde0; }
+    if root.heading: Rectangle { x: parent.width * 0.84; width: 1px; background: #d5dde0; }
+}
+
+export component AppWindow inherits Window {
+    no-frame: true;
+    title: "OpenTermius"; preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
+    icon: @image-url("../../assets/icon.png");
+    background: Theme.base; default-font-family: "sans-serif"; default-font-size: 14px;
+    in property <[HostRow]> hosts;
+    in property <[GroupRow]> groups;
+    in property <[TabRow]> tabs;
+    in property <[TerminalRun]> terminal-runs;
+    in property <[SelectionRun]> selection-runs;
+    in property <int> cursor-row;
+    in property <int> cursor-col;
+    in property <bool> cursor-visible;
+    in property <string> active-session;
+    in property <string> active-host;
+    in property <bool> remote-connected;
+    in property <bool> local-session;
+    in property <bool> terminal-visible;
+    in property <string> status-text;
+    in property <bool> status-error;
+    in property <[FileRow]> files;
+    in property <[FileRow]> local-files;
+    in property <string> local-path;
+    in-out property <bool> sftp-page: false;
+    in property <string> file-path;
+    in-out property <bool> files-open;
+    in property <bool> file-busy;
+    in property <string> settings-text;
+    in property <string> prompt-title;
+    in property <string> prompt-message;
+    in property <bool> prompt-is-key;
+    in property <bool> prompt-password;
+    in-out property <string> prompt-answer;
+    in property <bool> prompt-visible;
+    property <length> cell-advance: Math.max(1px, terminal-metric.preferred-width / 40);
+    out property <int> terminal-cols: Math.max(20, Math.floor((terminal-area.width - 20px) / root.cell-advance));
+    out property <int> terminal-rows: Math.max(5, Math.floor((terminal-area.height - 16px) / 18px));
+    out property <float> cell-width: root.cell-advance / 1px;
+    out property <float> cell-height: 18;
+    property <bool> hosts-page: true;
+    property <bool> editor-open: false;
+    property <bool> creating-host: false;
+    property <bool> editor-menu-open: false;
+    property <bool> settings-open: false;
+    property <bool> menu-open: false;
+    property <bool> host-picker-open: false;
+    property <HostDraft> draft;
+    property <string> search;
+    property <string> quick-host;
+    property <string> selected-host;
+    property <bool> editor-focus-requested: false;
+    property <int> grid-cols: Math.max(1, Math.floor((host-grid.width - 40px) / 360px));
+    property <length> group-height: root.groups.length > 0 ? 48px + Math.ceil(root.groups.length / root.grid-cols) * 76px : 0px;
+    property <int> draft-count: root.editor-open && root.creating-host ? 1 : 0;
+    callback save-host(HostDraft) -> bool;
+    callback save-and-connect(HostDraft);
+    callback quick-connect(string);
+    callback edit-host(string) -> HostDraft;
+    callback delete-host(string);
+    callback connect-host(string);
+    callback open-terminal;
+    callback select-session(string);
+    callback close-session(string);
+    callback terminal-key(string, bool, bool, bool);
+    callback terminal-size(int, int);
+    callback terminal-scroll(int);
+    callback copy-terminal;
+    callback paste-terminal;
+    callback list-files(string);
+    callback open-sftp;
+    callback list-local(string);
+    callback upload-local(string);
+    callback download-to-local(string);
+    callback select-sftp-host(string);
+    callback upload-file;
+    callback download-file(string);
+    callback import-hosts;
+    callback export-hosts;
+    callback search-hosts(string);
+    callback select-group(string);
+    callback pick-key() -> string;
+    callback show-settings;
+    callback select-terminal(int, int, bool);
+    callback answer-prompt(bool, string);
+    callback window-drag;
+    callback window-minimize;
+    callback window-maximize;
+    callback window-close;
+    changed terminal-cols => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
+    changed terminal-rows => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
+    changed active-session => {
+        if root.active-session != "" { root.hosts-page = false; if !root.sftp-page { terminal-focus.focus(); } }
+        else if !root.sftp-page { root.hosts-page = true; }
+    }
+    public function new-host() {
+        if !root.save-current-draft() { return; }
+        root.draft = root.edit-host(""); root.draft.port = ""; root.creating-host = true; root.editor-open = true; root.editor-menu-open = false;
+        root.selected-host = root.draft.id; root.editor-focus-requested = true;
+    }
+    public function save-current-draft() -> bool {
+        if root.editor-open && root.draft.host != "" { return root.save-host(root.draft); }
+        return true;
+    }
+    public function open-editor(host-id: string) {
+        if root.editor-open && root.draft.id == host-id { return; }
+        if !root.save-current-draft() { return; }
+        root.draft = root.edit-host(host-id); root.selected-host = host-id; root.creating-host = false; root.editor-open = true; root.editor-menu-open = false; root.editor-focus-requested = true;
+    }
+    public function activate-host(host-id: string) {
+        if !root.save-current-draft() { return; }
+        root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
+    }
+    public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
+    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
+    VerticalLayout { spacing: 0px;
+        Rectangle { height: 51px; background: Theme.lowest;
+            HorizontalLayout { padding-left: 9px; padding-right: 10px; spacing: 5px;
+                Rectangle { width: 30px; background: transparent;
+                    Text { text: "≡"; color: #8d91a5; vertical-alignment: center; horizontal-alignment: center; font-size: 19px; }
+                    TouchArea { clicked => { root.menu-open = !root.menu-open; } }
+                }
+                Rectangle { width: root.sftp-page ? 80px : 153px; y: 11px; height: 30px; border-radius: 10px; background: !root.sftp-page && root.hosts-page ? #3e4257 : #32364a;
+                    HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 8px;
+                        Rectangle { width: 14px; background: transparent;
+                            Image { source: @image-url("../../assets/logo.svg"); width: 18px; height: 18px; x: -2px; y: (parent.height - 18px) / 2; }
+                        }
+                        Text { text: root.sftp-page ? "Hosts" : "OpenTermius"; color: white; vertical-alignment: center; font-weight: 500; }
+                    }
+                    TouchArea { clicked => { root.sftp-page = false; root.hosts-page = true; root.search = ""; root.select-group(""); root.search-hosts(""); } }
+                }
+                Rectangle { width: root.sftp-page ? 139px : 80px; height: 30px; y: 11px; border-radius: 10px; background: root.sftp-page ? #3e4257 : #32364a;
+                    HorizontalLayout { padding-left: 9px; padding-right: 9px; spacing: 7px;
+                        Rectangle { width: 14px; background: transparent;
+                            Image { source: @image-url("icons/folder-filled.svg"); colorize: white; width: 14px; height: 14px; x: 0px; y: (parent.height - 14px) / 2; }
+                        }
+                        Text { text: "SFTP"; color: white; vertical-alignment: center; font-weight: 500; }
+                    }
+                    TouchArea { clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = true; root.open-sftp(); } } }
+                }
+                Text { text: "+"; width: 30px; color: #8d91a5; font-size: 24px; vertical-alignment: center; horizontal-alignment: center; }
+                for tab in root.tabs: Rectangle { width: 170px; height: 32px; y: 7px; border-radius: 6px;
+                    background: !root.hosts-page && root.active-session == tab.id ? #3e4257 : #32364a;
+                    HorizontalLayout { padding-left: 10px; padding-right: 5px; spacing: 6px;
+                        Image { source: @image-url("icons/terminal.svg"); colorize: tab.status == "connected" ? #21b568 : Theme.secondary; width: 17px; height: 17px; }
+                        Text { text: tab.title; color: white; overflow: elide; vertical-alignment: center; }
+                        Action { text: "×"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.close-session(tab.id); } }
+                    }
+                    TouchArea { width: parent.width - 30px; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
+                }
+                Rectangle { horizontal-stretch: 1; background: transparent;
+                    TouchArea { pointer-event(event) => { if event.kind == PointerEventKind.down { root.window-drag(); } } }
+                }
+                for chrome in [{icon:@image-url("icons/minimize.svg"),action:0},{icon:@image-url("icons/maximize.svg"),action:1},{icon:@image-url("icons/close.svg"),action:2}]: Rectangle {
+                    width: 30px; height: 30px; y: 11px; border-radius: 5px; background: chrome-touch.has-hover ? #ffffff1a : transparent;
+                    Image { source: chrome.icon; colorize: #8d91a5; width: 16px; height: 16px; x: 7px; y: 7px; }
+                    chrome-touch := TouchArea { clicked => { if chrome.action == 0 { root.window-minimize(); } else if chrome.action == 1 { root.window-maximize(); } else if root.save-current-draft() { root.close-editor(); root.window-close(); } } }
+                }
+            }
+        }
+        HorizontalLayout { spacing: 0px;
+            Rectangle { width: 184px; background: Theme.high;
+                VerticalLayout { padding: 10px; spacing: 8px;
+                    NavItem { text: "Hosts"; icon: @image-url("icons/hosts.svg"); active: root.hosts-page; clicked => { root.hosts-page = true; root.search = ""; root.select-group(""); root.search-hosts(""); } }
+                    NavItem { text: "Keychain"; icon: @image-url("icons/keychain.svg"); enabled: false; }
+                    NavItem { text: "Port Forwarding"; icon: @image-url("icons/forward.svg"); enabled: false; }
+                    NavItem { text: "Snippets"; icon: @image-url("icons/snippets.svg"); enabled: false; }
+                    NavItem { text: "Known Hosts"; icon: @image-url("icons/known.svg"); enabled: false; }
+                    NavItem { text: "Logs"; icon: @image-url("icons/history.svg"); enabled: false; }
+                    for tab in root.tabs: NavItem { text: tab.title; icon: @image-url("icons/terminal.svg"); active: !root.hosts-page && root.active-session == tab.id; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
+                    Rectangle { vertical-stretch: 1; background: transparent; }
+                }
+            }
+            Rectangle { width: 1px; background: #798c941a; }
+            Rectangle { horizontal-stretch: 1; background: Theme.base;
+                VerticalLayout { spacing: 0px;
+                    if root.hosts-page: Rectangle { height: 56px; background: Theme.high;
+                        HorizontalLayout { padding: 8px; spacing: 8px;
+                            Rectangle { horizontal-stretch: 1; height: 36px; background: #e6ebed; border-width: 1px; border-color: #d5dde0; border-radius: 10px;
+                                HorizontalLayout { padding: 5px; spacing: 0px;
+                                    Input { border-width: 0px; min-height: 24px; max-height: 24px; placeholder-color: Theme.secondary; placeholder-text: "Type \"ssh user@hostname -p port\" to connect..."; text <=> root.search; horizontal-stretch: 1; edited => { root.search-hosts(self.text); } accepted => { root.quick-connect(self.text); } }
+                                    Action { text: "Connect"; min-height: 24px; max-height: 24px; disabled: root.search == ""; clicked => { root.quick-connect(root.search); } }
+                                }
+                            }
+                        }
+                    }
+                    if root.hosts-page: Rectangle { height: 45px; background: Theme.high;
+                        Rectangle { x: 12px; y: 7px; width: parent.width - 160px; height: 30px; background: transparent;
+                            HorizontalLayout { spacing: 10px; alignment: start;
+                                Rectangle { width: 132px; height: 30px; background: transparent;
+                                    HorizontalLayout { spacing: 2px;
+                                        Action { text: "New host"; has-icon: true; icon: @image-url("icons/plus.svg"); min-width: 100px; max-width: 100px; clicked => { root.new-host(); } }
+                                        Rectangle { width: 30px; height: 30px; background: #798c9426; border-radius: 5px;
+                                            Image { source: @image-url("icons/chevron-down.svg"); x: 8px; y: 8px; width: 14px; height: 14px; }
+                                            TouchArea { clicked => { root.menu-open = !root.menu-open; } }
+                                        }
+                                    }
+                                }
+                                Action { text: "Terminal"; has-icon: true; icon: @image-url("icons/local-filled.svg"); flat: true; clicked => { if root.save-current-draft() { root.close-editor(); root.open-terminal(); } } }
+                                Action { text: "Serial"; has-icon: true; icon: @image-url("icons/serial.svg"); flat: true; disabled: true; }
+                            }
+                        }
+                        Rectangle { x: parent.width - 132px; y: 7px; width: 110px; height: 30px; background: transparent;
+                            HorizontalLayout { spacing: 10px;
+                                for tool-icon in [@image-url("icons/grid.svg"),@image-url("icons/tag.svg"),@image-url("icons/calendar.svg")]: Rectangle { width: 30px; height: 30px; background: transparent;
+                                    Image { source: tool-icon; colorize: Theme.text; x: 8px; y: 8px; width: 14px; height: 14px; }
+                                }
+                            }
+                        }
+                    }
+                    host-grid := Rectangle { visible: root.hosts-page; vertical-stretch: root.hosts-page ? 1 : 0; min-height: 0px; max-height: root.hosts-page ? 100000px : 0px; background: Theme.base;
+                        host-focus := FocusScope { key-pressed(event) => { if event.text == Key.Return && root.selected-host != "" { root.activate-host(root.selected-host); accept } else { reject } } }
+                        if root.hosts.length == 0 && !root.editor-open: Rectangle {
+                            width: Math.min(500px, parent.width - 40px); height: 260px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+                            Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; border-width: 1px; border-color: #798c940d; background: #798c941a;
+                                Image { source: @image-url("icons/hosts.svg"); x: 20px; y: 20px; width: 20px; height: 20px; }
+                            }
+                            Text { y: 90px; height: 28px; width: parent.width; text: root.search == "" ? "Create host" : "No matching hosts"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
+                            Text { y: 125px; height: 24px; width: parent.width; text: root.search == "" ? "Save your connection details as hosts to connect in one click." : "Try another label, address, or group."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+                            Input { x: (parent.width - self.width) / 2; y: 165px; width: 384px; height: 36px; placeholder-color: Theme.secondary; placeholder-text: "Type IP or Hostname"; text <=> root.quick-host; init => { self.focus(); } accepted => { root.new-host(); root.draft.host = root.quick-host; } }
+                            Action { x: (parent.width - self.width) / 2; y: 221px; width: 384px; height: 36px; border-radius: 10px; text: "Continue"; primary: true; clicked => { root.new-host(); root.draft.host = root.quick-host; } }
+                        }
+                        if root.hosts.length > 0 || root.editor-open: ScrollView {
+                            content-height: root.group-height + 58px + Math.ceil((root.hosts.length + root.draft-count) / root.grid-cols) * 73px;
+                            if root.groups.length > 0: Text { x: 20px; y: 20px; text: "Groups"; color: Theme.text; font-weight: 600; font-size: 13px; }
+                            for group[index] in root.groups: Rectangle {
+                                x: 16px + Math.mod(index, root.grid-cols) * ((host-grid.width - 32px) / root.grid-cols);
+                                y: 52px + Math.floor(index / root.grid-cols) * 76px;
+                                width: (host-grid.width - 32px) / root.grid-cols - 8px; height: 64px; border-radius: 10px;
+                                background: group-touch.has-hover ? Theme.highest : Theme.high;
+                                HorizontalLayout { padding: 12px; spacing: 12px;
+                                    Rectangle { width: 40px; height: 40px; border-radius: 10px; background: #0f5774;
+                                        Image { source: @image-url("icons/hosts.svg"); x: 9px; y: 9px; width: 22px; height: 22px; }
+                                    }
+                                    VerticalLayout { spacing: 3px;
+                                        Text { text: group.name; color: Theme.text; font-size: 14px; overflow: elide; }
+                                        Text { text: group.count + " Hosts"; color: Theme.secondary; font-size: 11px; }
+                                    }
+                                }
+                                group-touch := TouchArea { clicked => { root.search = group.name; root.select-group(group.name); } }
+                            }
+                            Text { x: 30px; y: 20px + root.group-height; text: "Hosts"; color: Theme.text; font-weight: 500; font-size: 14px; }
+                            if root.draft-count > 0: Rectangle {
+                                x: 30px; y: root.group-height + 53px; width: Math.min(350px, host-grid.width - 60px); height: 60px; border-radius: 15px;
+                                background: white; border-width: 2px; border-color: Theme.accent;
+                                HorizontalLayout { padding: 12px; spacing: 14px;
+                                    Rectangle { width: 36px; height: 36px; border-radius: 10px; background: #00527c;
+                                        Image { source: @image-url("icons/hosts.svg"); colorize: white; x: 8px; y: 8px; width: 20px; height: 20px; }
+                                    }
+                                    VerticalLayout { spacing: 0px;
+                                        Text { text: root.draft.name != "" ? root.draft.name : root.draft.host != "" ? root.draft.host : "Enter IP or Hostname..."; color: root.draft.host == "" ? Theme.secondary : Theme.text; font-size: 14px; overflow: elide; }
+                                        Text { text: "ssh"; color: Theme.secondary; font-size: 11px; }
+                                    }
+                                }
+                            }
+                            for host[index] in root.hosts: Rectangle {
+                                x: 30px + Math.mod(index + root.draft-count, root.grid-cols) * 360px;
+                                y: root.group-height + 53px + Math.floor((index + root.draft-count) / root.grid-cols) * 73px;
+                                width: Math.min(350px, host-grid.width - 60px); height: 60px; border-radius: 15px;
+                                border-width: root.selected-host == host.id ? 2px : 0px; border-color: Theme.accent;
+                                background: host-touch.has-hover ? Theme.high : Theme.highest;
+                                HorizontalLayout { padding: 12px; spacing: 14px;
+                                    Rectangle { width: 36px; height: 36px; border-radius: 10px; background: #00527c;
+                                        Image { source: @image-url("icons/hosts.svg"); colorize: white; x: 8px; y: 8px; width: 20px; height: 20px; }
+                                    }
+                                    VerticalLayout { spacing: 3px;
+                                        Text { text: host.name; color: Theme.text; font-size: 14px; overflow: elide; }
+                                        Text { text: host.address; color: Theme.secondary; font-size: 11px; overflow: elide; }
+                                    }
+                                    Rectangle { width: 24px; background: transparent; visible: host-touch.has-hover || more-touch.has-hover;
+                                        Image { source: @image-url("icons/more.svg"); x: 5px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+                                        more-touch := TouchArea { clicked => { root.open-editor(host.id); } }
+                                    }
+                                }
+                                host-touch := TouchArea { width: parent.width - 42px;
+                                    clicked => { if root.editor-open { root.open-editor(host.id); } else { root.selected-host = host.id; host-focus.focus(); } }
+                                    double-clicked => { root.activate-host(host.id); }
+                                }
+                            }
+                        }
+                    }
+                    if !root.hosts-page: Rectangle { height: 40px; background: Theme.high;
+                        HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 6px;
+                            Text { text: root.local-session ? "Local" : "SSH"; color: Theme.secondary; width: 45px; vertical-alignment: center; }
+                            Rectangle { horizontal-stretch: 1; background: transparent; }
+                            Action { text: "Copy"; flat: true; clicked => { root.copy-terminal(); } }
+                            Action { text: "Paste"; flat: true; clicked => { root.paste-terminal(); terminal-focus.focus(); } }
+                            Action { text: "SFTP"; disabled: root.local-session; clicked => { root.list-files(root.file-path); } }
+                        }
+                    }
+                    HorizontalLayout { visible: !root.hosts-page; min-height: 0px; max-height: root.hosts-page ? 0px : 100000px; vertical-stretch: root.hosts-page ? 0 : 1; spacing: 0px;
+                        terminal-area := Rectangle { horizontal-stretch: 1; background: #141729; clip: true;
+                            for run in root.terminal-runs: Rectangle {
+                                x: 10px + run.col * root.cell-advance; y: 8px + run.row * 18px; width: run.width * root.cell-advance; height: 18px; background: run.bg;
+                                Text { text: run.text; color: run.fg; font-family: "Consolas"; font-size: 14px; font-weight: run.bold ? 700 : 400; vertical-alignment: center; }
+                                if run.underline: Rectangle { y: 16px; height: 1px; background: run.fg; }
+                            }
+                            for selection in root.selection-runs: Rectangle { x: 10px + selection.col * root.cell-advance; y: 8px + selection.row * 18px; width: selection.width * root.cell-advance; height: 18px; background: #2091f640; }
+                            if root.cursor-visible && root.terminal-visible: Rectangle { x: 10px + root.cursor-col * root.cell-advance; y: 8px + root.cursor-row * 18px; width: root.cell-advance; height: 18px; background: #ffffff80; }
+                            terminal-focus := FocusScope {
+                                key-pressed(event) => {
+                                    if event.modifiers.control && event.modifiers.shift && (event.text == "C" || event.text == "c") { root.copy-terminal(); }
+                                    else if event.modifiers.control && event.modifiers.shift && (event.text == "V" || event.text == "v") { root.paste-terminal(); }
+                                    else { root.terminal-key(event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift); }
+                                    accept
+                                }
+                            }
+                            TouchArea {
+                                pointer-event(event) => { if event.kind == PointerEventKind.down { terminal-focus.focus(); root.select-terminal(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), false); } }
+                                moved => { if self.pressed { root.select-terminal(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), true); } }
+                                scroll-event(event) => { root.terminal-scroll(Math.round(event.delta-y / 18px)); accept }
+                            }
+                        }
+                        if root.files-open: Rectangle { width: 340px; background: Theme.base;
+                            VerticalLayout { spacing: 0px;
+                                Rectangle { height: 44px; background: Theme.high;
+                                    HorizontalLayout { padding: 7px; spacing: 5px;
+                                        Text { text: "Remote files"; color: Theme.text; vertical-alignment: center; }
+                                        Action { text: "Upload"; clicked => { root.upload-file(); } }
+                                        Action { text: "Refresh"; clicked => { root.list-files(root.file-path); } }
+                                        Action { text: "×"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.files-open = false; terminal-focus.focus(); } }
+                                    }
+                                }
+                                LineEdit { text: root.file-path; accepted => { root.list-files(self.text); } }
+                                Text { visible: root.file-busy; text: "Loading…"; color: Theme.secondary; height: root.file-busy ? 28px : 0px; }
+                                ListView {
+                                    for file in root.files: Rectangle { height: 36px; background: file-touch.has-hover ? Theme.high : transparent;
+                                        HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 9px;
+                                            Image { source: file.is-directory ? @image-url("icons/folder.svg") : @image-url("icons/file.svg"); colorize: file.is-directory ? #58adf8 : Theme.secondary; width: 18px; height: 18px; }
+                                            Text { text: file.name; color: Theme.text; overflow: elide; vertical-alignment: center; }
+                                            Text { text: file.size; color: Theme.secondary; font-size: 10px; vertical-alignment: center; }
+                                        }
+                                        file-touch := TouchArea { clicked => { if file.is-directory { root.list-files(root.file-path + "/" + file.name); } else { root.download-file(file.name); } } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Rectangle { width: root.editor-open ? 340px : 0px; background: Theme.base; }
+        }
+        Rectangle { height: root.status-error || !root.hosts-page ? 28px : 0px; background: Theme.high;
+            Text { x: 14px; width: parent.width - 28px; text: root.status-text; color: root.status-error ? #f25e61 : Theme.secondary; font-size: 11px; overflow: elide; vertical-alignment: center; }
+        }
+    }
+    if root.sftp-page: Rectangle {
+        x: 0px; y: 51px; width: root.width; height: root.height - 51px; background: Theme.base;
+        Rectangle { background: transparent;
+            Rectangle { x: 0px; y: 0px; width: (root.width - 1px) / 2; height: parent.height; background: Theme.base; clip: true;
+                VerticalLayout { spacing: 0px;
+                    Rectangle { height: 50px; background: Theme.high;
+                        HorizontalLayout { padding-left: 16px; padding-right: 16px; spacing: 10px;
+                            Rectangle { width: 24px; background: transparent;
+                                Rectangle { x: 0px; y: (parent.height - 24px) / 2; width: 24px; height: 24px; border-radius: 8px; background: #00527c;
+                                    Image { source: @image-url("icons/local.svg"); colorize: white; x: 5px; y: 5px; width: 14px; height: 14px; }
+                                }
+                            }
+                            Text { text: "Local"; color: Theme.text; vertical-alignment: center; font-size: 14px; }
+                            Rectangle { horizontal-stretch: 1; background: transparent; }
+                            Action { text: "Filter"; flat: true; disabled: true; }
+                            Action { text: "Actions ⌄"; flat: true; clicked => { root.list-local(root.local-path); } }
+                        }
+                    }
+                    Rectangle { height: 50px; background: Theme.high;
+                        HorizontalLayout { padding: 10px; spacing: 10px;
+                            Action { text: "‹"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.list-local(root.local-path + "/.."); } }
+                            Input { text: root.local-path; accepted => { root.list-local(self.text); } }
+                        }
+                    }
+                    FileTableRow { heading: true; }
+                    ListView {
+                        for entry in root.local-files: FileTableRow { file: entry; background: local-touch.has-hover ? #798c941a : transparent;
+                            local-touch := TouchArea { clicked => { if entry.is-directory { root.list-local(root.local-path + "/" + entry.name); } else { root.upload-local(entry.name); } } }
+                        }
+                    }
+                }
+            }
+            Rectangle { x: (root.width - 1px) / 2; width: 1px; background: #d5dde0; }
+            Rectangle { x: (root.width + 1px) / 2; y: 0px; width: (root.width - 1px) / 2; height: parent.height; background: Theme.base; clip: true;
+                if !root.remote-connected: Rectangle { width: parent.width - 40px; height: 222px; x: 20px; y: (parent.height + 160px - self.height) / 2;
+                    Rectangle { x: (parent.width - 60px) / 2; y: 0px; width: 60px; height: 60px; border-radius: 15px; background: #798c941a;
+                        Image { source: @image-url("icons/folder-filled.svg"); colorize: Theme.text; x: 20px; y: 20px; width: 20px; height: 20px; }
+                    }
+                    Text { y: 90px; height: 26px; width: parent.width; text: "Connect to host"; color: Theme.text; font-size: 18px; font-weight: 500; horizontal-alignment: center; }
+                    Text { y: 125px; height: 21px; width: parent.width; text: "Start by connecting to a saved host"; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+                    Text { y: 146px; height: 21px; width: parent.width; text: "to manage your files with SFTP."; color: Theme.secondary; font-size: 14px; horizontal-alignment: center; }
+                    Action { x: (parent.width - self.width) / 2; y: 185px; width: 104px; height: 36px; border-radius: 10px; text: "Select host"; clicked => { root.host-picker-open = true; } }
+                }
+                if root.remote-connected: VerticalLayout { spacing: 0px;
+                    Rectangle { height: 50px; background: Theme.high;
+                        HorizontalLayout { padding-left: 16px; padding-right: 16px; spacing: 10px;
+                            Text { text: root.active-host; color: Theme.text; vertical-alignment: center; overflow: elide; }
+                            Rectangle { horizontal-stretch: 1; background: transparent; }
+                            Action { text: "Select host"; flat: true; clicked => { root.host-picker-open = true; } }
+                            Action { text: "Refresh"; flat: true; clicked => { root.list-files(root.file-path); } }
+                        }
+                    }
+                    Rectangle { height: 50px; background: Theme.high;
+                        HorizontalLayout { padding: 10px; spacing: 10px;
+                            Action { text: "‹"; flat: true; min-width: 24px; max-width: 24px; clicked => { root.list-files(root.file-path + "/.."); } }
+                            Input { text: root.file-path; accepted => { root.list-files(self.text); } }
+                        }
+                    }
+                    FileTableRow { heading: true; }
+                    ListView {
+                        for entry in root.files: FileTableRow { file: entry; background: remote-touch.has-hover ? #798c941a : transparent;
+                            remote-touch := TouchArea { clicked => { if entry.is-directory { root.list-files(root.file-path + "/" + entry.name); } else { root.download-to-local(entry.name); } } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if root.host-picker-open: Rectangle { background: #14172980;
+        TouchArea { clicked => { root.host-picker-open = false; } }
+        Rectangle { width: 400px; height: 420px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; border-radius: 10px; background: Theme.high;
+            VerticalLayout { padding: 20px; spacing: 12px;
+                Text { text: "Select host"; color: Theme.text; font-size: 18px; font-weight: 500; height: 28px; }
+                ListView {
+                    for host in root.hosts: Rectangle { height: 52px; border-radius: 8px; background: select-host-touch.has-hover ? #798c941a : transparent;
+                        HorizontalLayout { padding: 8px; spacing: 12px;
+                            Image { source: @image-url("icons/hosts.svg"); width: 24px; height: 24px; }
+                            VerticalLayout { spacing: 3px;
+                                Text { text: host.name; color: Theme.text; overflow: elide; }
+                                Text { text: host.address; color: Theme.secondary; font-size: 11px; overflow: elide; }
+                            }
+                        }
+                        select-host-touch := TouchArea { clicked => { root.host-picker-open = false; root.select-sftp-host(host.id); } }
+                    }
+                }
+                Action { text: "Cancel"; clicked => { root.host-picker-open = false; } }
+            }
+        }
+    }
+    if root.menu-open: Rectangle { x: 9px; y: 45px; width: 230px; height: 151px; background: white; border-width: 1px; border-color: Theme.border; border-radius: 10px;
+        VerticalLayout { padding: 8px; spacing: 4px;
+            NavItem { text: "Import hosts"; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
+            NavItem { text: "Export hosts"; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
+            NavItem { text: "Settings"; icon: @image-url("icons/settings.svg"); clicked => { root.menu-open = false; root.show-settings(); root.settings-open = true; } }
+        }
+    }
+    if root.editor-open: Rectangle { x: root.width - 340px; y: 51px; width: 340px; height: root.height - 51px; background: Theme.base;
+        Rectangle { background: Theme.base;
+            Timer { interval: 16ms; running: root.editor-focus-requested; triggered => { address-input.focus(); editor-scroll.content-y = 0px; root.editor-focus-requested = false; } }
+            VerticalLayout { padding: 0px; spacing: 0px;
+                Rectangle { height: 56px; background: Theme.high;
+                    HorizontalLayout { padding-left: 20px; padding-right: 14px; spacing: 10px;
+                        Text { text: root.creating-host ? "New Host" : "Host Details"; color: Theme.text; font-size: 14px; font-weight: 700; vertical-alignment: center; }
+                        Rectangle { width: 30px; background: transparent;
+                            Image { source: @image-url("icons/more.svg"); x: 8px; y: (parent.height - 14px) / 2; width: 14px; height: 14px; }
+                            TouchArea { clicked => { root.editor-menu-open = !root.editor-menu-open; } }
+                        }
+                        Rectangle { width: 24px; background: transparent;
+                            Image { source: @image-url("icons/collapse-right.svg"); x: 3px; y: (parent.height - 18px) / 2; width: 18px; height: 18px; }
+                            TouchArea { clicked => { if root.draft.host == "" || root.save-host(root.draft) { root.close-editor(); } } }
+                        }
+                    }
+                }
+                editor-scroll := ScrollView { VerticalLayout { padding: 15px; spacing: 15px;
+                    Rectangle { height: 102px; background: Theme.high; border-radius: 10px;
+                        VerticalLayout { padding: 20px; spacing: 10px;
+                            Text { text: "Address"; color: Theme.text; font-size: 14px; font-weight: 500; height: 16px; }
+                            HorizontalLayout { spacing: 10px;
+                                Rectangle { width: 36px; height: 36px; border-radius: 8px; background: #00527c;
+                                    Image { source: @image-url("icons/hosts.svg"); colorize: white; x: 8px; y: 8px; width: 20px; height: 20px; }
+                                }
+                                address-input := Input { placeholder-text: "IP or Hostname"; text <=> root.draft.host; }
+                            }
+                        }
+                    }
+                    Rectangle { height: 240px; background: Theme.high; border-radius: 10px;
+                        VerticalLayout { padding: 20px; spacing: 10px;
+                            Text { text: "General"; color: Theme.text; font-size: 14px; font-weight: 500; height: 16px; }
+                            Input { placeholder-text: "Label"; text <=> root.draft.name; }
+                            Input { placeholder-text: "Parent Group"; text <=> root.draft.group; has-leading-icon: true; leading-icon: @image-url("icons/group.svg"); }
+                            Input { placeholder-text: "Tags"; enabled: false; }
+                            Input { placeholder-text: "Backspace                            Default"; enabled: false; }
+                        }
+                    }
+                    Rectangle { background: Theme.high; border-radius: 10px;
+                        VerticalLayout { padding: 20px; spacing: 10px;
+                            HorizontalLayout { spacing: 4px; alignment: start;
+                                Text { text: "SSH on"; width: 46px; color: Theme.text; font-size: 14px; font-weight: 500; vertical-alignment: center; }
+                                Input { placeholder-text: "22"; text <=> root.draft.port; min-height: 28px; max-height: 28px; min-width: 79px; max-width: 79px; }
+                                Text { text: "port"; width: 27px; color: Theme.text; font-size: 14px; font-weight: 500; vertical-alignment: center; }
+                            }
+                            Rectangle { height: 1px; background: #798c941a; }
+                            Text { text: "Credentials"; color: Theme.text; font-size: 14px; font-weight: 500; height: 20px; }
+                            Input { placeholder-text: "Username"; text <=> root.draft.username; has-leading-icon: true; leading-icon: @image-url("icons/user.svg"); }
+                            Input { placeholder-text: root.draft.auth-index == 1 ? "Passphrase" : "Password"; input-type: InputType.password; text <=> root.draft.secret; has-leading-icon: true; leading-icon: @image-url("icons/password.svg"); }
+                            Action { text: "Key, Certificate, FIDO2"; has-icon: true; icon: @image-url("icons/plus.svg"); flat: true; secondary: true; text-size: 12px; left-aligned: true; clicked => { root.draft.key-path = root.pick-key(); if root.draft.key-path != "" { root.draft.auth-index = 1; } } }
+                            if root.draft.auth-index == 1: VerticalLayout { spacing: 8px;
+                                Field { label: "Private key file"; text <=> root.draft.key-path; }
+                                Action { text: "Choose file…"; clicked => { root.draft.key-path = root.pick-key(); } }
+                            }
+                        }
+                    }
+                } }
+                Rectangle { height: 76px; background: Theme.base;
+                    HorizontalLayout { padding-left: 15px; padding-right: 15px; padding-top: 20px; padding-bottom: 20px; spacing: 10px;
+                        Action { text: "Connect"; primary: true; border-radius: 10px; disabled: root.draft.host == ""; horizontal-stretch: 1; min-height: 36px; max-height: 36px; clicked => { root.save-and-connect(root.draft); } }
+                    }
+                }
+            }
+        }
+    }
+    if root.editor-open && root.editor-menu-open: Rectangle { x: root.width - 220px; y: 93px; width: 205px; height: 86px; background: white; border-radius: 8px; border-width: 1px; border-color: Theme.border;
+        VerticalLayout { padding: 8px; spacing: 5px;
+            Action { text: "Add Telnet"; flat: true; disabled: true; }
+            Action { text: "Remove"; flat: true; clicked => { if !root.creating-host { root.delete-host(root.draft.id); } root.close-editor(); } }
+        }
+    }
+    if root.settings-open: Rectangle { background: #141729bf;
+        TouchArea { }
+        Rectangle { width: 520px; height: 360px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px;
+            VerticalLayout { padding: 24px; spacing: 20px;
+                Text { text: "Settings"; color: Theme.text; font-size: 20px; }
+                Text { text: root.settings-text; color: Theme.text; wrap: word-wrap; vertical-stretch: 1; }
+                HorizontalLayout { alignment: end; Action { text: "Close"; clicked => { root.settings-open = false; } } }
+            }
+        }
+    }
+    if root.prompt-visible: Rectangle { background: #141729bf;
+        TouchArea { }
+        Rectangle { width: 550px; height: 340px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px;
+            VerticalLayout { padding: 24px; spacing: 16px;
+                Text { text: root.prompt-title; color: Theme.text; font-size: 18px; font-weight: 600; }
+                Text { text: root.prompt-message; color: Theme.text; wrap: word-wrap; vertical-stretch: 1; font-size: 13px; }
+                if !root.prompt-is-key: LineEdit { text <=> root.prompt-answer; input-type: root.prompt-password ? InputType.password : InputType.text; init => { self.focus(); } accepted => { root.answer-prompt(true, root.prompt-answer); } }
+                HorizontalLayout { alignment: end; spacing: 10px;
+                    Action { text: "Cancel"; clicked => { root.answer-prompt(false, ""); } }
+                    Action { text: root.prompt-is-key ? "Trust and connect" : "Continue"; primary: true; clicked => { root.answer-prompt(true, root.prompt-answer); } }
+                }
+            }
+        }
+    }
+}

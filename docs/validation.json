@@ -1,0 +1,100 @@
+{
+  "product": "OpenTermius",
+  "version": "0.2.0",
+  "validated_at_utc": "2026-10-20T02:08:14.003304+00:00",
+  "platform": "Windows x64",
+  "toolchain": "Rust 1.97.1 / Slint 1.18.1 / MSVC static CRT",
+  "tests": {
+    "command": "cargo test --release --locked",
+    "library_passed": 11,
+    "local_conpty_passed": 3,
+    "ssh_sftp_passed": 7,
+    "failures": 0
+  },
+  "release_gui": {
+    "command": "cargo test --release --locked --test transport native_gui_live_selftest -- --ignored --nocapture",
+    "passed": true,
+    "checks": [
+      "native profile callback",
+      "password prompt",
+      "explicit SHA256 prompt",
+      "real SSH terminal IO",
+      "real SFTP listing",
+      "tab cleanup",
+      "Windows DPAPI",
+      "no plaintext credentials",
+      "profile persistence",
+      "host search",
+      "measured terminal cell metric"
+    ],
+    "screenshot": "screenshots/ssh-sftp.png"
+  },
+  "scenes": [
+    {
+      "scene": "empty",
+      "ok": true
+    },
+    {
+      "scene": "editor",
+      "ok": true
+    },
+    {
+      "scene": "hosts",
+      "ok": true
+    },
+    {
+      "scene": "sftp",
+      "ok": true
+    }
+  ],
+  "artifact": {
+    "version": "0.2.0",
+    "product": "OpenTermius",
+    "architecture": "x86_64-pc-windows-msvc",
+    "file": "OpenTermius-0.2.0-windows-x64.exe",
+    "bytes": 16406016,
+    "sha256": "77480c3e44167ee48cc33f7371c356a6861d60e832de1b6aa122260f22f941dd",
+    "direct_dll_imports": [
+      "advapi32.dll",
+      "api-ms-win-core-synch-l1-2-0.dll",
+      "api-ms-win-core-winrt-error-l1-1-0.dll",
+      "bcryptprimitives.dll",
+      "combase.dll",
+      "comctl32.dll",
+      "crypt32.dll",
+      "dwmapi.dll",
+      "dwrite.dll",
+      "gdi32.dll",
+      "imm32.dll",
+      "kernel32.dll",
+      "ntdll.dll",
+      "ole32.dll",
+      "oleaut32.dll",
+      "shell32.dll",
+      "shlwapi.dll",
+      "user32.dll",
+      "uxtheme.dll",
+      "ws2_32.dll"
+    ],
+    "imports_vc_runtime": false
+  },
+  "branding": {
+    "source": "assets/logo.svg",
+    "windows_icon_sizes": [
+      256,
+      128,
+      64,
+      48,
+      32,
+      24,
+      16
+    ],
+    "ui_icon_count": 31,
+    "font_source": "system fonts"
+  },
+  "platform_status": {
+    "windows": "validated preview",
+    "macos": "planned",
+    "linux": "planned"
+  }
+}
