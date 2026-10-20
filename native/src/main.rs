@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use anyhow::Context;
 use opentermius::{
+    settings::{BellMode, Settings},
     ssh::{self, Command, Event},
     store::{self, Profile, Store},
     terminal::{Snapshot, Terminal},
@@ -54,6 +55,7 @@ enum Prompt {
 struct State {
     ui: slint::Weak<AppWindow>,
     store: Arc<Mutex<Store>>,
+    settings: Settings,
     runtime: tokio::runtime::Runtime,
     events: mpsc::Sender<Event>,
     sessions: BTreeMap<String, SessionView>,
@@ -193,6 +195,7 @@ impl State {
                 ui.set_remote_connected(view.connected && !view.local);
                 ui.set_local_session(view.local);
                 ui.set_active_host(view.profile.name.clone().into());
+                let scheme = self.settings.color_scheme;
                 let rows: Vec<TerminalRun> = view
                     .snapshot
                     .runs
@@ -202,8 +205,8 @@ impl State {
                         row: r.row as i32,
                         col: r.col as i32,
                         width: r.width as i32,
-                        fg: ui_color(r.fg),
-                        bg: ui_color(r.bg),
+                        fg: ui_color(scheme.map_color(r.fg, r.fg_source)),
+                        bg: ui_color(scheme.map_color(r.bg, r.bg_source)),
                         bold: r.bold,
                         underline: r.underline,
                     })
@@ -355,7 +358,12 @@ impl State {
                 local: false,
                 profile,
                 transport: None,
-                snapshot: Terminal::new(self.rows, self.cols).snapshot(),
+                snapshot: Terminal::with_scrollback(
+                    self.rows,
+                    self.cols,
+                    self.settings.scrollback_lines,
+                )
+                .snapshot(),
                 status: "等待认证".into(),
                 connected: false,
                 selection: None,
@@ -403,13 +411,18 @@ impl State {
                 .cloned()
         });
         view.status = "连接中".into();
-        view.transport = Some(ssh::spawn(
+        view.transport = Some(ssh::spawn_with_options(
             self.runtime.handle(),
             id.to_string(),
             view.profile.clone(),
             secret,
             known,
             self.events.clone(),
+            ssh::ConnectOptions {
+                keepalive_seconds: self.settings.keepalive_seconds,
+                timeout_seconds: self.settings.connection_timeout_seconds,
+                scrollback_lines: self.settings.scrollback_lines,
+            },
         ));
         self.tabs();
     }
@@ -441,7 +454,12 @@ impl State {
                 local: true,
                 profile,
                 transport: Some(transport),
-                snapshot: Terminal::new(self.rows, self.cols).snapshot(),
+                snapshot: Terminal::with_scrollback(
+                    self.rows,
+                    self.cols,
+                    self.settings.scrollback_lines,
+                )
+                .snapshot(),
                 status: "Starting".into(),
                 connected: false,
                 selection: None,
@@ -693,6 +711,14 @@ impl State {
                     if s.snapshot.lines != snapshot.lines {
                         s.selection = None;
                     }
+                    if snapshot.bell_count != s.snapshot.bell_count
+                        && self.settings.bell == BellMode::Visual
+                        && self.active.as_deref() == Some(&id)
+                    {
+                        if let Some(ui) = self.ui.upgrade() {
+                            ui.set_bell_flash(true);
+                        }
+                    }
                     s.snapshot = snapshot;
                     if self.active.as_deref() == Some(&id) {
                         self.display();
@@ -728,11 +754,13 @@ impl State {
             Event::Files { id, path, entries } => {
                 if self.active.as_deref() == Some(&id) {
                     self.file_path = path.clone();
+                    let show_hidden = self.settings.show_hidden_files;
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_path(path.into());
                         ui.set_files(model(
                             entries
                                 .into_iter()
+                                .filter(|e| show_hidden || !e.name.starts_with('.'))
                                 .map(|e| FileRow {
                                     name: e.name.into(),
                                     is_directory: e.is_dir,
@@ -798,6 +826,13 @@ impl State {
                     self.status("Upload cancelled", false);
                     if let Some(ui) = self.ui.upgrade() {
                         ui.set_file_busy(false)
+                    }
+                }
+            }
+            Event::Bell { id } => {
+                if self.settings.bell == BellMode::Visual && self.active.as_deref() == Some(&id) {
+                    if let Some(ui) = self.ui.upgrade() {
+                        ui.set_bell_flash(true);
                     }
                 }
             }
@@ -932,12 +967,45 @@ impl State {
             }
         }
     }
+    fn end_selection(&self) {
+        if !self.settings.copy_on_select {
+            return;
+        }
+        let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get(id)) else {
+            return;
+        };
+        let Some((start, end)) = view.selection.filter(|(a, b)| a != b) else {
+            return;
+        };
+        let text = view.snapshot.selected_text(start, end);
+        if text.is_empty() {
+            return;
+        }
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Err(e) = clipboard.set_text(text) {
+                self.status(e.to_string(), true)
+            }
+        }
+    }
     fn paste(&self) {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if let Ok(text) = clipboard.get_text() {
                 if text.len() > 1024 * 1024 {
                     self.status("粘贴内容不能超过 1 MB", true);
                     return;
+                }
+                let lines = opentermius::settings::paste_line_count(&text);
+                if self.settings.confirm_multiline_paste && lines > 1 {
+                    let confirmed = rfd::MessageDialog::new()
+                        .set_title("粘贴多行内容")
+                        .set_description(format!("剪贴板包含 {lines} 行内容，是否粘贴到终端？"))
+                        .set_buttons(rfd::MessageButtons::YesNo)
+                        .show()
+                        == rfd::MessageDialogResult::Yes;
+                    if !confirmed {
+                        self.status("已取消粘贴", false);
+                        return;
+                    }
                 }
                 let bracketed = self
                     .active
@@ -980,6 +1048,7 @@ impl State {
         };
         self.local_request += 1;
         let generation = self.local_request;
+        let show_hidden = self.settings.show_hidden_files;
         let weak = self.ui.clone();
         self.runtime.spawn_blocking(move || {
             let result = (|| -> anyhow::Result<(PathBuf, Vec<(String, bool, u64, String)>)> {
@@ -989,6 +1058,17 @@ impl State {
                 for entry in std::fs::read_dir(&path)?.take(20000) {
                     let entry = entry?;
                     let Ok(meta) = entry.metadata() else { continue };
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    #[cfg(windows)]
+                    let is_hidden = {
+                        use std::os::windows::fs::MetadataExt;
+                        name.starts_with('.') || meta.file_attributes() & 0x2 != 0
+                    };
+                    #[cfg(not(windows))]
+                    let is_hidden = name.starts_with('.');
+                    if !show_hidden && is_hidden {
+                        continue;
+                    }
                     let date = meta
                         .modified()
                         .ok()
@@ -998,12 +1078,7 @@ impl State {
                                 .to_string()
                         })
                         .unwrap_or_default();
-                    files.push((
-                        entry.file_name().to_string_lossy().to_string(),
-                        meta.is_dir(),
-                        meta.len(),
-                        date,
-                    ));
+                    files.push((name, meta.is_dir(), meta.len(), date));
                 }
                 files.sort_by(|a, b| {
                     b.1.cmp(&a.1)
@@ -1186,10 +1261,15 @@ fn run() -> anyhow::Result<()> {
             }
         }
     });
+    let initial_settings = store
+        .lock()
+        .map(|s| s.data.settings.clone().normalized())
+        .unwrap_or_default();
     STATE.with(|s| {
         *s.borrow_mut() = Some(State {
             ui: ui.as_weak(),
             store,
+            settings: initial_settings,
             runtime,
             events: tx,
             sessions: BTreeMap::new(),
@@ -1346,6 +1426,9 @@ fn run() -> anyhow::Result<()> {
     ui.on_copy_terminal(|| {
         with_state(|s| s.copy());
     });
+    ui.on_end_terminal_selection(|| {
+        with_state(|s| s.end_selection());
+    });
     ui.on_paste_terminal(|| {
         with_state(|s| s.paste());
     });
@@ -1392,7 +1475,7 @@ fn run() -> anyhow::Result<()> {
             s.send(Command::Upload {
                 directory: s.file_path.clone(),
                 local: s.local_path.join(name.as_str()),
-                overwrite: false,
+                overwrite: !s.settings.confirm_overwrite,
             });
         });
     });
@@ -1414,7 +1497,7 @@ fn run() -> anyhow::Result<()> {
                 s.send(Command::Upload {
                     directory: s.file_path.clone(),
                     local,
-                    overwrite: false,
+                    overwrite: !s.settings.confirm_overwrite,
                 });
             });
         }
@@ -1478,16 +1561,6 @@ fn run() -> anyhow::Result<()> {
         }
     });
     pages::install(&ui);
-    ui.on_show_settings(|| {
-        with_state(|s| {
-            let path = s
-                .store
-                .lock()
-                .map(|s| s.path.display().to_string())
-                .unwrap_or_default();
-            if let Some(ui)=s.ui.upgrade(){ui.set_settings_text(format!("OpenTermius 0.2.0 · Rust + Slint\n\n本机配置：{path}\n\n凭据由 Windows DPAPI 加密。无产品账号、云同步和遥测。\n支持导入和导出本地主机 JSON；导出文件不含保存的凭据。").into())}
-        });
-    });
     with_state(|s| {
         s.hosts();
         s.tabs();

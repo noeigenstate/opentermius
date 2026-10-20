@@ -86,11 +86,33 @@ pub enum Event {
     Closed {
         id: String,
     },
+    Bell {
+        id: String,
+    },
 }
 pub struct Session {
     pub id: String,
     pub commands: mpsc::Sender<Command>,
     pub task: JoinHandle<()>,
+}
+
+/// Transport tuning taken from the persisted settings. `spawn` keeps the
+/// defaults for callers that do not need preferences (tests, local sessions).
+#[derive(Clone, Copy, Debug)]
+pub struct ConnectOptions {
+    pub keepalive_seconds: u32,
+    pub timeout_seconds: u32,
+    pub scrollback_lines: usize,
+}
+impl Default for ConnectOptions {
+    fn default() -> Self {
+        use crate::settings::{CONNECTION_TIMEOUT_DEFAULT, KEEPALIVE_DEFAULT};
+        Self {
+            keepalive_seconds: KEEPALIVE_DEFAULT,
+            timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
+            scrollback_lines: crate::terminal::DEFAULT_SCROLLBACK,
+        }
+    }
 }
 
 pub fn spawn(
@@ -100,6 +122,26 @@ pub fn spawn(
     secret: String,
     known_key: Option<String>,
     events: mpsc::Sender<Event>,
+) -> Session {
+    spawn_with_options(
+        rt,
+        id,
+        profile,
+        secret,
+        known_key,
+        events,
+        ConnectOptions::default(),
+    )
+}
+
+pub fn spawn_with_options(
+    rt: &Handle,
+    id: String,
+    profile: Profile,
+    secret: String,
+    known_key: Option<String>,
+    events: mpsc::Sender<Event>,
+    options: ConnectOptions,
 ) -> Session {
     let (commands, rx) = mpsc::channel(64);
     let session_id = id.clone();
@@ -111,6 +153,7 @@ pub fn spawn(
             known_key,
             events.clone(),
             rx,
+            options,
         )
         .await;
         if let Err(e) = result {
@@ -184,9 +227,12 @@ async fn connect(
     known: Option<String>,
     events: &mpsc::Sender<Event>,
     cancelled: watch::Receiver<bool>,
+    options: ConnectOptions,
 ) -> Result<client::Handle<Client>> {
+    let keepalive_interval = (options.keepalive_seconds > 0)
+        .then(|| Duration::from_secs(u64::from(options.keepalive_seconds)));
     let config = Arc::new(client::Config {
-        keepalive_interval: Some(Duration::from_secs(15)),
+        keepalive_interval,
         keepalive_max: 3,
         nodelay: true,
         channel_buffer_size: 32,
@@ -200,8 +246,9 @@ async fn connect(
         events: events.clone(),
         cancelled,
     };
+    let connection_timeout = Duration::from_secs(u64::from(options.timeout_seconds.max(1)));
     let mut ssh = timeout(
-        Duration::from_secs(150),
+        connection_timeout,
         client::connect(config, (p.host.as_str(), p.port), handler),
     )
     .await
@@ -318,11 +365,12 @@ async fn run(
     known: Option<String>,
     events: mpsc::Sender<Event>,
     mut commands: mpsc::Receiver<Command>,
+    options: ConnectOptions,
 ) -> Result<()> {
     let (cancel_tx, cancel_rx) = watch::channel(false);
     let _cancellation = CancelOnDrop(cancel_tx);
     let ssh = {
-        let connecting = connect(id, &p, &secret, known, &events, cancel_rx);
+        let connecting = connect(id, &p, &secret, known, &events, cancel_rx, options);
         tokio::pin!(connecting);
         loop {
             tokio::select! {
@@ -363,7 +411,7 @@ async fn run(
     let mut pending_write = None;
     let mut pending_control = Some(Write::Pty);
     let mut protocol = Vec::new();
-    let mut terminal = Terminal::new(30, 100);
+    let mut terminal = Terminal::with_scrollback(30, 100, options.scrollback_lines);
     let mut stage = 0;
     let mut connected = false;
     let mut setup_timeout = Box::pin(tokio::time::sleep(Duration::from_secs(30)));
@@ -400,6 +448,9 @@ async fn run(
             message=reader.wait()=>match message {
                 Some(ChannelMsg::Data{data})|Some(ChannelMsg::ExtendedData{data,..})=>{
                     terminal.feed(&data);
+                    if terminal.take_bells() > 0 {
+                        let _ = events.try_send(Event::Bell{id:id.into()});
+                    }
                     let responses=terminal.take_responses();
                     ensure!(protocol.len()+responses.len()<=65536,"服务器终端查询过于频繁");
                     protocol.extend(responses);dirty=true;

@@ -59,7 +59,13 @@ export component AppWindow inherits Window {
     in property <string> file-path;
     in-out property <bool> files-open;
     in property <bool> file-busy;
-    in property <string> settings-text;
+    in property <color> terminal-background: #141729;
+    in property <color> terminal-cursor: #ffffff80;
+    in-out property <bool> bell-flash: false;
+    property <length> terminal-font-size: SettingsBridge.terminal-font-size * 1px;
+    property <bool> terminal-cursor-blink: SettingsBridge.cursor-blink;
+    property <bool> cursor-phase: true;
+    property <length> cell-height-px: Math.max(1px, terminal-line-metric.preferred-height / 10);
     in property <string> prompt-title;
     in property <string> prompt-message;
     in property <bool> prompt-is-key;
@@ -68,9 +74,9 @@ export component AppWindow inherits Window {
     in property <bool> prompt-visible;
     property <length> cell-advance: Math.max(1px, terminal-metric.preferred-width / 40);
     out property <int> terminal-cols: Math.max(20, Math.floor((terminal-area.width - 20px) / root.cell-advance));
-    out property <int> terminal-rows: Math.max(5, Math.floor((terminal-area.height - 16px) / 18px));
+    out property <int> terminal-rows: Math.max(5, Math.floor((terminal-area.height - 16px) / root.cell-height-px));
     out property <float> cell-width: root.cell-advance / 1px;
-    out property <float> cell-height: 18;
+    out property <float> cell-height: root.cell-height-px / 1px;
     property <bool> hosts-page: true;
     // Sidebar section shown while hosts-page is true: hosts, keychain, forwarding, snippets, known-hosts, logs, settings.
     in-out property <string> section: "hosts";
@@ -78,7 +84,6 @@ export component AppWindow inherits Window {
     property <bool> editor-open: false;
     property <bool> creating-host: false;
     property <bool> editor-menu-open: false;
-    property <bool> settings-open: false;
     property <bool> menu-open: false;
     property <bool> host-picker-open: false;
     property <HostDraft> draft;
@@ -116,8 +121,8 @@ export component AppWindow inherits Window {
     callback search-hosts(string);
     callback select-group(string);
     callback pick-key() -> string;
-    callback show-settings;
     callback select-terminal(int, int, bool);
+    callback end-terminal-selection;
     callback answer-prompt(bool, string);
     callback window-drag;
     callback window-minimize;
@@ -125,6 +130,7 @@ export component AppWindow inherits Window {
     callback window-close;
     changed terminal-cols => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
     changed terminal-rows => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
+    changed terminal-cursor-blink => { root.cursor-phase = true; }
     changed active-session => {
         if root.active-session != "" { root.hosts-page = false; if !root.sftp-page { terminal-focus.focus(); } }
         else if !root.sftp-page { root.hosts-page = true; }
@@ -149,7 +155,10 @@ export component AppWindow inherits Window {
     }
     public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = true; root.section = name; } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.draft.secret = ""; }
-    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: 14px; font-weight: 400; opacity: 0; }
+    terminal-metric := Text { text: "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"; font-family: "Consolas"; font-size: root.terminal-font-size; font-weight: 400; opacity: 0; }
+    terminal-line-metric := Text { text: "M\nM\nM\nM\nM\nM\nM\nM\nM\nM"; font-family: "Consolas"; font-size: root.terminal-font-size; font-weight: 400; opacity: 0; }
+    Timer { interval: 500ms; running: root.terminal-cursor-blink && root.cursor-visible && !root.hosts-page; triggered => { root.cursor-phase = !root.cursor-phase; } }
+    Timer { interval: 150ms; running: root.bell-flash; triggered => { root.bell-flash = false; } }
     VerticalLayout { spacing: 0px;
         Rectangle { height: 51px; background: Theme.lowest;
             HorizontalLayout { padding-left: 9px; padding-right: 10px; spacing: 5px;
@@ -333,14 +342,15 @@ export component AppWindow inherits Window {
                         }
                     }
                     HorizontalLayout { visible: !root.hosts-page; min-height: 0px; max-height: root.hosts-page ? 0px : 100000px; vertical-stretch: root.hosts-page ? 0 : 1; spacing: 0px;
-                        terminal-area := Rectangle { horizontal-stretch: 1; background: #141729; clip: true;
+                        terminal-area := Rectangle { horizontal-stretch: 1; background: root.terminal-background; clip: true;
                             for run in root.terminal-runs: Rectangle {
-                                x: 10px + run.col * root.cell-advance; y: 8px + run.row * 18px; width: run.width * root.cell-advance; height: 18px; background: run.bg;
-                                Text { text: run.text; color: run.fg; font-family: "Consolas"; font-size: 14px; font-weight: run.bold ? 700 : 400; vertical-alignment: center; }
-                                if run.underline: Rectangle { y: 16px; height: 1px; background: run.fg; }
+                                x: 10px + run.col * root.cell-advance; y: 8px + run.row * root.cell-height-px; width: run.width * root.cell-advance; height: root.cell-height-px; background: run.bg;
+                                Text { text: run.text; color: run.fg; font-family: "Consolas"; font-size: root.terminal-font-size; font-weight: run.bold ? 700 : 400; height: parent.height; vertical-alignment: center; }
+                                if run.underline: Rectangle { y: parent.height - 2px; height: 1px; background: run.fg; }
                             }
-                            for selection in root.selection-runs: Rectangle { x: 10px + selection.col * root.cell-advance; y: 8px + selection.row * 18px; width: selection.width * root.cell-advance; height: 18px; background: #2091f640; }
-                            if root.cursor-visible && root.terminal-visible: Rectangle { x: 10px + root.cursor-col * root.cell-advance; y: 8px + root.cursor-row * 18px; width: root.cell-advance; height: 18px; background: #ffffff80; }
+                            for selection in root.selection-runs: Rectangle { x: 10px + selection.col * root.cell-advance; y: 8px + selection.row * root.cell-height-px; width: selection.width * root.cell-advance; height: root.cell-height-px; background: #2091f640; }
+                            if root.cursor-visible && root.terminal-visible && (!root.terminal-cursor-blink || root.cursor-phase): Rectangle { x: 10px + root.cursor-col * root.cell-advance; y: 8px + root.cursor-row * root.cell-height-px; width: root.cell-advance; height: root.cell-height-px; background: root.terminal-cursor; }
+                            if root.bell-flash: Rectangle { width: parent.width; height: parent.height; background: #2091f633; }
                             terminal-focus := FocusScope {
                                 key-pressed(event) => {
                                     if event.modifiers.control && event.modifiers.shift && (event.text == "C" || event.text == "c") { root.copy-terminal(); }
@@ -350,9 +360,12 @@ export component AppWindow inherits Window {
                                 }
                             }
                             TouchArea {
-                                pointer-event(event) => { if event.kind == PointerEventKind.down { terminal-focus.focus(); root.select-terminal(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), false); } }
-                                moved => { if self.pressed { root.select-terminal(Math.floor((self.mouse-y - 8px) / 18px), Math.floor((self.mouse-x - 10px) / root.cell-advance), true); } }
-                                scroll-event(event) => { root.terminal-scroll(Math.round(event.delta-y / 18px)); accept }
+                                pointer-event(event) => {
+                                    if event.kind == PointerEventKind.down { terminal-focus.focus(); root.select-terminal(Math.floor((self.mouse-y - 8px) / root.cell-height-px), Math.floor((self.mouse-x - 10px) / root.cell-advance), false); }
+                                    else if event.kind == PointerEventKind.up { root.end-terminal-selection(); }
+                                }
+                                moved => { if self.pressed { root.select-terminal(Math.floor((self.mouse-y - 8px) / root.cell-height-px), Math.floor((self.mouse-x - 10px) / root.cell-advance), true); } }
+                                scroll-event(event) => { root.terminal-scroll(Math.round(event.delta-y / root.cell-height-px)); accept }
                             }
                         }
                         if root.files-open: Rectangle { width: 340px; background: Theme.base;
@@ -553,16 +566,6 @@ export component AppWindow inherits Window {
         VerticalLayout { padding: 8px; spacing: 5px;
             Action { text: "Add Telnet"; flat: true; disabled: true; }
             Action { text: "Remove"; flat: true; clicked => { if !root.creating-host { root.delete-host(root.draft.id); } root.close-editor(); } }
-        }
-    }
-    if root.settings-open: Rectangle { background: #141729bf;
-        TouchArea { }
-        Rectangle { width: 520px; height: 360px; x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; background: Theme.high; border-radius: 10px;
-            VerticalLayout { padding: 24px; spacing: 20px;
-                Text { text: "Settings"; color: Theme.text; font-size: 20px; }
-                Text { text: root.settings-text; color: Theme.text; wrap: word-wrap; vertical-stretch: 1; }
-                HorizontalLayout { alignment: end; Action { text: "Close"; clicked => { root.settings-open = false; } } }
-            }
         }
     }
     if root.prompt-visible: Rectangle { background: #141729bf;
