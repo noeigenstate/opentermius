@@ -22,7 +22,6 @@ use tokio::{
 };
 use zeroize::Zeroizing;
 
-#[derive(Debug)]
 pub enum Command {
     Input(Vec<u8>),
     Resize {
@@ -81,6 +80,14 @@ pub enum Command {
         transfer: u64,
     },
 }
+impl std::fmt::Debug for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Input may contain passwords; even byte-array Debug discloses them.
+        f.debug_struct("Command")
+            .field("kind", &std::mem::discriminant(self))
+            .finish_non_exhaustive()
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RemoteFile {
     pub name: String,
@@ -121,7 +128,6 @@ pub struct TreeSummary {
     pub dirs: u64,
     pub bytes: u64,
 }
-#[derive(Debug)]
 pub enum Event {
     Status {
         id: String,
@@ -192,6 +198,14 @@ pub enum Event {
     Bell {
         id: String,
     },
+}
+impl std::fmt::Debug for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Screens and authentication prompts may echo credentials.
+        f.debug_struct("Event")
+            .field("kind", &std::mem::discriminant(self))
+            .finish_non_exhaustive()
+    }
 }
 pub struct Session {
     pub id: String,
@@ -426,15 +440,14 @@ async fn connect(
                     "私钥不能超过 1 MB"
                 );
                 let text = Zeroizing::new(std::fs::read_to_string(&path).context("读取私钥失败")?);
-                Ok(russh::keys::decode_secret_key(
+                Ok(crate::keychain::decode_private_key(
                     &text,
                     if passphrase.is_empty() {
                         None
                     } else {
                         Some(passphrase.as_str())
                     },
-                )
-                .context("私钥或口令无效")?)
+                )?)
             })
             .await??
         };
@@ -730,10 +743,11 @@ pub fn safe_local_component(name: &str) -> bool {
         return false;
     }
     let stem = name.split('.').next().unwrap_or(name).trim_end_matches(' ').to_ascii_uppercase();
-    !matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        && !(stem.len() == 4
-            && (stem.starts_with("COM") || stem.starts_with("LPT"))
-            && stem.as_bytes()[3].is_ascii_digit())
+    let device_number = stem.strip_prefix("COM").or_else(|| stem.strip_prefix("LPT"));
+    !matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$")
+        && !device_number.is_some_and(|suffix| {
+            matches!(suffix, "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³")
+        })
 }
 fn remote_join(directory: &str, name: &str) -> Result<String> {
     validate_remote(directory)?;
@@ -897,12 +911,60 @@ fn local_is_link(meta: &std::fs::Metadata) -> bool {
     }
 }
 fn ensure_local_directory(path: &Path) -> Result<()> {
-    let meta = std::fs::symlink_metadata(path)?;
-    ensure!(
-        meta.is_dir() && !local_is_link(&meta),
-        "本地目标不是常规文件夹，不能通过链接写入"
-    );
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    for ancestor in absolute.ancestors() {
+        let meta = std::fs::symlink_metadata(ancestor)?;
+        ensure!(
+            meta.is_dir() && !local_is_link(&meta),
+            "本地目标不是常规文件夹，不能通过链接读写"
+        );
+    }
     Ok(())
+}
+
+async fn open_upload_file(local: &Path) -> Result<tokio::fs::File> {
+    let local = local.to_path_buf();
+    let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
+        ensure_local_directory(local.parent().context("本地文件路径无效")?)?;
+        let meta = std::fs::symlink_metadata(&local)?;
+        ensure!(
+            meta.is_file() && !local_is_link(&meta),
+            "只能上传常规文件，不能通过链接读取"
+        );
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+        }
+        let file = options.open(local)?;
+        let meta = file.metadata()?;
+        ensure!(
+            meta.is_file() && !local_is_link(&meta),
+            "只能上传常规文件，不能通过链接读取"
+        );
+        Ok(file)
+    })
+    .await
+    .context("读取本地文件任务失败")??;
+    Ok(tokio::fs::File::from_std(file))
+}
+
+fn transfer_error_message(error: &anyhow::Error) -> String {
+    // SFTP status strings (also wrapped in io::Error by its file API) are
+    // arbitrary server text and can echo authentication secrets.
+    if error.downcast_ref::<russh_sftp::client::error::Error>().is_some()
+        || error.downcast_ref::<std::io::Error>().is_some_and(|e| e.get_ref().is_some())
+    {
+        "SFTP 操作失败，服务器返回错误或连接已中断".into()
+    } else {
+        format!("{error:#}")
+    }
 }
 fn transfer_id(command: Command) -> Option<u64> {
     match command {
@@ -1044,7 +1106,7 @@ async fn complete_transfer(
         Err(error) if error.downcast_ref::<TransferCancelled>().is_some() => {
             ("传输已取消".to_string(), false, true)
         }
-        Err(error) => (format!("{error:#}"), true, false),
+        Err(error) => (transfer_error_message(&error), true, false),
     };
     events
         .send(Event::TransferFinished {
@@ -1099,7 +1161,7 @@ async fn sftp_worker(
             let _ = events
                 .send(Event::Transfer {
                     id: id.clone(),
-                    message: format!("{e:#}"),
+                    message: transfer_error_message(&e),
                     error: true,
                 })
                 .await;
@@ -1300,8 +1362,7 @@ async fn upload_file_progress(
     progress: &mut Progress<'_>,
 ) -> Result<u64> {
     ensure_active(progress.cancelled, progress.transfer)?;
-    let mut input = tokio::fs::File::open(local).await?;
-    ensure!(input.metadata().await?.is_file(), "只能上传常规文件");
+    let mut input = open_upload_file(local).await?;
     if overwrite && sftp.try_exists(remote.to_string()).await? {
         let meta = sftp.symlink_metadata(remote.to_string()).await?;
         ensure!(meta.is_regular() && !meta.is_symlink(), "远程目标不是常规文件");
@@ -1335,6 +1396,7 @@ async fn download_file_progress(
     ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "本地文件名无效");
     ensure!(!local.exists(), "本地文件已存在，请选择新的保存名称");
     let parent = local.parent().context("保存路径无效")?;
+    ensure_local_directory(parent)?;
     let temp = parent.join(format!(".opentermius-{}.part", uuid::Uuid::new_v4()));
     let guard = PartialDownload(temp.clone());
     let mut output = tokio::fs::OpenOptions::new()
@@ -1392,8 +1454,7 @@ async fn execute_file_job(
                     .context("界面已关闭")?;
                 return Ok(());
             }
-            let mut input = tokio::fs::File::open(&local).await?;
-            ensure!(input.metadata().await?.is_file(), "只能上传常规文件");
+            let mut input = open_upload_file(&local).await?;
             let flags = OpenFlags::WRITE
                 | OpenFlags::CREATE
                 | if overwrite {
@@ -1408,8 +1469,10 @@ async fn execute_file_job(
         }
         Command::Download { remote, local } => {
             validate_remote(&remote)?;
+            ensure!(local.file_name().and_then(|n| n.to_str()).is_some_and(safe_local_component), "本地文件名无效");
             ensure!(!local.exists(), "本地文件已存在，请选择新的保存名称");
             let parent = local.parent().context("保存路径无效")?;
+            ensure_local_directory(parent)?;
             let temp = parent.join(format!(".opentermius-{}.part", uuid::Uuid::new_v4()));
             let guard = PartialDownload(temp.clone());
             let mut output = tokio::fs::OpenOptions::new()

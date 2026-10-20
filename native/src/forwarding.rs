@@ -14,6 +14,7 @@ use tokio::{
 use zeroize::Zeroizing;
 
 pub const MAX_CONNECTIONS: usize = 256;
+pub const MAX_RULES: usize = 64;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +54,13 @@ impl Default for Forward {
 }
 impl Forward {
     pub fn validate(&mut self, existing: &[Forward]) -> Result<()> {
+        ensure!(
+            existing
+                .iter()
+                .any(|rule| !self.id.is_empty() && rule.id == self.id)
+                || existing.len() < MAX_RULES,
+            "转发规则最多 {MAX_RULES} 条"
+        );
         self.label = self.label.trim().into();
         self.bind_address = self.bind_address.trim().into();
         self.destination_host = self.destination_host.trim().into();

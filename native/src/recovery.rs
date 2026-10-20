@@ -287,7 +287,8 @@ fn decode(code: &str, passphrase: Option<&str>) -> Result<Payload> {
         miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(compressed, MAX_PAYLOAD)
             .map_err(|_| anyhow::anyhow!("恢复数据压缩格式无效或过大"))?,
     );
-    let payload: Payload = serde_json::from_slice(&json).context("恢复数据格式无效")?;
+    let payload: Payload = serde_json::from_slice(&json)
+        .map_err(|_| anyhow::anyhow!("恢复数据格式无效"))?;
     ensure!(payload.data["version"] == 2, "配置版本不受支持");
     validate_ids(&payload.data)?;
     Ok(payload)
@@ -397,8 +398,8 @@ pub fn restore(
         ensure!(value.as_str() == Some(""), "恢复码空凭据标记无效");
         *value = Value::String(store::protect("")?);
     }
-    let mut incoming: Data =
-        serde_json::from_value(payload.data.clone()).context("恢复配置无效")?;
+    let mut incoming: Data = serde_json::from_value(payload.data.clone())
+        .map_err(|_| anyhow::anyhow!("恢复配置无效"))?;
     for host in &mut incoming.hosts {
         if host.encrypted_secret.as_deref() == Some("") {
             host.encrypted_secret = None;
