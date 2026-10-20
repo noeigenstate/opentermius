@@ -399,6 +399,7 @@ impl State {
         let Some(view) = self.sessions.get_mut(id) else {
             return;
         };
+        pages::logs::ssh_started(id, &view.profile);
         let known = self.store.lock().ok().and_then(|s| {
             s.data
                 .known_hosts
@@ -425,6 +426,7 @@ impl State {
             return;
         }
         let id = uuid::Uuid::new_v4().to_string();
+        pages::logs::local_started(&id);
         let transport =
             opentermius::local::spawn(self.runtime.handle(), id.clone(), self.events.clone());
         let profile = Profile {
@@ -476,6 +478,7 @@ impl State {
         }
     }
     fn close(&mut self, id: &str) {
+        pages::logs::closed(id);
         if let Some(view) = self.sessions.remove(id) {
             if let Some(transport) = view.transport {
                 let _ = transport.commands.try_send(Command::Disconnect);
@@ -672,6 +675,11 @@ impl State {
                         });
                     }
                 }
+                if connected {
+                    pages::logs::connected(&id);
+                } else if error {
+                    pages::logs::failed(&id, &message);
+                }
                 self.status(
                     if connected {
                         "Connected".to_string()
@@ -805,6 +813,7 @@ impl State {
                 }
             }
             Event::Closed { id } => {
+                pages::logs::closed(&id);
                 if let Some(s) = self.sessions.get_mut(&id) {
                     s.connected = false;
                     if s.status == "已连接" || s.status == "连接中" {
@@ -1592,7 +1601,8 @@ fn run() -> anyhow::Result<()> {
             for (_, mut forward) in std::mem::take(&mut state.forwards) {
                 state.runtime.block_on(forward.stop());
             }
-            for (_, mut view) in std::mem::take(&mut state.sessions) {
+            for (id, mut view) in std::mem::take(&mut state.sessions) {
+                pages::logs::closed(&id);
                 if let Some(transport) = view.transport.take() {
                     let _ = transport.commands.try_send(Command::Disconnect);
                     transport.task.abort();
