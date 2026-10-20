@@ -52,7 +52,11 @@ pub(super) fn reload(ui: &AppWindow) {
     if let Some(saved) = saved {
         crate::with_state(|state| state.settings = saved.clone());
         apply_to_ui(ui, &saved, &config_path());
-        crate::with_state(|state| state.display());
+        crate::with_state(|state| {
+            state.display();
+            state.render_files();
+            state.list_local(String::new());
+        });
     }
 }
 
@@ -257,6 +261,31 @@ mod tests {
                 appearance
             );
         }
+
+        // The SFTP toolbar and Settings share the same persisted hidden-file switch.
+        crate::with_state(|state| {
+            state.remote_entries = [".hidden", "visible"]
+                .into_iter()
+                .map(|name| opentermius::ssh::RemoteFile {
+                    name: name.into(),
+                    path: format!("/{name}"),
+                    size: 1,
+                    is_dir: false,
+                    modified: "0".into(),
+                    permissions: None,
+                })
+                .collect();
+        });
+        bridge.set_show_hidden_files(false);
+        bridge.invoke_apply();
+        crate::with_state(|state| state.render_files());
+        assert!(!ui.get_show_hidden());
+        assert_eq!(slint::Model::row_count(&ui.get_files()), 1);
+        ui.set_show_hidden(true);
+        bridge.invoke_apply();
+        crate::with_state(|state| state.render_files());
+        assert!(current().show_hidden_files);
+        assert_eq!(slint::Model::row_count(&ui.get_files()), 2);
 
         // Both visible Settings entries must navigate away from a terminal.
         ui.invoke_activate_session("test".into());
