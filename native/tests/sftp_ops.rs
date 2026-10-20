@@ -391,6 +391,9 @@ fn profile(port: u16) -> Profile {
         key_id: String::new(),
         group: String::new(),
         encrypted_secret: None,
+        tags: Vec::new(),
+        last_connected: None,
+        created_at: None,
     }
 }
 async fn next(rx: &mut mpsc::Receiver<Event>) -> Event {

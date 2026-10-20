@@ -207,6 +207,9 @@ fn parse_file(root: &Path, path: &Path) -> Result<HostDraft> {
         key_id: String::new(),
         group,
         encrypted_secret: None,
+        tags: Vec::new(),
+        last_connected: None,
+        created_at: None,
     };
     profile.validate()?;
     Ok(HostDraft { profile, needs_key })
@@ -237,6 +240,7 @@ pub fn merge(store: &mut Store, scanned: ScanResult) -> Result<ImportSummary> {
             summary.duplicates += 1;
         } else {
             summary.needs_key += usize::from(draft.needs_key);
+            profile.created_at = Some(crate::hosts::now_rfc3339());
             added.push(profile);
         }
     }

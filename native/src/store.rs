@@ -30,6 +30,12 @@ pub struct Profile {
     pub group: String,
     #[serde(default)]
     pub encrypted_secret: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub last_connected: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
 }
 fn ssh_port() -> u16 {
     22
@@ -82,6 +88,18 @@ impl Profile {
         if self.id.is_empty() {
             self.id = Uuid::new_v4().to_string();
         }
+        self.tags = crate::hosts::normalize_tags(&self.tags);
+        for (value, label) in [
+            (&self.created_at, "创建时间"),
+            (&self.last_connected, "最近连接时间"),
+        ] {
+            if let Some(value) = value {
+                ensure!(
+                    value.len() <= 64 && chrono::DateTime::parse_from_rfc3339(value).is_ok(),
+                    "{label}无效"
+                );
+            }
+        }
         Ok(())
     }
 }
@@ -100,6 +118,8 @@ pub struct Data {
     pub snippets: Vec<crate::snippets::Snippet>,
     #[serde(default)]
     pub settings: crate::settings::Settings,
+    #[serde(default)]
+    pub hosts_view: crate::hosts::HostsView,
 }
 pub struct Store {
     pub path: PathBuf,
@@ -165,6 +185,8 @@ impl Store {
         );
         let old = self.data.clone();
         let previous = self.data.hosts.iter().find(|p| p.id == profile.id);
+        let previous_created = previous.and_then(|p| p.created_at.clone());
+        let previous_connected = previous.and_then(|p| p.last_connected.clone());
         profile.encrypted_secret = if remember {
             if let Some(value) = secret.filter(|s| !s.is_empty()) {
                 Some(protect(value)?)
@@ -176,6 +198,13 @@ impl Store {
         } else {
             None
         };
+        profile.created_at = profile
+            .created_at
+            .or(previous_created)
+            .or_else(|| Some(crate::hosts::now_rfc3339()));
+        if profile.last_connected.is_none() {
+            profile.last_connected = previous_connected;
+        }
         match self.data.hosts.iter_mut().find(|p| p.id == profile.id) {
             Some(p) => *p = profile,
             None => self.data.hosts.push(profile),
@@ -285,6 +314,9 @@ impl Store {
             p.id = Uuid::new_v4().to_string();
             p.encrypted_secret = None;
             p.validate()?;
+            if p.created_at.is_none() {
+                p.created_at = Some(crate::hosts::now_rfc3339());
+            }
             imported.push(p);
         }
         let count = imported.len();
@@ -526,6 +558,9 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
         key_id: String::new(),
         group: String::new(),
         encrypted_secret: None,
+        tags: Vec::new(),
+        last_connected: None,
+        created_at: None,
     };
     profile.validate()?;
     Ok(profile)
@@ -687,6 +722,9 @@ mod tests {
             key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
+            tags: Vec::new(),
+            last_connected: None,
+            created_at: None,
         }
     }
     #[test]
@@ -907,6 +945,9 @@ mod core_regression_tests {
             key_id: String::new(),
             group: String::new(),
             encrypted_secret: None,
+            tags: Vec::new(),
+            last_connected: None,
+            created_at: None,
         }
     }
 

@@ -464,8 +464,10 @@ pub fn restore(
         && store.data.snippets.is_empty()
         && store.data.forwards.is_empty()
         && store.data.known_hosts.is_empty()
-        && merged["settings"] == serde_json::to_value(crate::settings::Settings::default())?;
+        && merged["settings"] == serde_json::to_value(crate::settings::Settings::default())?
+        && merged["hostsView"] == serde_json::to_value(crate::hosts::HostsView::default())?;
     merge_preferences(&mut merged["settings"], &incoming["settings"], mode, fresh);
+    merge_preferences(&mut merged["hostsView"], &incoming["hostsView"], mode, fresh);
     let known = merged["knownHosts"]
         .as_object_mut()
         .context("本机指纹列表无效")?;

@@ -206,6 +206,9 @@ fn profile(port: u16) -> Profile {
         key_id: String::new(),
         group: String::new(),
         encrypted_secret: None,
+        tags: Vec::new(),
+        last_connected: None,
+        created_at: None,
     }
 }
 fn rule(kind: Kind, port: u16, destination: u16) -> Forward {

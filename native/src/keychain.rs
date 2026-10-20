@@ -672,6 +672,9 @@ mod tests {
             private_key_path: String::new(),
             key_id,
             group: String::new(),
+            tags: Vec::new(),
+            last_connected: None,
+            created_at: None,
             encrypted_secret: None,
         }
     }
