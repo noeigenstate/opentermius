@@ -2790,7 +2790,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
                         ui.invoke_search_hosts("absent-search".into());anyhow::ensure!(ui.get_hosts().row_count()==0, "{}", crate::i18n::t("Host search failed"));ui.invoke_search_hosts("".into());
                         anyhow::ensure!(credentials&&fingerprint, "{}", crate::i18n::t("Credential and host key dialogs were not exercised"));
                         anyhow::ensure!(ui.get_cell_width().is_finite() && ui.get_cell_width() > 0.0 && ui.get_cell_height().is_finite() && ui.get_cell_height() > 0.0,"Terminal cell metric must be measured from the selected font");
-                        std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup",if cfg!(windows){"Windows DPAPI"}else{"AES-256-GCM"},"no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;
+                        std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":env!("CARGO_PKG_VERSION"),"backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"cellWidth":ui.get_cell_width(),"checks":["native profile callback","password prompt","explicit SHA256 prompt","real SSH terminal IO","real SFTP listing","tab cleanup",if cfg!(windows){"Windows DPAPI"}else{"AES-256-GCM"},"no plaintext credentials","profile persistence","host search","measured terminal cell metric"],"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;
                         return Ok(true)
                     }
                     Ok(false)
@@ -2800,7 +2800,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         } else {
             timer.start(slint::TimerMode::SingleShot,Duration::from_millis(800),move||{
                 if let Some(ui)=weak.upgrade(){
-                    let result=(||->anyhow::Result<()>{capture(&ui,&output)?;std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":"0.2.0","backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"scene":scene,"cellWidth":ui.get_cell_width(),"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;Ok(())})();
+                    let result=(||->anyhow::Result<()>{capture(&ui,&output)?;std::fs::write(output.join("startup.json"),serde_json::json!({"ok":true,"version":env!("CARGO_PKG_VERSION"),"backend":renderer.backend(),"firstFrameMs":first_frame.get(),"terminalFont":ui.get_terminal_font().as_str(),"scene":scene,"cellWidth":ui.get_cell_width(),"pid":rendering::launcher_pid(),"rendererPid":std::process::id()}).to_string())?;Ok(())})();
                     if let Err(error)=result{let _=std::fs::write(output.join("error.txt"),error.to_string());}
                 }
                 if smoke{let _=slint::quit_event_loop();}
