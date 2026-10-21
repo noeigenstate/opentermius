@@ -116,29 +116,41 @@ fn model<T: Clone + 'static>(rows: Vec<T>) -> ModelRc<T> {
 fn ui_color(rgb: u32) -> slint::Color {
     slint::Color::from_rgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
 }
-fn drag_window(window: &slint::Window) {
-    #[cfg(unix)]
-    {
-        use slint::winit_030::WinitWindowAccessor;
-        window.with_winit_window(|window| { let _ = window.drag_window(); });
-    }
+fn drag_window(ui: &AppWindow) {
+    // winit's drag marks the window as dragging and, on Windows, posts the button release
+    // the native move loop swallows; without it Slint keeps the title bar's pointer grab.
+    use slint::winit_030::WinitWindowAccessor;
+    ui.window().with_winit_window(|window| { let _ = window.drag_window(); });
     #[cfg(windows)]
-    {
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        if let Ok(RawWindowHandle::Win32(handle)) =
-            window.window_handle().window_handle().map(|h| h.as_raw())
-        {
-            unsafe {
-                windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture();
-                windows_sys::Win32::UI::WindowsAndMessaging::PostMessageW(
-                    handle.hwnd.get() as _,
-                    0x00A1,
-                    2,
-                    0,
-                );
+    release_grab_after_drag(ui.as_weak());
+}
+
+// Windows does not always end the move loop with WM_EXITSIZEMOVE, and then nobody delivers
+// the release. Once the button is physically up, release the grab ourselves; a release
+// with nothing grabbed is ignored by Slint.
+#[cfg(windows)]
+fn release_grab_after_drag(ui: slint::Weak<AppWindow>) {
+    use windows_sys::Win32::UI::{Input::KeyboardAndMouse::*, WindowsAndMessaging::*};
+    thread_local! { static TIMER: slint::Timer = slint::Timer::default(); }
+    TIMER.with(|timer| {
+        timer.start(slint::TimerMode::Repeated, Duration::from_millis(50), move || {
+            let held = unsafe {
+                let button = if GetSystemMetrics(SM_SWAPBUTTON) != 0 { VK_RBUTTON } else { VK_LBUTTON };
+                GetAsyncKeyState(button as i32) as u16 & 0x8000 != 0
+            };
+            if held {
+                return;
             }
-        }
-    }
+            if let Some(ui) = ui.upgrade() {
+                ui.window().dispatch_event(slint::platform::WindowEvent::PointerReleased {
+                    position: slint::LogicalPosition::new(-1.0, -1.0),
+                    button: slint::platform::PointerEventButton::Left,
+                });
+                ui.window().dispatch_event(slint::platform::WindowEvent::PointerExited);
+            }
+            TIMER.with(|timer| timer.stop());
+        });
+    });
 }
 
 fn keypad_key(key: slint::winit_030::winit::keyboard::PhysicalKey) -> Option<char> {
@@ -2284,7 +2296,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     let weak = ui.as_weak();
     ui.on_window_drag(move || {
         if let Some(ui) = weak.upgrade() {
-            drag_window(ui.window());
+            drag_window(&ui);
         }
     });
     ui.on_search_hosts(|query| {

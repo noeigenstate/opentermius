@@ -36,3 +36,9 @@ Slint 绝对定位组件要设置实际 `width/height`；仅设置最小或最�
 `scripts/measure-process.ps1` 对新临时配置进行进程树采样，清理时核对 PID 与创建时间。区分工作集、私有字节、采样时长、渲染模式和启动就绪条件。截图模式的固定等待计时不能当作启动性能；短时空闲 CPU 为零不能证明长期稳定性。
 
 PowerShell 5.1 读写源码显式使用 UTF-8，编辑优先使用 apply_patch。默认 `$OutputEncoding` 可能将管道送入 Python 的中文转换为问号；不要用默认 here-string 管道替换中文源码。递归清理前验证解析后的绝对目标仍在预期目录内，使用同一运行时完成检查与删除。
+
+## 真实鼠标输入
+
+自绘标题栏、拖动和点击状态必须用真实输入验证：`PostMessage` 投递的 WM_LBUTTONDOWN 不经过命中测试，也不会进入 Windows 的原生移动循环，无法复现"标题栏按下后整个界面无法点击"这类问题。用 `real-input-click.ps1 -Exe <exe> -Out <dir> -AppArgs @("--data-dir=<fresh>") -Clicks "900,40;110,177;d900,40,-80,-60;110,234"` 注入点击/拖动，并比较每步 PrintWindow 截图（Python PIL `ImageChops.difference(...).getbbox()`，`None` 即界面无变化，应选会改变页面的点击目标）。脚本只在应用窗口位于前台且在光标下时发送输入，否则跳过；它会移动用户的鼠标，先用 `GetLastInputInfo` 确认用户空闲。
+
+窗口拖动只能调用 winit 的 `drag_window()`：它记录拖动状态，并在 WM_EXITSIZEMOVE 后补发被移动循环吞掉的按键释放；自行 `PostMessage(WM_NCLBUTTONDOWN, HTCAPTION)` 会让 Slint 永久持有标题栏的指针抓取。标题栏只在按下后移动超过阈值时才开始原生拖动，Windows 上拖动后再等按键物理释放、补发 `PointerReleased`，单击标题栏不得进入移动循环。

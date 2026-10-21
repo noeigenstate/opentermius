@@ -330,7 +330,9 @@ export component AppWindow inherits Window {
                     property <length> tab-width: Math.max(120px, Math.min(160px, self.width / Math.max(1, root.tabs.length) - 6px));
                     content-width: root.tabs.length * (self.tab-width + 6px);
                     TouchArea { width: Math.max(tab-strip.width, tab-strip.content-width); height: 32px;
-                        pointer-event(event) => { if event.kind == PointerEventKind.down { root.window-drag(); } }
+                        // Start the native move only once the pointer really drags, so a plain
+                        // click on the title bar never enters the OS move loop.
+                        moved => { if self.pressed && (Math.abs(self.mouse-x - self.pressed-x) > 4px || Math.abs(self.mouse-y - self.pressed-y) > 4px) { root.window-drag(); } }
                     }
                     for tab[index] in root.tabs: Rectangle { x: index * (tab-strip.tab-width + 6px); y: 0px; width: tab-strip.tab-width; height: 32px; border-radius: Theme.r-field;
                         property <bool> active: !root.hosts-page && !root.sftp-page && root.active-session == tab.id;
