@@ -118,7 +118,7 @@ impl ColorScheme {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Default => crate::i18n::t("Default"),
+            Self::Default => crate::i18n::t("Match app theme"),
             Self::SolarizedDark => crate::i18n::t("Solarized Dark"),
             Self::Monokai => crate::i18n::t("Monokai"),
             Self::Light => crate::i18n::t("Light"),
@@ -143,9 +143,15 @@ impl ColorScheme {
         }
     }
 
+    /// `Default` follows the app: the dark terminal in the dark theme, the light one otherwise.
+    pub fn resolve(self, dark: bool) -> Self {
+        if self == Self::Default && !dark { Self::Light } else { self }
+    }
+
     pub const fn background(self) -> u32 {
         match self {
-            Self::Default => 0x141729,
+            // The app's dark content surface, so the terminal blends into the window.
+            Self::Default => 0x1b1e2e,
             Self::SolarizedDark => 0x002b36,
             Self::Monokai => 0x272822,
             Self::Light => 0xffffff,
@@ -154,7 +160,7 @@ impl ColorScheme {
 
     pub const fn foreground(self) -> u32 {
         match self {
-            Self::Default => 0xffffff,
+            Self::Default => 0xe6e9f2,
             Self::SolarizedDark => 0x839496,
             Self::Monokai => 0xf8f8f2,
             Self::Light => 0x141729,
@@ -428,6 +434,14 @@ mod tests {
             assert!(json.contains(key), "missing {key} in {json}");
         }
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+    }
+
+    #[test]
+    fn default_scheme_follows_app_theme() {
+        assert_eq!(ColorScheme::Default.resolve(true), ColorScheme::Default);
+        assert_eq!(ColorScheme::Default.resolve(false), ColorScheme::Light);
+        assert_eq!(ColorScheme::Monokai.resolve(false), ColorScheme::Monokai);
+        assert_eq!(ColorScheme::Light.resolve(true), ColorScheme::Light);
     }
 
     #[test]

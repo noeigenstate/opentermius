@@ -1,5 +1,5 @@
 import { ScrollView, ListView } from "std-widgets.slint";
-import { Theme, Action, Input, NavItem, Field, IconButton, EmptyState, Badge, Card, EntityCard, Select, Popover, MenuItem, MenuSeparator, Dialog } from "common.slint";
+import { Theme, Action, Input, NavItem, Field, IconButton, EmptyState, Badge, Card, EntityCard, Select, Popover, MenuItem, MenuSeparator, Dialog, Segmented } from "common.slint";
 import { KeychainBridge, KeychainPage } from "pages/keychain.slint";
 import { ForwardingBridge, ForwardingPage, ForwardRow, ForwardDraft } from "pages/forwarding.slint";
 import { SnippetsBridge, SnippetsPage, SnippetRow } from "pages/snippets.slint";
@@ -75,6 +75,13 @@ component FileTableRow inherits Rectangle {
     }
 }
 
+// Starts the native move only once the pointer really drags, so a plain click on the
+// title bar never enters the OS move loop.
+component WindowDragArea inherits TouchArea {
+    callback drag;
+    moved => { if self.pressed && (Math.abs(self.mouse-x - self.pressed-x) > 4px || Math.abs(self.mouse-y - self.pressed-y) > 4px) { root.drag(); } }
+}
+
 export component AppWindow inherits Window {
     no-frame: true;
     title: @tr("OpenTermius"); preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
@@ -121,7 +128,6 @@ export component AppWindow inherits Window {
     in-out property <bool> tab-menu-reconnectable: false;
     in-out property <length> tab-menu-x: 0px;
     in property <string> file-path;
-    in-out property <bool> files-open;
     in property <bool> file-busy;
     in property <color> terminal-background: Theme.terminal-bg;
     in property <color> terminal-cursor: Theme.terminal-cursor;
@@ -149,7 +155,10 @@ export component AppWindow inherits Window {
     property <bool> creating-host: false;
     property <bool> editor-menu-open: false;
     in-out property <bool> menu-open: false;
-    property <bool> host-picker-open: false;
+    property <length> session-bar-height: 40px;
+    // Mirrors sftp-page for the session switch (Rust restores the mode per tab).
+    in-out property <int> session-view-index: 0;
+    changed sftp-page => { root.session-view-index = root.sftp-page ? 1 : 0; }
     in-out property <HostDraft> draft;
     in-out property <string> search;
     property <string> quick-host;
@@ -204,11 +213,10 @@ export component AppWindow inherits Window {
     callback copy-terminal;
     callback paste-terminal;
     callback list-files(string);
-    callback open-sftp;
+    callback session-sftp(bool);
     callback list-local(string);
     callback upload-local(string);
     callback download-to-local(string);
-    callback select-sftp-host(string);
     callback upload-file;
     callback upload-folder;
     callback file-operation(bool, string, string, string);
@@ -237,8 +245,12 @@ export component AppWindow inherits Window {
     callback window-minimize;
     callback window-maximize;
     callback window-close;
-    changed terminal-cols => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
-    changed terminal-rows => { root.terminal-size(root.terminal-cols, root.terminal-rows); }
+    // Like xterm.js' fit addon: never size the PTY from a hidden or collapsed terminal
+    // (it would shrink the remote screen to a few rows), and refit when it shows again.
+    out property <bool> terminal-shown: !root.hosts-page && !root.sftp-page && terminal-area.height > root.cell-height-px * 2;
+    changed terminal-cols => { if root.terminal-shown { root.terminal-size(root.terminal-cols, root.terminal-rows); } }
+    changed terminal-rows => { if root.terminal-shown { root.terminal-size(root.terminal-cols, root.terminal-rows); } }
+    changed terminal-shown => { if root.terminal-shown { root.terminal-size(root.terminal-cols, root.terminal-rows); } }
     changed terminal-cursor-blink => { root.cursor-phase = true; }
     changed active-session => {
         root.file-dialog = "";
@@ -265,8 +277,8 @@ export component AppWindow inherits Window {
         root.close-editor(); root.selected-host = host-id; root.connect-host(host-id);
     }
     public function focus-terminal() { terminal-focus.focus(); }
-    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = name == "sftp"; root.hosts-page = true; root.section = name; if name == "sftp" { root.open-sftp(); } } } }
-    public function activate-session(session-id: string) { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(session-id); terminal-focus.focus(); } }
+    public function open-section(name: string) { if root.save-current-draft() { root.close-editor(); if name == "recovery" { RecoveryBridge.visible = true; } else { root.sftp-page = false; root.hosts-page = true; root.section = name; } } }
+    public function activate-session(session-id: string) { if root.save-current-draft() { root.close-editor(); root.hosts-page = false; root.select-session(session-id); if !root.sftp-page { terminal-focus.focus(); } } }
     public function close-editor() { root.editor-open = false; root.creating-host = false; root.editor-menu-open = false; root.editor-focus-requested = false; root.group-editing = false; root.draft.secret = ""; }
     public function open-host-menu(id: string, name: string, x: length, y: length) {
         host-focus.focus();
@@ -299,28 +311,20 @@ export component AppWindow inherits Window {
     Timer { interval: 150ms; running: root.bell-flash; triggered => { root.bell-flash = false; } }
     VerticalLayout { spacing: 0px;
         Rectangle { height: Theme.titlebar-height; background: Theme.lowest;
+            WindowDragArea { drag => { root.window-drag(); } double-clicked => { root.window-maximize(); } }
             HorizontalLayout { x: 9px; y: 9px; width: parent.width - 19px; height: 32px; spacing: 6px; cross-axis-alignment: center;
                 Rectangle { width: 30px; height: 30px; border-radius: Theme.r-control; background: menu-touch.has-hover ? Theme.tab-hover : transparent;
                     Image { source: @image-url("icons/menu.svg"); colorize: Theme.titlebar-fg; x: 7px; y: 7px; width: 16px; height: 16px; }
                     menu-touch := TouchArea { mouse-cursor: pointer; clicked => { root.menu-open = !root.menu-open; } }
                 }
                 Rectangle { width: 150px; height: 32px; border-radius: Theme.r-field;
-                    background: root.hosts-page && !root.sftp-page ? Theme.tab-active : home-touch.has-hover ? Theme.tab-hover : Theme.tab-bg;
+                    background: root.hosts-page ? Theme.tab-active : home-touch.has-hover ? Theme.tab-hover : Theme.tab-bg;
                     HorizontalLayout { padding-left: 10px; padding-right: 10px; spacing: 8px; cross-axis-alignment: center;
                         Image { source: @image-url("../../assets/logo.svg"); width: 18px; height: 18px; }
                         Text { text: root.section == "keychain" ? @tr("Keychain") : root.section == "forwarding" ? @tr("Port Forwarding") : root.section == "snippets" ? @tr("Snippets") : root.section == "known-hosts" ? @tr("Known Hosts") : root.section == "logs" ? @tr("Logs") : root.section == "settings" ? @tr("Settings") : root.section == "gallery" ? @tr("Gallery") : @tr("Hosts"); color: Theme.on-accent; font-size: Theme.font-body; font-weight: 500; overflow: elide; }
                     }
-                    if root.hosts-page && !root.sftp-page: Rectangle { x: 10px; y: 30px; width: parent.width - 20px; height: 2px; border-radius: 1px; background: Theme.accent; }
+                    if root.hosts-page: Rectangle { x: 10px; y: 30px; width: parent.width - 20px; height: 2px; border-radius: 1px; background: Theme.accent; }
                     home-touch := TouchArea { mouse-cursor: pointer; clicked => { root.sftp-page = false; root.hosts-page = true; } }
-                }
-                Rectangle { width: 96px; height: 32px; border-radius: Theme.r-field;
-                    background: root.sftp-page ? Theme.tab-active : sftp-tab-touch.has-hover ? Theme.tab-hover : Theme.tab-bg;
-                    HorizontalLayout { padding-left: 12px; padding-right: 12px; spacing: 8px; cross-axis-alignment: center;
-                        Image { source: @image-url("icons/folder-filled.svg"); colorize: Theme.on-accent; width: 16px; height: 16px; }
-                        Text { text: @tr("SFTP"); color: Theme.on-accent; font-weight: 500; }
-                    }
-                    if root.sftp-page: Rectangle { x: 10px; y: 30px; width: parent.width - 20px; height: 2px; border-radius: 1px; background: Theme.accent; }
-                    sftp-tab-touch := TouchArea { mouse-cursor: pointer; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = true; root.open-sftp(); } } }
                 }
                 Rectangle { width: 30px; height: 30px; border-radius: Theme.r-control; background: plus-touch.has-hover ? Theme.tab-hover : transparent;
                     Image { source: @image-url("icons/plus.svg"); colorize: Theme.titlebar-fg; x: 7px; y: 7px; width: 16px; height: 16px; }
@@ -329,13 +333,9 @@ export component AppWindow inherits Window {
                 tab-strip := Flickable { horizontal-stretch: 1; height: 32px; content-height: self.height;
                     property <length> tab-width: Math.max(120px, Math.min(160px, self.width / Math.max(1, root.tabs.length) - 6px));
                     content-width: root.tabs.length * (self.tab-width + 6px);
-                    TouchArea { width: Math.max(tab-strip.width, tab-strip.content-width); height: 32px;
-                        // Start the native move only once the pointer really drags, so a plain
-                        // click on the title bar never enters the OS move loop.
-                        moved => { if self.pressed && (Math.abs(self.mouse-x - self.pressed-x) > 4px || Math.abs(self.mouse-y - self.pressed-y) > 4px) { root.window-drag(); } }
-                    }
+                    WindowDragArea { width: Math.max(tab-strip.width, tab-strip.content-width); height: 32px; drag => { root.window-drag(); } double-clicked => { root.window-maximize(); } }
                     for tab[index] in root.tabs: Rectangle { x: index * (tab-strip.tab-width + 6px); y: 0px; width: tab-strip.tab-width; height: 32px; border-radius: Theme.r-field;
-                        property <bool> active: !root.hosts-page && !root.sftp-page && root.active-session == tab.id;
+                        property <bool> active: !root.hosts-page && root.active-session == tab.id;
                         background: self.active ? Theme.tab-active : tab-touch.has-hover ? Theme.tab-hover : Theme.tab-bg;
                         HorizontalLayout { padding-left: 10px; padding-right: 4px; spacing: 4px; cross-axis-alignment: center;
                             Image { source: @image-url("icons/terminal.svg"); colorize: tab.status == "connected" ? Theme.success : tab.disconnected ? Theme.warning : Theme.titlebar-fg; width: 16px; height: 16px; }
@@ -344,7 +344,7 @@ export component AppWindow inherits Window {
                                 Image { source: @image-url("icons/more.svg"); colorize: Theme.titlebar-fg; x: 3px; y: 3px; width: 14px; height: 14px; }
                                 tab-menu-touch := TouchArea { clicked => { root.tab-menu-session = tab.id; root.tab-menu-reconnectable = tab.disconnected && !tab.local; root.tab-menu-x = Math.min(self.absolute-position.x, root.width - 210px); } }
                             }
-                            Rectangle { width: 20px; height: 20px; visible: (!root.hosts-page && !root.sftp-page && root.active-session == tab.id) || tab-touch.has-hover || tab-close-touch.has-hover; border-radius: Theme.r-control; background: tab-close-touch.has-hover ? Theme.tab-hover : transparent;
+                            Rectangle { width: 20px; height: 20px; visible: (!root.hosts-page && root.active-session == tab.id) || tab-touch.has-hover || tab-close-touch.has-hover; border-radius: Theme.r-control; background: tab-close-touch.has-hover ? Theme.tab-hover : transparent;
                                 Image { source: @image-url("icons/close.svg"); colorize: Theme.on-accent; x: 4px; y: 4px; width: 12px; height: 12px; }
                                 tab-close-touch := TouchArea { clicked => { root.close-session(tab.id); } }
                             }
@@ -372,7 +372,6 @@ export component AppWindow inherits Window {
                     NavItem { text: @tr("Snippets"); icon: @image-url("icons/snippets.svg"); active: root.hosts-page && root.section == "snippets"; clicked => { root.open-section("snippets"); } }
                     NavItem { text: @tr("Known Hosts"); icon: @image-url("icons/known.svg"); active: root.hosts-page && root.section == "known-hosts"; clicked => { root.open-section("known-hosts"); } }
                     NavItem { text: @tr("Logs"); icon: @image-url("icons/history.svg"); active: root.hosts-page && root.section == "logs"; clicked => { root.open-section("logs"); } }
-                    for tab in root.tabs: NavItem { text: tab.title; icon: @image-url("icons/terminal.svg"); active: !root.hosts-page && root.active-session == tab.id; clicked => { if root.save-current-draft() { root.close-editor(); root.sftp-page = false; root.hosts-page = false; root.select-session(tab.id); terminal-focus.focus(); } } }
                     Rectangle { vertical-stretch: 1; background: transparent; }
                     NavItem { text: @tr("Settings"); icon: @image-url("icons/settings.svg"); active: root.hosts-page && root.section == "settings"; clicked => { root.open-section("settings"); } }
                 }
@@ -597,14 +596,15 @@ export component AppWindow inherits Window {
                     if root.hosts-page && root.section == "logs": LogsPage { vertical-stretch: 1; }
                     if root.hosts-page && root.section == "settings": SettingsPage { vertical-stretch: 1; }
                     if root.hosts-page && root.section == "gallery": GalleryPage { vertical-stretch: 1; }
-                    if !root.hosts-page: Rectangle { height: 40px; background: Theme.high;
+                    if !root.hosts-page: Rectangle { height: root.session-bar-height; background: Theme.high;
                         Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: Theme.divider; }
-                        HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 6px;
-                            Badge { text: root.local-session ? @tr("Local") : @tr("SSH"); }
-                            Rectangle { horizontal-stretch: 1; background: transparent; }
-                            Action { text: @tr("Copy"); kind: "flat"; clicked => { root.copy-terminal(); } }
-                            Action { text: @tr("Paste"); kind: "flat"; clicked => { root.paste-terminal(); terminal-focus.focus(); } }
-                            Action { kind: "secondary"; text: @tr("SFTP"); disabled: root.local-session; clicked => { root.list-files(root.file-path); } }
+                        HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 10px;
+                            if root.local-session: Badge { text: @tr("Local"); }
+                            if !root.local-session: Segmented {
+                                segment-min-width: 84px; options: [@tr("Terminal"), @tr("SFTP")]; current-index <=> root.session-view-index;
+                                changed(index) => { root.session-sftp(index == 1); if index == 0 { terminal-focus.focus(); } }
+                            }
+                            Text { text: root.active-host; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
                         }
                     }
                     HorizontalLayout { visible: !root.hosts-page; min-height: 0px; max-height: root.hosts-page ? 0px : 100000px; vertical-stretch: root.hosts-page ? 0 : 1; spacing: 0px;
@@ -645,30 +645,6 @@ export component AppWindow inherits Window {
                                 TouchArea { clicked => { root.reconnect-session(root.active-session); terminal-focus.focus(); } }
                             }
                         }
-                        if root.files-open: Rectangle { width: 340px; background: Theme.base;
-                            VerticalLayout { spacing: 0px;
-                                Rectangle { height: 44px; background: Theme.high;
-                                    HorizontalLayout { cross-axis-alignment: center; padding: 7px; spacing: 5px;
-                                        Text { text: @tr("Remote files"); font-weight: 600; color: Theme.text; vertical-alignment: center; }
-                                        Action { kind: "secondary"; text: @tr("Upload"); size: "s"; clicked => { root.upload-file(); } }
-                                        Action { kind: "secondary"; text: @tr("Refresh"); size: "s"; clicked => { root.list-files(root.file-path); } }
-                                        IconButton { icon: @image-url("icons/close.svg"); size: 24px; clicked => { root.files-open = false; terminal-focus.focus(); } }
-                                    }
-                                }
-                                Input { filled: true; compact: true; text: root.file-path; accepted => { root.list-files(self.text); } }
-                                Text { visible: root.file-busy; text: @tr("Loading…"); color: Theme.secondary; height: root.file-busy ? 28px : 0px; }
-                                ListView {
-                                    for file in root.files: Rectangle { height: 36px; background: file-touch.has-hover ? Theme.high : transparent;
-                                        HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 9px;
-                                            Image { source: file.is-directory ? @image-url("icons/folder.svg") : @image-url("icons/file.svg"); colorize: file.is-directory ? Theme.folder : Theme.secondary; width: 18px; height: 18px; }
-                                            Text { text: file.name; color: Theme.text; overflow: elide; vertical-alignment: center; }
-                                            Text { text: file.size; color: Theme.secondary; font-size: Theme.font-caption; vertical-alignment: center; }
-                                        }
-                                        file-touch := TouchArea { clicked => { if file.is-directory { root.list-files(root.file-path + "/" + file.name); } else { root.download-file(file.name); } } }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -680,10 +656,11 @@ export component AppWindow inherits Window {
         }
     }
     if root.sftp-page: Rectangle {
-        x: 0px; y: 51px; width: root.width; height: root.height - 51px; background: Theme.base;
+        x: Theme.sidebar-width + 1px; y: Theme.titlebar-height + (root.hosts-page ? 0px : root.session-bar-height);
+        width: root.width - self.x; height: root.height - self.y - Theme.statusbar-height; background: Theme.base;
         VerticalLayout { spacing: 0px;
             HorizontalLayout { spacing: 0px;
-                Rectangle { width: (root.width - 1px) / 2; clip: true; background: Theme.highest;
+                Rectangle { width: (parent.width - 1px) / 2; clip: true; background: Theme.highest;
                     VerticalLayout { spacing: 0px;
                         Rectangle { height: 44px; background: Theme.high;
                             HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 8px;
@@ -711,7 +688,7 @@ export component AppWindow inherits Window {
                     }
                 }
                 Rectangle { width: 1px; background: Theme.divider; }
-                Rectangle { width: (root.width - 1px) / 2; clip: true; background: Theme.highest;
+                Rectangle { width: (parent.width - 1px) / 2; clip: true; background: Theme.highest;
                     VerticalLayout { spacing: 0px;
                         Rectangle { height: 44px; background: Theme.high;
                             HorizontalLayout { cross-axis-alignment: center; padding-left: 12px; padding-right: 12px; spacing: 8px;
@@ -720,7 +697,6 @@ export component AppWindow inherits Window {
                                 }
                                 Text { text: root.remote-connected ? root.active-host : @tr("Remote"); color: Theme.text; font-weight: 500; overflow: elide; vertical-alignment: center; }
                                 Rectangle { horizontal-stretch: 1; }
-                                Action { text: @tr("Select host"); kind: "flat"; text-size: 12px; clicked => { root.host-picker-open = true; } }
                                 Action { text: @tr("Actions"); kind: "flat"; has-icon: true; icon: @image-url("icons/chevron-down.svg"); disabled: !root.remote-connected; clicked => { root.file-actions-pane = 2; root.file-actions-x = self.absolute-position.x; root.file-actions-y = self.absolute-position.y + 36px; } }
                             }
                         }
@@ -737,9 +713,10 @@ export component AppWindow inherits Window {
                             }
                         }
                         if !root.remote-connected: EmptyState { vertical-stretch: 1; background: Theme.base;
-                            icon: @image-url("icons/folder-filled.svg"); title: @tr("Connect to host");
-                            description: @tr("Select a saved host to manage files with SFTP."); action-text: @tr("Select host");
-                            action-clicked => { root.host-picker-open = true; }
+                            icon: @image-url("icons/folder-filled.svg"); title: @tr("Not connected");
+                            description: @tr("Reconnect this session to browse its files."); action-text: @tr("Reconnect");
+                            action-visible: root.active-session != "";
+                            action-clicked => { root.reconnect-session(root.active-session); }
                         }
                     }
                 }
@@ -793,22 +770,6 @@ export component AppWindow inherits Window {
         Input { filled: true; text <=> root.file-dialog-value; placeholder-text: @tr("Name"); init => { self.focus(); } }
         cancel => { root.file-dialog = ""; }
         confirm => { root.file-operation(root.file-dialog-local, root.file-dialog, root.file-dialog-source, root.file-dialog-value); root.file-dialog = ""; }
-    }
-    Dialog { open <=> root.host-picker-open; title: @tr("Select host"); dialog-width: 440px; confirm-text: @tr("Done"); cancel-visible: false; dismiss-on-scrim: true;
-        confirm => { root.host-picker-open = false; }
-        if root.hosts.length == 0: Text { text: @tr("Add a host in Hosts to connect with SFTP."); color: Theme.secondary; wrap: word-wrap; }
-        ListView { height: Math.min(312px, root.hosts.length * 52px);
-            for host in root.hosts: Rectangle { height: 52px; border-radius: Theme.r-control; background: select-host-touch.has-hover ? Theme.hover : transparent;
-                HorizontalLayout { padding: 8px; spacing: 12px; cross-axis-alignment: center;
-                    Image { source: @image-url("icons/hosts.svg"); colorize: Theme.text; width: 20px; height: 20px; }
-                    VerticalLayout { spacing: 2px;
-                        Text { text: host.name; color: Theme.text; font-weight: 500; overflow: elide; }
-                        Text { text: host.address; color: Theme.secondary; font-size: Theme.font-caption; overflow: elide; }
-                    }
-                }
-                select-host-touch := TouchArea { clicked => { root.host-picker-open = false; root.select-sftp-host(host.id); } }
-            }
-        }
     }
     if root.group-editing: TouchArea { clicked => { root.group-editing = false; } }
     if root.editor-open: Rectangle { x: root.width - Theme.panel-width; y: Theme.titlebar-height; width: Theme.panel-width; height: root.height - Theme.titlebar-height - (root.status-error ? Theme.statusbar-height : 0px); background: Theme.base;

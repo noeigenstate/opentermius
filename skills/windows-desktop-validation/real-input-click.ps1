@@ -50,7 +50,7 @@ foreach ($c in ($Clicks -split ";")) {
     $v = $c.Substring(1) -split ","; $x0 = $r.L + [int]$v[0]; $y0 = $r.T + [int]$v[1]
     [R]::SetCursorPos($x0, $y0) | Out-Null; Start-Sleep -Milliseconds 200
     $pt = New-Object R+POINT; $pt.X = $x0; $pt.Y = $y0
-    if ([R]::GetForegroundWindow() -ne $h -or [R]::GetAncestor([R]::WindowFromPoint($pt), 2) -ne $h) { "drag skipped"; break }
+    if ([R]::GetForegroundWindow() -ne $h -or [R]::GetAncestor([R]::WindowFromPoint($pt), 2) -ne $h) { "drag skipped: foreground=$([R]::GetForegroundWindow()) under=$([R]::GetAncestor([R]::WindowFromPoint($pt), 2)) app=$h"; break }
     $before = New-Object R+RECT; [R]::GetWindowRect($h, [ref]$before) | Out-Null
     [R]::mouse_event(2, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 150
     for ($k = 1; $k -le 10; $k++) { [R]::SetCursorPos($x0 + [int]$v[2] * $k / 10, $y0 + [int]$v[3] * $k / 10) | Out-Null; Start-Sleep -Milliseconds 40 }

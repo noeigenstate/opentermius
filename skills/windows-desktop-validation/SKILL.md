@@ -42,3 +42,8 @@ PowerShell 5.1 读写源码显式使用 UTF-8，编辑优先使用 apply_patch�
 自绘标题栏、拖动和点击状态必须用真实输入验证：`PostMessage` 投递的 WM_LBUTTONDOWN 不经过命中测试，也不会进入 Windows 的原生移动循环，无法复现"标题栏按下后整个界面无法点击"这类问题。用 `real-input-click.ps1 -Exe <exe> -Out <dir> -AppArgs @("--data-dir=<fresh>") -Clicks "900,40;110,177;d900,40,-80,-60;110,234"` 注入点击/拖动，并比较每步 PrintWindow 截图（Python PIL `ImageChops.difference(...).getbbox()`，`None` 即界面无变化，应选会改变页面的点击目标）。脚本只在应用窗口位于前台且在光标下时发送输入，否则跳过；它会移动用户的鼠标，先用 `GetLastInputInfo` 确认用户空闲。
 
 窗口拖动只能调用 winit 的 `drag_window()`：它记录拖动状态，并在 WM_EXITSIZEMOVE 后补发被移动循环吞掉的按键释放；自行 `PostMessage(WM_NCLBUTTONDOWN, HTCAPTION)` 会让 Slint 永久持有标题栏的指针抓取。标题栏只在按下后移动超过阈值时才开始原生拖动，Windows 上拖动后再等按键物理释放、补发 `PointerReleased`，单击标题栏不得进入移动循环。
+`GetForegroundWindow()` 为 0 通常表示屏幕已锁定或进入屏保，此时无法注入真实输入，应推迟测试而不是改用 `PostMessage` 冒充。
+
+## 终端尺寸
+
+只在终端实际可见时把界面尺寸同步给 PTY（参照 xterm.js fit addon）：主机页、设置页或 SFTP 视图遮住终端时区域高度为 0，若照样发送 resize，远端会被缩成几行，回到终端后只显示一部分。终端重新可见时补发一次尺寸；切换标签页时按当前尺寸修正后台会话。SSH 首个 pty-req 直接使用窗口尺寸（`ConnectOptions::initial_size`），不要先用固定 100×30 再 resize，否则登录横幅按错误尺寸排版。

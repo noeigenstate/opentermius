@@ -184,6 +184,7 @@ async fn keychain_key_authenticates_without_a_file_or_prompt() {
             keepalive_seconds: 0,
             timeout_seconds: 5,
             scrollback_lines: 1000,
+            ..Default::default()
         },
     );
     timeout(Duration::from_secs(15), async {

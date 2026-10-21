@@ -228,6 +228,9 @@ pub struct ConnectOptions {
     pub keepalive_seconds: u32,
     pub timeout_seconds: u32,
     pub scrollback_lines: usize,
+    /// Columns and rows for the initial pty-req, so the login banner is laid out at the
+    /// real window size instead of being redrawn after a resize.
+    pub initial_size: (u16, u16),
 }
 impl Default for ConnectOptions {
     fn default() -> Self {
@@ -236,6 +239,7 @@ impl Default for ConnectOptions {
             keepalive_seconds: KEEPALIVE_DEFAULT,
             timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
             scrollback_lines: crate::terminal::DEFAULT_SCROLLBACK,
+            initial_size: (100, 30),
         }
     }
 }
@@ -570,7 +574,7 @@ impl Drop for CancelOnDrop {
 enum Write {
     Input(Vec<u8>),
     Resize { cols: u16, rows: u16 },
-    Pty,
+    Pty { cols: u16, rows: u16 },
     Shell,
 }
 async fn run(
@@ -615,9 +619,9 @@ async fn run(
                 Write::Resize { cols, rows } => {
                     writer.window_change(cols.into(), rows.into(), 0, 0).await?
                 }
-                Write::Pty => {
+                Write::Pty { cols, rows } => {
                     writer
-                        .request_pty(true, "xterm-256color", 100, 30, 0, 0, &[])
+                        .request_pty(true, "xterm-256color", cols.into(), rows.into(), 0, 0, &[])
                         .await?
                 }
                 Write::Shell => writer.request_shell(true).await?,
@@ -627,9 +631,11 @@ async fn run(
     };
     tokio::pin!(writing);
     let mut pending_write = None;
-    let mut pending_control = Some(Write::Pty);
+    let cols = options.initial_size.0.clamp(2, 500);
+    let rows = options.initial_size.1.clamp(2, 300);
+    let mut pending_control = Some(Write::Pty { cols, rows });
     let mut protocol = Vec::new();
-    let mut terminal = Terminal::with_scrollback(30, 100, options.scrollback_lines);
+    let mut terminal = Terminal::with_scrollback(rows, cols, options.scrollback_lines);
     let mut stage = 0;
     let mut connected = false;
     let mut setup_timeout = Box::pin(tokio::time::sleep(Duration::from_secs(30)));

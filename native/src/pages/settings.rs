@@ -134,7 +134,7 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     bridge.set_version(settings::VERSION.into());
     bridge.set_config_path(config_path.into());
 
-    let scheme = settings.color_scheme;
+    let scheme = settings.color_scheme.resolve(ui.global::<Theme>().get_dark());
     ui.set_terminal_background(crate::ui_color(scheme.background()));
     ui.set_terminal_cursor(color_with_alpha(scheme.cursor(), 140));
     if settings.bell == BellMode::None {

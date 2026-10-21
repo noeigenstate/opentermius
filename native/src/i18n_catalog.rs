@@ -230,6 +230,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("Credentials are too long", "凭据过长"),
     ("Credentials were stored in plaintext", "凭据被明文保存"),
     ("Default", "默认"),
+    ("Match app theme", "跟随应用主题"),
     (
         "Delete {name}?\n{files} files, {dirs} subfolders, {}. This cannot be undone.",
         "删除 {name}？\n{files} 个文件，{dirs} 个子文件夹，{}。此操作无法撤销。",

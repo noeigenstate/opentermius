@@ -113,7 +113,7 @@ export component SettingsPage inherits Rectangle {
                 SettingRow {
                     label: @tr("Terminal color scheme"); description: @tr("Applied to every terminal session"); divider: false;
                     Select {
-                        width: 200px; options: [@tr("Default"), @tr("Solarized Dark"), @tr("Monokai"), @tr("Light")];
+                        width: 200px; options: [@tr("Match app theme"), @tr("Solarized Dark"), @tr("Monokai"), @tr("Light")];
                         current-index <=> SettingsBridge.color-scheme;
                         changed(index) => { SettingsBridge.apply(); }
                     }

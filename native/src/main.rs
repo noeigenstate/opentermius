@@ -84,6 +84,8 @@ struct State {
     local_path: PathBuf,
     local_request: u64,
     pending_sftp: Option<String>,
+    /// Sessions whose tab currently shows its SFTP view instead of the terminal.
+    sftp_views: std::collections::BTreeSet<String>,
     remote_entries: Vec<ssh::RemoteFile>,
     local_entries: Vec<ssh::LocalFile>,
     transfers: BTreeMap<u64, (String, TransferRow)>,
@@ -151,6 +153,29 @@ fn release_grab_after_drag(ui: slint::Weak<AppWindow>) {
             TIMER.with(|timer| timer.stop());
         });
     });
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ClipboardShortcut {
+    Copy,
+    Paste,
+}
+
+/// Windows Terminal conventions: Ctrl+C copies only while text is selected (otherwise it
+/// stays an interrupt), Ctrl+V / Shift+Insert paste, Ctrl+Insert / Ctrl+Shift+C copy.
+fn clipboard_shortcut(text: &str, ctrl: bool, alt: bool, shift: bool, selected: bool) -> Option<ClipboardShortcut> {
+    if alt {
+        return None;
+    }
+    let is = |letter: &str, control: &str| text.eq_ignore_ascii_case(letter) || text == control;
+    let insert = matches!(terminal::Key::from_text(text), Some(terminal::Key::Named(terminal::NamedKey::Insert)));
+    if ctrl && is("c", "\u{3}") && (shift || selected) || ctrl && !shift && insert {
+        Some(ClipboardShortcut::Copy)
+    } else if ctrl && is("v", "\u{16}") || shift && !ctrl && insert {
+        Some(ClipboardShortcut::Paste)
+    } else {
+        None
+    }
 }
 
 fn keypad_key(key: slint::winit_030::winit::keyboard::PhysicalKey) -> Option<char> {
@@ -282,7 +307,7 @@ impl State {
                 ui.set_remote_connected(view.connected && !view.local);
                 ui.set_local_session(view.local);
                 ui.set_active_host(if view.local { i18n::t("Local Terminal").into() } else { view.profile.name.clone().into() });
-                let scheme = self.settings.color_scheme;
+                let scheme = self.settings.color_scheme.resolve(ui.global::<Theme>().get_dark());
                 let rows: Vec<TerminalRun> = view
                     .snapshot
                     .runs
@@ -714,6 +739,7 @@ impl State {
                     keepalive_seconds: self.settings.keepalive_seconds,
                     timeout_seconds: self.settings.connection_timeout_seconds,
                     scrollback_lines: self.settings.scrollback_lines,
+                    initial_size: (self.cols, self.rows),
                 },
             ));
         }
@@ -778,6 +804,18 @@ impl State {
             .and_then(|id| self.sessions.get(id))
             .is_some_and(|s| s.connected && !s.local)
     }
+    /// Bring the active session's PTY to the last visible terminal size (a background tab
+    /// keeps the size it had while the window was resized).
+    fn fit_active(&self) {
+        let stale = self
+            .active
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .is_some_and(|view| view.transport.is_some() && (view.snapshot.rows, view.snapshot.cols) != (self.rows, self.cols));
+        if stale {
+            self.send(Command::Resize { cols: self.cols, rows: self.rows });
+        }
+    }
     fn send(&self, command: Command) {
         if let Some(sender) = self
             .active
@@ -793,6 +831,7 @@ impl State {
     }
     fn close(&mut self, id: &str) {
         pages::logs::closed(id);
+        self.sftp_views.remove(id);
         if let Some(view) = self.sessions.remove(id) {
             if let Some(transport) = view.transport {
                 let _ = transport.commands.try_send(Command::Disconnect);
@@ -895,6 +934,15 @@ impl State {
                 0 if button == 0 => {
                     self.selecting = true;
                     self.select(row, col, shift);
+                }
+                // Right click copies a selection, otherwise pastes (Windows console convention).
+                0 if button == 1 => {
+                    if self.has_selection() {
+                        self.copy();
+                        self.clear_selection();
+                    } else {
+                        self.paste();
+                    }
                 }
                 1 | 3 => {
                     let was_selecting = self.selecting;
@@ -1217,7 +1265,7 @@ impl State {
                 if connected {
                     self.selecting = false;
                     self.mouse_button = None;
-                    if let Some(ui) = self.ui.upgrade() {
+                    if let Some(ui) = self.ui.upgrade().filter(|ui| ui.get_terminal_shown()) {
                         self.cols = ui.get_terminal_cols().clamp(2, 500) as u16;
                         self.rows = ui.get_terminal_rows().clamp(2, 300) as u16;
                     }
@@ -1529,13 +1577,17 @@ impl State {
         }
     }
     fn key(&mut self, text: &str, ctrl: bool, alt: bool, shift: bool) {
-        if ctrl && shift && text.eq_ignore_ascii_case("c") {
-            self.copy();
-            return;
-        }
-        if ctrl && shift && text.eq_ignore_ascii_case("v") {
-            self.paste();
-            return;
+        match clipboard_shortcut(text, ctrl, alt, shift, self.has_selection()) {
+            Some(ClipboardShortcut::Copy) => {
+                self.copy();
+                self.clear_selection();
+                return;
+            }
+            Some(ClipboardShortcut::Paste) => {
+                self.paste();
+                return;
+            }
+            None => {}
         }
         let Some(id) = self.active.clone() else {
             return;
@@ -1592,6 +1644,18 @@ impl State {
                 }
             }
         }
+    }
+    fn has_selection(&self) -> bool {
+        self.active
+            .as_ref()
+            .and_then(|id| self.sessions.get(id))
+            .is_some_and(|view| view.selection.is_some_and(|(a, b)| a != b))
+    }
+    fn clear_selection(&mut self) {
+        if let Some(view) = self.active.as_ref().and_then(|id| self.sessions.get_mut(id)) {
+            view.selection = None;
+        }
+        self.display();
     }
     fn end_selection(&self) {
         if !self.settings.copy_on_select {
@@ -1653,7 +1717,6 @@ impl State {
             return;
         }
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_files_open(true);
             ui.set_file_busy(true)
         }
         self.send(Command::List(path));
@@ -2018,6 +2081,26 @@ impl State {
             }
         });
     }
+    fn show_sftp(&mut self, on: bool) {
+        let local = self.active.as_ref().and_then(|id| self.sessions.get(id)).is_some_and(|s| s.local);
+        let on = on && !local;
+        if let Some(id) = self.active.clone() {
+            if on {
+                self.sftp_views.insert(id);
+            } else {
+                self.sftp_views.remove(&id);
+            }
+        }
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_sftp_page(on);
+        }
+        if on {
+            self.list_local(String::new());
+            if self.remote_ready() {
+                self.list_files(".".into());
+            }
+        }
+    }
     fn select_sftp(&mut self, host_id: &str) {
         if let Some(id) = self
             .order
@@ -2029,7 +2112,8 @@ impl State {
             })
             .cloned()
         {
-            self.active = Some(id);
+            self.active = Some(id.clone());
+            self.sftp_views.insert(id);
             self.reset_files();
             self.display();
             self.list_files(".".into());
@@ -2037,6 +2121,7 @@ impl State {
         }
         self.connect(host_id);
         self.pending_sftp = self.active.clone();
+        self.sftp_views.extend(self.active.clone());
     }
 }
 fn format_size(size: u64) -> String {
@@ -2237,6 +2322,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             local_path: initial_local_path,
             local_request: 0,
             pending_sftp: None,
+            sftp_views: Default::default(),
             remote_entries: Vec::new(),
             local_entries: Vec::new(),
             transfers: BTreeMap::new(),
@@ -2375,11 +2461,15 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
                 Some(id.to_string())
             };
             s.reset_files();
+            if let Some(ui) = s.ui.upgrade() {
+                ui.set_sftp_page(s.active.as_ref().is_some_and(|id| s.sftp_views.contains(id)));
+            }
             s.display();
+            s.fit_active();
             if s.remote_ready()
                 && s.ui
                     .upgrade()
-                    .is_some_and(|ui| ui.get_sftp_page() || ui.get_files_open())
+                    .is_some_and(|ui| ui.get_sftp_page())
             {
                 s.list_files(".".into());
             }
@@ -2469,25 +2559,16 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     ui.on_list_files(|path| {
         with_state(|s| s.list_files(path.to_string()));
     });
-    ui.on_open_sftp(|| {
+    ui.on_session_sftp(|on| {
         with_state(|s| {
             s.search.clear();
             s.group_filter.clear();
             s.hosts();
-            s.list_local(String::new());
-            if let Some(ui) = s.ui.upgrade() {
-                ui.set_sftp_page(true)
-            }
-            if s.remote_ready() {
-                s.list_files(".".into())
-            }
+            s.show_sftp(on);
         });
     });
     ui.on_list_local(|path| {
         with_state(|s| s.list_local(path.to_string()));
-    });
-    ui.on_select_sftp_host(|id| {
-        with_state(|s| s.select_sftp(&id));
     });
     ui.on_upload_local(|name| {
         with_state(|s| {
@@ -2692,8 +2773,9 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     if smoke && scene == "editor" {
         ui.invoke_new_host();
     }
-    if smoke && (scene == "section-terminal" || scene == "section-terminal-menu") {
-        // Deterministic disconnected SSH fixture; no network or saved secrets.
+    if smoke && (scene == "section-terminal" || scene == "section-terminal-menu" || (scene == "section-sftp" && smoke_port.is_none())) {
+        // Deterministic disconnected SSH fixture; no network or saved secrets. The SFTP
+        // scene shows the same session switched to its file view.
         with_state(|s| {
             let mut terminal = Terminal::new(s.rows, s.cols);
             terminal.feed("\x1b[32mdev@workspace\x1b[0m:~$ echo 'Terminal ready · 中文输入'\r\nTerminal ready · 中文输入\r\n\r\n\x1b[33mSSH session ended.\x1b[0m\r\n".as_bytes());
@@ -2748,7 +2830,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             );
             s.local_path = folder;
         });
-        ui.invoke_open_sftp();
+        ui.invoke_session_sftp(true);
         if scene == "section-sftp" && smoke_port.is_none() {
             // Disconnected visual fixture: exercise path input and partial progress without IO.
             ui.set_file_path("/srv/workspace/releases".into());
@@ -2882,6 +2964,25 @@ fn main() {
 mod terminal_ux_tests {
     use super::*;
 
+    #[test]
+    fn clipboard_shortcuts_follow_windows_terminal() {
+        use ClipboardShortcut::*;
+        // Ctrl+C copies only with a selection; without one it stays an interrupt.
+        assert_eq!(clipboard_shortcut("c", true, false, false, true), Some(Copy));
+        assert_eq!(clipboard_shortcut("\u{3}", true, false, false, true), Some(Copy));
+        assert_eq!(clipboard_shortcut("c", true, false, false, false), None);
+        assert_eq!(clipboard_shortcut("C", true, false, true, false), Some(Copy));
+        assert_eq!(clipboard_shortcut("v", true, false, false, false), Some(Paste));
+        assert_eq!(clipboard_shortcut("V", true, false, true, false), Some(Paste));
+        assert_eq!(clipboard_shortcut("\u{16}", true, false, false, false), Some(Paste));
+        assert_eq!(clipboard_shortcut("\u{f727}", true, false, false, false), Some(Copy));
+        assert_eq!(clipboard_shortcut("\u{f727}", false, false, true, false), Some(Paste));
+        // Plain keys and Alt chords reach the remote shell untouched.
+        assert_eq!(clipboard_shortcut("\u{f727}", false, false, false, false), None);
+        assert_eq!(clipboard_shortcut("v", false, false, false, false), None);
+        assert_eq!(clipboard_shortcut("v", true, true, false, false), None);
+    }
+
     pub(super) fn state() -> State {
         let (events, _) = mpsc::channel(32);
         State {
@@ -2893,7 +2994,7 @@ mod terminal_ux_tests {
             queue: VecDeque::new(), prompt: None, cols: 80, rows: 24,
             file_path: String::new(), search: String::new(), group_filter: String::new(),
             tag_filter: String::new(),
-            local_path: PathBuf::new(), local_request: 0, pending_sftp: None,
+            local_path: PathBuf::new(), local_request: 0, pending_sftp: None, sftp_views: Default::default(),
             remote_entries: Vec::new(), local_entries: Vec::new(),
             transfers: BTreeMap::new(), next_transfer: 0,
             render_model: Rc::new(VecModel::from(Vec::new())),

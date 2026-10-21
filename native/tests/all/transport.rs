@@ -394,6 +394,31 @@ async fn connected(rx: &mut mpsc::Receiver<Event>) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn initial_pty_request_uses_the_window_size() {
+    let (port, key, state, server) = fixture(false).await;
+    let (tx, mut rx) = mpsc::channel(128);
+    let _session = ssh::spawn_with_options(
+        &tokio::runtime::Handle::current(),
+        "test".into(),
+        profile(port),
+        "test-password".into(),
+        Some(key),
+        tx,
+        ssh::ConnectOptions { initial_size: (132, 40), ..Default::default() },
+    );
+    connected(&mut rx).await;
+    // The banner must be laid out at the real size, not at a default fixed later by a resize.
+    assert_eq!(state.sizes.lock().unwrap().first().copied(), Some((132, 40)));
+    loop {
+        if let Event::Screen { snapshot, .. } = next(&mut rx).await {
+            assert_eq!((snapshot.cols, snapshot.rows), (132, 40));
+            break;
+        }
+    }
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
     let (port, key, state, server) = fixture(false).await;
     let (tx, mut rx) = mpsc::channel(128);

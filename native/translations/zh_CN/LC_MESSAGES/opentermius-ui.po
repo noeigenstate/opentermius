@@ -2455,3 +2455,12 @@ msgstr "RSA 3072"
 
 msgid "RSA 4096"
 msgstr "RSA 4096"
+
+msgid "Match app theme"
+msgstr "跟随应用主题"
+
+msgid "Not connected"
+msgstr "未连接"
+
+msgid "Reconnect this session to browse its files."
+msgstr "重新连接此会话以浏览其文件。"
