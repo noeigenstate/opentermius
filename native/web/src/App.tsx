@@ -115,7 +115,7 @@ export default function App() {
         <main className={`content${activeSessionId ? " session-content" : ""}`}>
           {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
           <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
-            {section === "hosts" ? <HostsPage hosts={hosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} /> : <div className="empty">{t(titles[section])}</div>}
+            {section === "hosts" ? <HostsPage hosts={hosts} onHostsChange={setHosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} /> : <div className="empty">{t(titles[section])}</div>}
           </div>
           <Suspense fallback={<div className="empty">{t("Loading terminal…")}</div>}>
             {sessions.map((session) => <SessionPage key={session.sessionId} session={session} visible={activeSessionId === session.sessionId}
