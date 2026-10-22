@@ -155,6 +155,27 @@ fn release_grab_after_drag(ui: slint::Weak<AppWindow>) {
     });
 }
 
+// Terminal copy/paste goes through these so unit tests never touch the user's clipboard.
+#[cfg(not(test))]
+fn clipboard_text() -> Option<String> {
+    arboard::Clipboard::new().ok()?.get_text().ok()
+}
+#[cfg(not(test))]
+fn set_clipboard_text(text: String) -> Result<(), String> {
+    arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(text)).map_err(|e| e.to_string())
+}
+#[cfg(test)]
+thread_local! { static TEST_CLIPBOARD: RefCell<Option<String>> = const { RefCell::new(None) }; }
+#[cfg(test)]
+fn clipboard_text() -> Option<String> {
+    TEST_CLIPBOARD.with(|clipboard| clipboard.borrow().clone())
+}
+#[cfg(test)]
+fn set_clipboard_text(text: String) -> Result<(), String> {
+    TEST_CLIPBOARD.with(|clipboard| *clipboard.borrow_mut() = Some(text));
+    Ok(())
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum ClipboardShortcut {
     Copy,
@@ -1638,10 +1659,8 @@ impl State {
             } else {
                 s.snapshot.lines.join("\n").trim_end().to_string()
             };
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                if let Err(e) = clipboard.set_text(text) {
-                    self.status(e.to_string(), true)
-                }
+            if let Err(e) = set_clipboard_text(text) {
+                self.status(e, true)
             }
         }
     }
@@ -1671,15 +1690,13 @@ impl State {
         if text.is_empty() {
             return;
         }
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if let Err(e) = clipboard.set_text(text) {
-                self.status(e.to_string(), true)
-            }
+        if let Err(e) = set_clipboard_text(text) {
+            self.status(e, true)
         }
     }
     fn paste(&self) {
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if let Ok(text) = clipboard.get_text() {
+        {
+            if let Some(text) = clipboard_text().filter(|text| !text.is_empty()) {
                 if text.len() > 1024 * 1024 {
                     self.status(crate::i18n::t("Pasted text must not exceed 1 MB"), true);
                     return;
@@ -2716,6 +2733,66 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             }
         }
     });
+    ui.on_import_windterm(|| {
+        use opentermius::import_windterm;
+        let home = dirs::home_dir().unwrap_or_default();
+        let found = import_windterm::detect(&home);
+        let title = crate::i18n::t("Import from WindTerm");
+        let files = if found.is_empty() {
+            // Nothing in the usual places: let the user point at the WindTerm folder.
+            match rfd::FileDialog::new().set_title(crate::i18n::t("Import from WindTerm — Select the WindTerm folder")).pick_folder() {
+                Some(folder) => import_windterm::find_sessions(&folder),
+                None => return,
+            }
+        } else {
+            let list = found.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n");
+            match rfd::MessageDialog::new()
+                .set_title(title)
+                .set_description(opentermius::tf!("Import WindTerm sessions from:\n{}\nChoose No to select another folder.", "0" => list))
+                .set_buttons(rfd::MessageButtons::YesNoCancel)
+                .show()
+            {
+                rfd::MessageDialogResult::Yes => found,
+                rfd::MessageDialogResult::No => match rfd::FileDialog::new().set_title(crate::i18n::t("Import from WindTerm — Select the WindTerm folder")).pick_folder() {
+                    Some(folder) => import_windterm::find_sessions(&folder),
+                    None => return,
+                },
+                _ => return,
+            }
+        };
+        let scanned = if files.is_empty() {
+            Err(anyhow::anyhow!("{}", crate::i18n::t("No WindTerm sessions were found in that folder")))
+        } else {
+            files.iter().try_fold(opentermius::import_xshell::ScanResult::default(), |mut all, file| {
+                let mut one = import_windterm::scan_file(file, &home)?;
+                all.hosts.append(&mut one.hosts);
+                all.skipped.append(&mut one.skipped);
+                Ok::<_, anyhow::Error>(all)
+            })
+        };
+        let message = with_state(|s| {
+            let result = scanned.and_then(|scanned| {
+                s.store.lock()
+                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
+                    .and_then(|mut store| opentermius::import_xshell::merge(&mut store, scanned))
+            });
+            match result {
+                Ok(summary) => {
+                    s.hosts();
+                    let message = summary.message();
+                    s.status(&message, false);
+                    message
+                }
+                Err(error) => {
+                    s.status(error.to_string(), true);
+                    error.to_string()
+                }
+            }
+        });
+        if let Some(message) = message {
+            rfd::MessageDialog::new().set_title(title).set_description(message).show();
+        }
+    });
     ui.on_export_hosts(|| {
         if let Some(path) = rfd::FileDialog::new()
             .set_title(crate::i18n::t("Export hosts (without credentials)"))
@@ -2923,6 +3000,18 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
 fn main() {
     let started = std::time::Instant::now();
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(windows)]
+    if args.get(1).is_some_and(|a| a == "--apply-update") {
+        // Helper copy started by the updater: no window, no configuration access.
+        if let Err(error) = opentermius::update::apply(&args[2..]) {
+            rfd::MessageDialog::new()
+                .set_title(crate::i18n::t("Update failed"))
+                .set_description(format!("{error:#}"))
+                .show();
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    }
     let result = (|| -> anyhow::Result<i32> {
         let store = startup_store(&args)?;
         let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref(), store.data.settings.gpu_rendering)?;
@@ -3113,8 +3202,12 @@ mod terminal_ux_tests {
         let mut rx = session(&mut s);
         s.wheel(0, 0, 3, false, false, false);
         assert!(matches!(rx.try_recv().unwrap(), Command::Scroll(3)));
+        TEST_CLIPBOARD.with(|clipboard| *clipboard.borrow_mut() = Some("pasted".into()));
         s.pointer(0, 1, 2, 3, false, false, false);
         assert!(!s.selecting); // Right-click never begins a text selection.
+        // Without a selection it pastes (Windows console convention).
+        assert!(matches!(rx.try_recv().unwrap(), Command::Input(data) if data == b"pasted"));
+        TEST_CLIPBOARD.with(|clipboard| *clipboard.borrow_mut() = None);
         s.pointer(0, 0, 2, 3, false, false, false);
         s.pointer(2, -1, 2, 8, false, false, false);
         s.pointer(1, 0, 2, 8, false, false, false);

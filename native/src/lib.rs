@@ -1,6 +1,7 @@
 pub mod forwarding;
 pub mod hosts;
 pub mod i18n;
+pub mod import_windterm;
 pub mod import_xshell;
 pub mod keychain;
 pub mod local;
@@ -11,3 +12,4 @@ pub mod snippets;
 pub mod ssh;
 pub mod store;
 pub mod terminal;
+pub mod update;

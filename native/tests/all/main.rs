@@ -3,6 +3,7 @@
 mod design_foundation;
 mod forwarding;
 mod hosts_ux;
+mod import_windterm;
 mod import_xshell;
 mod integration_features;
 mod integration_recovery_transport;
@@ -17,3 +18,4 @@ mod snippets;
 mod store_core;
 mod terminal_core;
 mod transport;
+mod update;

@@ -270,6 +270,8 @@ pub struct Settings {
     pub connection_timeout_seconds: u32,
     pub confirm_overwrite: bool,
     pub show_hidden_files: bool,
+    /// Check GitHub Releases for a newer version shortly after startup.
+    pub auto_update: bool,
 }
 
 impl Default for Settings {
@@ -289,6 +291,7 @@ impl Default for Settings {
             connection_timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
             confirm_overwrite: true,
             show_hidden_files: true,
+            auto_update: true,
         }
     }
 }

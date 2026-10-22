@@ -9,6 +9,7 @@ mod known_hosts;
 pub(crate) mod logs;
 mod settings;
 mod recovery;
+mod updates;
 
 pub fn install(ui: &AppWindow) {
     keychain::install(ui);
@@ -18,6 +19,7 @@ pub fn install(ui: &AppWindow) {
     logs::install(ui);
     settings::install(ui);
     recovery::install(ui);
+    updates::install(ui);
 }
 
 pub(super) fn refresh_language(ui: &AppWindow) {

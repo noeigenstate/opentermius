@@ -225,6 +225,7 @@ export component AppWindow inherits Window {
     callback download-file(string);
     callback import-hosts;
     callback import-xshell;
+    callback import-windterm;
     callback export-hosts;
     callback search-hosts(string);
     callback select-group(string);
@@ -902,6 +903,7 @@ export component AppWindow inherits Window {
         Text { text: @tr("OpenTermius"); color: Theme.secondary; font-size: Theme.font-caption; height: 20px; vertical-alignment: center; }
         MenuItem { text: @tr("Import hosts"); has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-hosts(); } }
         MenuItem { text: @tr("Import from Xshell"); has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-xshell(); } }
+        MenuItem { text: @tr("Import from WindTerm"); has-icon: true; icon: @image-url("icons/arrow-down.svg"); clicked => { root.menu-open = false; root.import-windterm(); } }
         MenuItem { text: @tr("Export hosts"); has-icon: true; icon: @image-url("icons/arrow-up.svg"); clicked => { root.menu-open = false; root.export-hosts(); } }
         MenuSeparator { }
         MenuItem { text: @tr("Backup & Restore"); has-icon: true; icon: @image-url("icons/keychain.svg"); clicked => { root.menu-open = false; root.open-section("recovery"); } }

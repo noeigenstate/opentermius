@@ -47,3 +47,9 @@ PowerShell 5.1 读写源码显式使用 UTF-8，编辑优先使用 apply_patch�
 ## 终端尺寸
 
 只在终端实际可见时把界面尺寸同步给 PTY（参照 xterm.js fit addon）：主机页、设置页或 SFTP 视图遮住终端时区域高度为 0，若照样发送 resize，远端会被缩成几行，回到终端后只显示一部分。终端重新可见时补发一次尺寸；切换标签页时按当前尺寸修正后台会话。SSH 首个 pty-req 直接使用窗口尺寸（`ConnectOptions::initial_size`），不要先用固定 100×30 再 resize，否则登录横幅按错误尺寸排版。
+
+## 自动更新与导入
+
+NSIS 安装程序在 OpenTermius 运行时以 `/S` 静默安装会直接中止，所以更新由临时目录中的程序副本完成：`opentermius.exe --apply-update <installer> <install-dir> <pid>` 等待原进程退出，再运行 `installer /S /D=<dir>`（`/D` 必须最后且不加引号，Rust 用 `raw_arg`），完成后启动新版本。端到端验证：把新安装包与 release 版程序复制到 `E:` 临时目录，启动已安装旧版，按上述参数启动副本后关闭旧版，确认安装目录版本、HKCU 卸载项 `DisplayVersion` 和新进程。在线检查用 `OPENTERMIUS_LIVE_UPDATE_CHECK=1 cargo test --locked --test all update::live -- --ignored --nocapture`。
+
+WindTerm 会话在 `<root>\.wind\profiles\<name>\terminal\user.sessions`（JSON 数组），`<root>` 由安装目录下 `profiles.config` 的 `path` 决定（便携版为 `.`），否则为用户主目录。只导入 `session.protocol` 为 SSH 的条目；`session.autoLogin` 是加密凭据，不读取。用 `OPENTERMIUS_WINDTERM_DIR=<windterm 目录> cargo test --locked --test all import_windterm::real -- --ignored --nocapture` 对真实安装只输出计数。

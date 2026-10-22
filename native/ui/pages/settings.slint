@@ -25,10 +25,18 @@ export global SettingsBridge {
     // About
     in-out property <string> version: "";
     in-out property <string> config-path: "";
+    // Updates
+    in-out property <bool> auto-update: true;
+    in-out property <bool> update-busy: false;
+    in-out property <string> update-status: "";
+    /// Newer version found by the last check, empty when none.
+    in-out property <string> update-version: "";
 
     callback apply;
     callback restore-defaults;
     callback open-config-folder;
+    callback check-updates;
+    callback install-update;
 }
 
 // Card has fixed inner padding; grouped settings need edge-to-edge SettingRows.
@@ -202,6 +210,15 @@ export component SettingsPage inherits Rectangle {
                 SettingRow {
                     label: @tr("OpenTermius"); description: @tr("Version ") + SettingsBridge.version;
                     Action { kind: "flat"; text: @tr("Restore defaults"); clicked => { SettingsBridge.restore-defaults(); } }
+                }
+                SettingRow {
+                    label: @tr("Check for updates automatically"); description: @tr("Looks for a new release on GitHub shortly after startup and asks before installing");
+                    Toggle { checked <=> SettingsBridge.auto-update; toggled => { SettingsBridge.apply(); } }
+                }
+                SettingRow {
+                    label: @tr("Updates"); description: SettingsBridge.update-status != "" ? SettingsBridge.update-status : @tr("Not checked yet");
+                    if SettingsBridge.update-version == "": Action { kind: "secondary"; text: @tr("Check now"); disabled: SettingsBridge.update-busy; clicked => { SettingsBridge.check-updates(); } }
+                    if SettingsBridge.update-version != "": Action { kind: "primary"; text: @tr("Update to ") + SettingsBridge.update-version; disabled: SettingsBridge.update-busy; clicked => { SettingsBridge.install-update(); } }
                 }
                 Rectangle {
                     height: 64px;

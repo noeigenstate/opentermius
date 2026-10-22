@@ -2464,3 +2464,108 @@ msgstr "未连接"
 
 msgid "Reconnect this session to browse its files."
 msgstr "重新连接此会话以浏览其文件。"
+
+msgid "Import from WindTerm"
+msgstr "从 WindTerm 导入"
+
+msgid "Check for updates automatically"
+msgstr "自动检查更新"
+
+msgid "Looks for a new release on GitHub shortly after startup and asks before installing"
+msgstr "启动后从 GitHub 检查新版本，安装前会询问"
+
+msgid "Updates"
+msgstr "更新"
+
+msgid "Not checked yet"
+msgstr "尚未检查"
+
+msgid "Check now"
+msgstr "立即检查"
+
+msgid "Update to "
+msgstr "更新到 "
+
+msgid "Invalid release information"
+msgstr "发布信息无效"
+
+msgid "The release has no Windows installer"
+msgstr "该版本没有 Windows 安装程序"
+
+msgid "The release has no checksums"
+msgstr "该版本缺少校验信息"
+
+msgid "Invalid checksums"
+msgstr "校验信息无效"
+
+msgid "The checksums do not describe this installer"
+msgstr "校验信息与安装程序不符"
+
+msgid "The downloaded installer has the wrong size"
+msgstr "下载的安装程序大小不正确"
+
+msgid "The downloaded installer failed verification"
+msgstr "下载的安装程序未通过校验"
+
+msgid "Cannot reach the update server"
+msgstr "无法连接更新服务器"
+
+msgid "The update download is too large"
+msgstr "更新文件过大"
+
+msgid "Cannot start the installer"
+msgstr "无法启动安装程序"
+
+msgid "Invalid update arguments"
+msgstr "更新参数无效"
+
+msgid "The installer did not finish"
+msgstr "安装程序未完成"
+
+msgid "Checking for updates…"
+msgstr "正在检查更新…"
+
+msgid "Version {} is available"
+msgstr "有新版本 {} 可用"
+
+msgid "Update available"
+msgstr "有可用更新"
+
+msgid "OpenTermius {} is available (you have {}). Install it now? OpenTermius restarts and open sessions close."
+msgstr "OpenTermius {} 已发布（当前版本 {}）。现在安装吗？OpenTermius 将重新启动，打开的会话会关闭。"
+
+msgid "OpenTermius is up to date ({})"
+msgstr "OpenTermius 已是最新版本（{}）"
+
+msgid "Update check failed: {error}"
+msgstr "检查更新失败：{error}"
+
+msgid "Downloading OpenTermius {}…"
+msgstr "正在下载 OpenTermius {}…"
+
+msgid "Update failed: {error}"
+msgstr "更新失败：{error}"
+
+msgid "Automatic installation is only available on Windows"
+msgstr "自动安装仅支持 Windows"
+
+msgid "Update failed"
+msgstr "更新失败"
+
+msgid "Import from WindTerm — Select the WindTerm folder"
+msgstr "从 WindTerm 导入 — 选择 WindTerm 文件夹"
+
+msgid "Import WindTerm sessions from:\n{}\nChoose No to select another folder."
+msgstr "从以下位置导入 WindTerm 会话：\n{}\n选择“否”以选择其他文件夹。"
+
+msgid "No WindTerm sessions were found in that folder"
+msgstr "该文件夹中未找到 WindTerm 会话"
+
+msgid "Not a WindTerm sessions file"
+msgstr "不是 WindTerm 会话文件"
+
+msgid "Cannot read the WindTerm sessions file"
+msgstr "无法读取 WindTerm 会话文件"
+
+msgid "The WindTerm sessions file is too large"
+msgstr "WindTerm 会话文件过大"

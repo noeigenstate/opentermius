@@ -102,6 +102,7 @@ fn read(ui: &AppWindow) -> Settings {
         connection_timeout_seconds: bridge.get_connection_timeout_seconds().max(0) as u32,
         confirm_overwrite: bridge.get_confirm_overwrite(),
         show_hidden_files: bridge.get_show_hidden_files(),
+        auto_update: bridge.get_auto_update(),
     };
     settings.sanitize();
     settings
@@ -131,6 +132,7 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     );
     bridge.set_confirm_overwrite(settings.confirm_overwrite);
     bridge.set_show_hidden_files(settings.show_hidden_files);
+    bridge.set_auto_update(settings.auto_update);
     bridge.set_version(settings::VERSION.into());
     bridge.set_config_path(config_path.into());
 
@@ -341,9 +343,11 @@ mod tests {
         assert_eq!(slint::Model::row_count(&ui.get_files()), 2);
 
         // Both visible Settings entries must navigate away from a terminal.
+        ui.invoke_open_section("hosts".into());
         ui.invoke_activate_session("test".into());
         ui.set_menu_open(true);
-        click(&ui, 70., 231.);
+        // Settings is the last menu item (after the three importers, export and backup).
+        click(&ui, 70., 263.);
         assert!(!ui.get_menu_open());
         assert_eq!(ui.get_section(), "settings");
         ui.invoke_open_section("hosts".into());

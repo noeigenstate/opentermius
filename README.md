@@ -10,7 +10,9 @@ OpenTermius brings host management, SSH terminals and SFTP file transfers into o
 
 The interface uses English, with Simplified Chinese available in **Settings → Appearance → Language**. Choose **English**, **简体中文**, or **System**. System is the persisted default: it uses Chinese when the Windows UI language is Chinese (or `LANG` starts with `zh` on other platforms), otherwise English. Changes apply immediately to labels, messages and page models. Server responses, terminal output, file names and user-created labels retain their original text. All translations are bundled; no translation service is contacted.
 
-Features include saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local terminals, multiple terminal tabs, SFTP transfers, key management, port forwarding, snippets, connection history and encrypted backup/restore. Credentials are encrypted locally with Windows DPAPI, or AES-256-GCM with a platform-specific master key on macOS/Linux. Host JSON exports omit credentials and trust records.
+Features include saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local terminals, multiple terminal tabs, SFTP transfers, key management, port forwarding, snippets, connection history, encrypted backup/restore, and one-click import from Xshell and WindTerm (host, port, name, group and key file; passwords are never imported). Credentials are encrypted locally with Windows DPAPI, or AES-256-GCM with a platform-specific master key on macOS/Linux. Host JSON exports omit credentials and trust records.
+
+Apart from your own SSH connections, the only network request is the update check: shortly after startup the installed app asks GitHub Releases for the latest version, and if one is newer it offers to download it, verifies its size and SHA-256 against the release `checksums.json`, and installs it silently before restarting. Nothing about you or your hosts is sent. Turn it off in **Settings → About → Check for updates automatically**.
 
 For development, run `cargo build --locked` and `cargo test --locked` **inside `native/`**. Rust/Slint sources live in `native/src/` and `native/ui/`; the Rust message catalog is `native/src/i18n_catalog.rs`, and bundled Slint translations are in `native/translations/zh_CN/LC_MESSAGES/opentermius-ui.po` (named for the UI crate). Add English source keys and Chinese translations together. Localization tests check catalog coverage and placeholder parity. Installer languages are configured separately.
 
@@ -37,6 +39,8 @@ OpenTermius 面向 **Windows、macOS 和 Linux** 打造轻量原生终端体验�
 - 多标签终端、Unicode/ANSI 输出、窗口尺寸同步、历史滚动和复制粘贴。
 - 本地终端：Windows 使用 ConPTY/PowerShell；macOS/Linux 使用 PTY 和用户的 `$SHELL` 登录 shell。
 - SFTP 双栏文件浏览、流式上传与下载；上传覆盖需确认，下载不覆盖已有文件。
+- 一键从 Xshell、WindTerm 导入主机（地址、端口、名称、分组和密钥文件；不导入密码）。
+- 自动更新：启动后向 GitHub Releases 查询新版本，确认后下载，按发布的 `checksums.json` 校验大小与 SHA-256，静默安装并重启；不发送任何个人或主机信息，可在 **设置 → 关于 → 自动检查更新** 关闭。
 - 加密保存密码和密钥口令：Windows DPAPI；macOS Keychain 主密钥 + AES-256-GCM；Linux 本地主密钥 + AES-256-GCM。主机导出不含凭据或信任记录。
 
 ## 安装
