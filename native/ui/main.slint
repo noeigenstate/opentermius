@@ -366,7 +366,7 @@ export component AppWindow inherits Window {
         HorizontalLayout { spacing: 0px;
             Rectangle { width: Theme.sidebar-width; background: @linear-gradient(180deg, Theme.glass-top 0%, Theme.high 100%);
                 VerticalLayout { padding: 10px; spacing: 2px;
-                    NavItem { text: @tr("Hosts"); icon: @image-url("icons/hosts.svg"); active: root.host-section; clicked => { root.section = "hosts"; root.hosts-page = true; root.search = ""; root.select-group(""); root.search-hosts(""); } }
+                    NavItem { text: @tr("Hosts"); icon: @image-url("icons/hosts.svg"); active: root.host-section; clicked => { root.section = "hosts"; root.hosts-page = true; root.search = ""; root.search-hosts(""); } }
                     NavItem { text: @tr("Keychain"); icon: @image-url("icons/keychain.svg"); active: root.hosts-page && root.section == "keychain"; clicked => { root.open-section("keychain"); } }
                     NavItem { text: @tr("Snippets"); icon: @image-url("icons/snippets.svg"); active: root.hosts-page && root.section == "snippets"; clicked => { root.open-section("snippets"); } }
                     NavItem { text: @tr("Known Hosts"); icon: @image-url("icons/known.svg"); active: root.hosts-page && root.section == "known-hosts"; clicked => { root.open-section("known-hosts"); } }

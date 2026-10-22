@@ -260,10 +260,18 @@ impl State {
                     })
                     .collect(),
             ));
+            // The highlighted group pill always reflects the filter actually applied; a group
+            // that no longer exists (renamed or emptied) falls back to "All".
+            let ungrouped = store.data.hosts.iter().any(|p| p.group.is_empty());
+            let filter_exists = self.group_filter.is_empty()
+                || (self.group_filter == hosts::NO_GROUP && ungrouped)
+                || store.data.hosts.iter().any(|p| p.group == self.group_filter);
+            let group_filter = if filter_exists { self.group_filter.clone() } else { String::new() };
+            ui.set_group_filter(group_filter.clone().into());
             let rows: Vec<HostRow> = hosts::visible_hosts(
                 &store.data.hosts,
                 &self.search,
-                &self.group_filter,
+                &group_filter,
                 &self.tag_filter,
                 store.data.hosts_view.sort_mode(),
             )
@@ -610,7 +618,6 @@ impl State {
     }
     fn open_host_sftp(&mut self, id: &str) {
         self.search.clear();
-        self.group_filter.clear();
         self.tag_filter.clear();
         self.hosts();
         if let Some(ui) = self.ui.upgrade() {
@@ -2632,7 +2639,6 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     ui.on_session_sftp(|on| {
         with_state(|s| {
             s.search.clear();
-            s.group_filter.clear();
             s.hosts();
             s.show_sftp(on);
         });
