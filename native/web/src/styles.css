@@ -84,3 +84,43 @@ input { font: inherit; color: inherit; }
 
 .empty { display: grid; place-items: center; height: 60%; color: var(--secondary); }
 .error { margin: 12px 20px 0; padding: 10px 12px; border-radius: 8px; color: #b91c1c; background: rgba(239, 68, 68, 0.1); }
+
+/* --- Settings and recovery ------------------------------------------------ */
+.settings-page { max-width: 850px; padding-top: 24px; }
+.settings-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.settings-heading h1 { margin: 0; font-size: 24px; font-weight: 600; }
+.settings-heading > span, .settings-hint { color: var(--secondary); font-size: 12px; line-height: 1.6; }
+.settings-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.settings-group { margin-bottom: 24px; }
+.settings-group h2 { margin: 0 0 8px 4px; color: var(--secondary); font-size: 13px; font-weight: 600; }
+.settings-card { border: 1px solid var(--card-border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 52px; padding: 12px 18px; }
+.settings-row + .settings-row { border-top: 1px solid var(--card-border); }
+.settings-row > span:first-child { min-width: 0; }
+.settings-row small { display: block; color: var(--secondary); font-size: 12px; margin-top: 4px; }
+.settings-row input[type="number"] { width: 116px; }
+.settings-row input[type="password"], .settings-row select { width: 210px; max-width: 50%; }
+.settings-row input:not([type="checkbox"]), .settings-row select { border: 1px solid var(--card-border); background: var(--card); color: var(--text); border-radius: 7px; padding: 7px 10px; font: inherit; }
+.settings-row input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; flex: none; cursor: pointer; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px; }
+.settings-button { padding: 7px 12px; min-height: 34px; border: 1px solid var(--card-border); border-radius: 7px; background: var(--card); transition: background .12s, border-color .12s; }
+.settings-button:hover { background: var(--hover); border-color: var(--muted); }
+.settings-primary { background: var(--accent); border-color: var(--accent); color: white; }
+.settings-primary:hover { background: var(--accent-hover); }
+.settings-button:disabled, .settings-fields:disabled { opacity: .65; }
+.settings-button:disabled { cursor: default; }
+.settings-button:focus-visible, .settings-row input:focus-visible, .settings-row select:focus-visible, .settings-code:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.settings-card > .settings-hint { margin: 0; padding: 0 18px 14px; }
+.settings-path { overflow-wrap: anywhere; }
+.settings-notice, .settings-error { border-radius: 8px; padding: 10px 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.settings-notice { background: var(--selected); color: var(--text); }
+.settings-error { background: rgba(239, 68, 68, .09); color: #b91c1c; }
+.settings-card > .settings-error { margin: 0 18px 14px; }
+.settings-recovery { width: min(680px, calc(100vw - 48px)); max-height: calc(100vh - 64px); padding: 24px; border: 1px solid var(--card-border); border-radius: 16px; color: var(--text); background: var(--card); box-shadow: 0 24px 80px rgba(20, 25, 40, .25); overflow-y: auto; }
+.settings-recovery::backdrop { background: rgba(25, 30, 45, .25); backdrop-filter: blur(5px); }
+.settings-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-dialog-head h2 { margin: 0; font-size: 20px; }
+.settings-recovery .settings-actions { padding-left: 0; padding-right: 0; }
+.settings-recovery .settings-row { padding-left: 0; padding-right: 0; }
+.settings-code-label { display: block; padding-top: 16px; }
+.settings-code { width: 100%; height: 132px; display: block; resize: vertical; margin: 8px 0 12px; padding: 10px; font: 12px/1.6 Consolas, monospace; color: var(--text); background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; overflow-wrap: anywhere; }
