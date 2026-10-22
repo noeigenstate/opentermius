@@ -1,16 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t } from "../i18n";
 import { Icon } from "../icons";
+import { Tabs, type TabsProps } from "./Tabs";
 
 /** Frameless window chrome: the empty area drags the window, double-click maximizes. */
-export function TitleBar({ title }: { title: string }) {
+export function TitleBar({ tabs }: { tabs: TabsProps }) {
   const win = getCurrentWindow();
   return (
-    <header className="titlebar" data-tauri-drag-region>
-      <div className="tab tab-active">
-        <img src="/logo.svg" alt="" width={18} height={18} />
-        <span>{t(title)}</span>
-      </div>
+    <header className="titlebar">
+      <Tabs {...tabs} />
       <div className="titlebar-spacer" data-tauri-drag-region />
       <button className="chrome" onClick={() => win.minimize()} aria-label={t("Minimize")}><Icon name="minimize" /></button>
       <button className="chrome" onClick={() => win.toggleMaximize()} aria-label={t("Maximize")}><Icon name="maximize" size={14} /></button>

@@ -8,13 +8,13 @@ import { UsageRing } from "../components/UsageRing";
 const NO_GROUP = "\u0001";
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
-function HostCard({ host, usage, online, selected, onSelect }: { host: Host; usage: Usage; online: boolean; selected: boolean; onSelect: () => void }) {
+function HostCard({ host, usage, online, selected, onSelect, onConnect }: { host: Host; usage: Usage; online: boolean; selected: boolean; onSelect: () => void; onConnect: () => void }) {
   return (
-    <article className={`card${selected ? " card-selected" : ""}`} onClick={onSelect}>
+    <article className={`card${selected ? " card-selected" : ""}`} onClick={onSelect} onDoubleClick={onConnect}>
       <header className="card-head">
         <span className={`dot${online ? " dot-online" : ""}`} />
         <h3 title={`${host.username}@${host.host}:${host.port}`}>{host.name}</h3>
-        <button className="icon-button" aria-label={t("Connect")}><Icon name="terminal" /></button>
+        <button className="icon-button" aria-label={t("Connect")} onClick={(event) => { event.stopPropagation(); onConnect(); }} onDoubleClick={(event) => event.stopPropagation()}><Icon name="terminal" /></button>
         <button className="icon-button" aria-label={t("More")}><Icon name="more" /></button>
       </header>
       <div className="card-rings">
@@ -26,7 +26,12 @@ function HostCard({ host, usage, online, selected, onSelect }: { host: Host; usa
   );
 }
 
-export function HostsPage({ hosts }: { hosts: Host[] }) {
+export function HostsPage({ hosts, onConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: {
+  hosts: Host[];
+  onConnect: (hostId: string) => void;
+  usageByHost?: Record<string, Usage>;
+  onlineHostIds?: ReadonlySet<string>;
+}) {
   const [group, setGroup] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState("");
@@ -64,7 +69,7 @@ export function HostsPage({ hosts }: { hosts: Host[] }) {
       ) : (
         <div className="grid">
           {visible.map((h) => (
-            <HostCard key={h.id} host={h} usage={UNKNOWN} online={false} selected={selected === h.id} onSelect={() => setSelected(h.id)} />
+            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} onSelect={() => setSelected(h.id)} onConnect={() => onConnect(h.id)} />
           ))}
         </div>
       )}
