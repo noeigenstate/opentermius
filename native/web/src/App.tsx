@@ -1,7 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { listHosts, type Host, type Usage } from "./api/hosts";
 import { closeSession, connectHost, sessionInput, duplicateSession, forgetSession, latestSessionStatus, listSessions, openLocalTerminal, reconnectSession, startSessionEvents, subscribeSessions, type SessionInfo, type SessionPrompt } from "./api/sessions";
-import { t } from "./i18n";
+import { t, setLanguage } from "./i18n";
+import { getSettings, saveSettings, onSettingsChanged, type Settings } from "./api/settings";
+import { useUpdates } from "./api/updates";
+import { SettingsPage } from "./pages/Settings";
 import { Sidebar, type Section } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { HostsPage } from "./pages/Hosts";
@@ -31,6 +34,34 @@ export default function App() {
   const [prompts, setPrompts] = useState<SessionPrompt[]>([]);
   const [usageByHost, setUsageByHost] = useState<Record<string, Usage>>({});
   const pending = useRef(new Set<string>());
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const updates = useUpdates(settings?.autoUpdate ?? false);
+
+  function applySettings(next: Settings) {
+    setLanguage(next.language);
+    setSettings(next);
+  }
+
+  async function changeSettings(next: Settings) {
+    setSaving(true);
+    try { applySettings(await saveSettings(next)); }
+    finally { setSaving(false); }
+  }
+
+  /** After an import or restore: hosts and preferences may both have changed. */
+  async function reloadData() {
+    const [nextHosts, nextSettings] = await Promise.all([listHosts(), getSettings()]);
+    setHosts(nextHosts);
+    applySettings(nextSettings);
+  }
+
+  useEffect(() => {
+    let active = true;
+    const listening = onSettingsChanged((next) => { if (active) applySettings(next); });
+    listening.then(() => getSettings()).then((next) => { if (active) applySettings(next); }).catch((e) => { if (active) setError(String(e)); });
+    return () => { active = false; void listening.then((unlisten) => unlisten()).catch(() => {}); };
+  }, []);
 
   function removeSession(sessionId: string) {
     forgetSession(sessionId);
@@ -136,6 +167,7 @@ export default function App() {
               : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
               : section === "known-hosts" ? <KnownHostsPage />
               : section === "logs" ? <LogsPage onConnect={connect} />
+              : section === "settings" ? <SettingsPage settings={settings} saving={saving} onChange={changeSettings} onDataChanged={reloadData} updates={updates} />
               : <div className="empty">{t(titles[section])}</div>}
           </div>
           <Suspense fallback={<div className="empty">{t("Loading terminal…")}</div>}>
