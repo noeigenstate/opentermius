@@ -1,5 +1,5 @@
-/** Chinese UI strings, keyed by the English source text passed to `t()`. */
-export const zh: Record<string, string> = {
+/** Chinese strings for the app shell and Hosts page (one file per feature in this folder). */
+export default {
   Hosts: "主机",
   Keychain: "密钥管理",
   Snippets: "代码片段",
@@ -20,4 +20,4 @@ export const zh: Record<string, string> = {
   Minimize: "最小化",
   Maximize: "最大化",
   Close: "关闭",
-};
+} satisfies Record<string, string>;

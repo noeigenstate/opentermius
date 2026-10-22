@@ -2823,6 +2823,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tokio",
  "window-vibrancy 0.6.0",
 ]
 

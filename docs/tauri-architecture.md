@@ -13,7 +13,7 @@ native/
     src/api/<feature>.ts   typed `invoke`/`listen` wrappers, one file per feature
     src/pages/<Page>.tsx   one page per sidebar section
     src/components/        shared UI (TitleBar, Sidebar, UsageRing, Dialog, …)
-    src/i18n.ts            `t("English text")`; Chinese strings in src/i18n/zh.ts
+    src/i18n.ts            `t("English text")`; Chinese strings in src/i18n/zh/<feature>.ts
     src/styles.css         glass theme tokens (CSS variables) and shared classes
 ```
 
@@ -41,7 +41,7 @@ native/
 - **Terminal**: xterm.js renders and emulates; the backend only streams bytes, resizes the
   PTY (`session_resize`) and forwards input (`session_input`).
 - **Strings**: every user-visible string in TS goes through `t("…")` with a Chinese entry
-  in `src/i18n/zh.ts`; Rust messages go through `opentermius::i18n` (catalog tests).
+  in your feature's own `src/i18n/zh/<feature>.ts` (default-exported map); Rust messages go through `opentermius::i18n` (catalog tests).
 - **Style**: reuse the CSS variables in `styles.css`; cards solid white, chrome
   translucent (`.glass`); no new UI libraries without need.
 

@@ -1,4 +1,8 @@
-import { zh } from "./i18n/zh";
+// Every file in i18n/zh exports a default English -> Chinese map; one file per feature.
+const zh: Record<string, string> = Object.assign(
+  {},
+  ...Object.values(import.meta.glob<Record<string, string>>("./i18n/zh/*.ts", { eager: true, import: "default" })),
+);
 
 /** English source text is the key; Chinese comes from `zh` when the UI language is Chinese. */
 let chinese = navigator.language.toLowerCase().startsWith("zh");

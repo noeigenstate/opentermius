@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod hosts;
+mod sessions;
 mod state;
 
 use state::AppState;
