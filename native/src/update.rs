@@ -1,7 +1,7 @@
 //! Update check against the project's GitHub Releases. The only network requests are the
 //! release metadata, `checksums.json` and the installer; nothing about the user is sent.
 //! An installer is used only when its size and SHA-256 match `checksums.json`.
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use serde_json::Value;
 use std::{
     io::Read,
@@ -151,7 +151,7 @@ pub fn launch_installer(installer: &Path, install_dir: &Path, work_dir: &Path) -
 pub fn apply(args: &[String]) -> Result<()> {
     use std::os::windows::process::CommandExt;
     use windows_sys::Win32::{Foundation::CloseHandle, System::Threading::*};
-    let [installer, install_dir, pid] = args else { bail!("{}", crate::i18n::t("Invalid update arguments")) };
+    let [installer, install_dir, pid] = args else { anyhow::bail!("{}", crate::i18n::t("Invalid update arguments")) };
     let pid: u32 = pid.parse()?;
     unsafe {
         let handle = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);

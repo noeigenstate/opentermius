@@ -78,7 +78,8 @@ fn expand_home(path: &str, home: &Path) -> Option<PathBuf> {
         return None;
     }
     match path.strip_prefix('~') {
-        Some(rest) => Some(home.join(rest.trim_start_matches(['/', '\\']))),
+        // WindTerm writes `~\.ssh\key`; split on both separators so this works everywhere.
+        Some(rest) => Some(rest.split(['/', '\\']).filter(|part| !part.is_empty()).fold(home.to_path_buf(), |path, part| path.join(part))),
         None => Some(PathBuf::from(path)),
     }
 }
@@ -137,6 +138,7 @@ fn profiles_root(install: &Path) -> Option<PathBuf> {
 /// Likely WindTerm locations: `~/.wind` and WindTerm folders at the top of each drive or
 /// in Program Files. Only folder names are listed; no session is read here.
 pub fn default_roots(home: &Path) -> Vec<PathBuf> {
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut roots = vec![home.to_path_buf()];
     #[cfg(windows)]
     {
