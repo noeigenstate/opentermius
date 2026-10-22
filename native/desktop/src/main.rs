@@ -3,6 +3,7 @@
 
 mod hosts;
 mod sessions;
+mod sftp;
 mod state;
 
 use state::AppState;
@@ -28,7 +29,11 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![hosts::list_hosts])
+        .invoke_handler(tauri::generate_handler![hosts::list_hosts,
+            sftp::local_home, sftp::local_list, sftp::local_mkdir, sftp::local_rename, sftp::local_delete,
+            sftp::sftp_list, sftp::sftp_upload, sftp::sftp_download, sftp::sftp_mkdir,
+            sftp::sftp_rename, sftp::sftp_delete, sftp::sftp_confirm_delete,
+            sftp::sftp_confirm_overwrite, sftp::sftp_cancel_transfer])
         .run(tauri::generate_context!())
         .expect("OpenTermius failed to start");
 }
