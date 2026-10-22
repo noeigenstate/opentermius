@@ -20,4 +20,5 @@ export default {
   Minimize: "最小化",
   Maximize: "最大化",
   Close: "关闭",
+  "Open a terminal first, then run the snippet.": "请先打开一个终端，再运行代码片段。",
 } satisfies Record<string, string>;

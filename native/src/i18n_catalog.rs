@@ -93,6 +93,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
         "Cannot export to the current configuration file",
         "不能导出到当前配置文件",
     ),
+    ("Cannot generate key", "无法生成密钥"),
     ("Cannot generate secure random bytes", "无法生成安全随机数"),
     (
         "Cannot initialize window or rendering context",

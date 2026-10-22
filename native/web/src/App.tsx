@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { listHosts, type Host, type Usage } from "./api/hosts";
-import { closeSession, connectHost, duplicateSession, forgetSession, latestSessionStatus, listSessions, openLocalTerminal, reconnectSession, startSessionEvents, subscribeSessions, type SessionInfo, type SessionPrompt } from "./api/sessions";
+import { closeSession, connectHost, sessionInput, duplicateSession, forgetSession, latestSessionStatus, listSessions, openLocalTerminal, reconnectSession, startSessionEvents, subscribeSessions, type SessionInfo, type SessionPrompt } from "./api/sessions";
 import { t } from "./i18n";
 import { Sidebar, type Section } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
@@ -8,6 +8,10 @@ import { HostsPage } from "./pages/Hosts";
 import { PromptDialog } from "./components/PromptDialog";
 
 const SessionPage = lazy(() => import("./pages/Session").then((module) => ({ default: module.SessionPage })));
+import { KeychainPage } from "./pages/Keychain";
+import { SnippetsPage } from "./pages/Snippets";
+import { KnownHostsPage } from "./pages/KnownHosts";
+import { LogsPage } from "./pages/Logs";
 
 const titles: Record<Section, string> = {
   hosts: "Hosts",
@@ -57,6 +61,18 @@ export default function App() {
     void run(sessionId, async () => {
       await reconnectSession(sessionId);
       setActiveSessionId(sessionId);
+    });
+  };
+  /** Types a snippet into the active terminal (or the most recent one) and shows it. */
+  const runSnippet = (script: string) => {
+    const target = activeSessionId ?? sessions.at(-1)?.sessionId;
+    if (!target) {
+      setError(t("Open a terminal first, then run the snippet."));
+      return;
+    }
+    void run(`snippet:${target}`, async () => {
+      await sessionInput(target, script);
+      setActiveSessionId(target);
     });
   };
   const connect = (hostId: string) => {
@@ -115,7 +131,12 @@ export default function App() {
         <main className={`content${activeSessionId ? " session-content" : ""}`}>
           {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
           <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
-            {section === "hosts" ? <HostsPage hosts={hosts} onHostsChange={setHosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} /> : <div className="empty">{t(titles[section])}</div>}
+            {section === "hosts" ? <HostsPage hosts={hosts} onHostsChange={setHosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
+              : section === "keychain" ? <KeychainPage />
+              : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
+              : section === "known-hosts" ? <KnownHostsPage />
+              : section === "logs" ? <LogsPage onConnect={connect} />
+              : <div className="empty">{t(titles[section])}</div>}
           </div>
           <Suspense fallback={<div className="empty">{t("Loading terminal…")}</div>}>
             {sessions.map((session) => <SessionPage key={session.sessionId} session={session} visible={activeSessionId === session.sessionId}
