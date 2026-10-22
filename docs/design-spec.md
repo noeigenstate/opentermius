@@ -18,46 +18,48 @@ Existing names are kept. Everything is declared in `Theme` (section 6.1). `Theme
 
 | Theme property | Light | Dark | Usage |
 |---|---|---|---|
-| `base` | `#edf1f2` | `#1b1e2e` | Page/content background, panel backgrounds behind cards |
-| `lowest` | `#282b3d` | `#0f111c` | Title bar background |
-| `high` | `#f7f9fa` | `#22263a` | Sidebar, page header, toolbar, table header, dialog body |
-| `highest` | `#ffffff` | `#2a2e44` | Cards, host cards, popups, menu, table rows container |
-| `border` | `#d5dde0` | `#3a3f58` | Input borders, popup borders, secondary button hover |
-| `divider` (new) | `#798c9426` | `#ffffff1a` | 1px separators (replaces hard-coded `#798c941a` / `#d5dde0` lines) |
-| `secondary` | `#798c94` | `#8d97b3` | Captions, helper text, placeholder-adjacent text, inactive icons |
-| `muted` (new) | `#a4b3ba` | `#5d6483` | Placeholder text, disabled text/icons |
-| `text` | `#141729` | `#e8eaf3` | Primary text, icons |
-| `accent` | `#2091f6` | `#3b9dff` | Primary buttons, focus border, selected border, links |
-| `accent-hover` (new) | `#58adf8` | `#6ab4ff` | Primary button hover |
-| `accent-pressed` (new) | `#1479d6` | `#2a85e6` | Primary button pressed |
-| `accent-soft` (new) | `#2091f61f` | `#3b9dff33` | Selected row/chip tint, text selection base |
+| `base` | `#e8ebf0` | `#171a24` | Page/content background, panel backgrounds behind cards |
+| `lowest` | `#e1e5eb` | `#11131b` | Title bar background |
+| `high` | `#f1f3f6` | `#1c2030` | Sidebar, page header, toolbar, table header, dialog body |
+| `highest` | `#ffffff` | `#242a3b` | Cards, host cards, popups, menu, table rows container |
+| `border` | `#d9dee5` | `#2f3547` | Input borders, popup borders, secondary button hover |
+| `divider` (new) | `#1e293b14` | `#ffffff14` | 1px separators (replaces hard-coded `#798c941a` / `#d5dde0` lines) |
+| `secondary` | `#6b7280` | `#9097ab` | Captions, helper text, placeholder-adjacent text, inactive icons |
+| `muted` (new) | `#a3aab5` | `#5d6479` | Placeholder text, disabled text/icons |
+| `text` | `#1f2430` | `#e7e9f0` | Primary text, icons |
+| `accent` | `#4f46e5` | `#818cf8` | Primary buttons, focus border, selected border, links |
+| `accent-hover` (new) | `#6366f1` | `#a5b4fc` | Primary button hover |
+| `accent-pressed` (new) | `#4338ca` | `#6366f1` | Primary button pressed |
+| `accent-soft` (new) | `#4f46e51f` | `#818cf833` | Selected row/chip tint, text selection base |
 | `on-accent` (new) | `#ffffff` | `#ffffff` | Text/icons on accent or danger fills |
-| `danger` (new) | `#f25e61` | `#ff6b6e` | Destructive text/fill, error status text |
-| `danger-hover` (new) | `#e04649` | `#ff8386` | Danger fill hover |
-| `danger-soft` (new) | `#f25e611f` | `#ff6b6e2e` | Danger badge background, danger flat hover |
-| `success` (new) | `#21b568` | `#2dce7a` | Connected dot, success badge text |
-| `success-soft` (new) | `#21b5681f` | `#2dce7a2e` | Success badge background |
-| `warning` (new) | `#e8920c` | `#f7b84a` | Warning badge text/dot |
-| `warning-soft` (new) | `#e8920c1f` | `#f7b84a2e` | Warning badge background |
-| `hover` (new) | `#798c9414` | `#ffffff0f` | Hover fill on transparent items (nav, rows, flat buttons) |
-| `pressed` (new) | `#798c9426` | `#ffffff1f` | Pressed fill |
-| `selected` (new) | `#798c9426` | `#ffffff1f` | Active nav item, active list row |
-| `control` (new) | `#798c9426` | `#ffffff1a` | Secondary button fill, segmented track |
-| `control-hover` (new) | `#d5dde0` | `#3a3f58` | Secondary button hover (equals old behaviour) |
-| `field-bg` (new) | `#ffffff` | `#1b1e2e` | Input fill when NOT inside a card (dialogs, settings rows). Inside cards inputs stay transparent |
-| `search-bg` (new) | `#e6ebed` | `#1b1e2e` | Header search field fill |
-| `focus-ring` (new) | `#2091f6` | `#3b9dff` | Focus border (1px) of Input/Select/TextArea |
+| `danger` (new) | `#ef4444` | `#f87171` | Destructive text/fill, error status text |
+| `danger-hover` (new) | `#dc2626` | `#fca5a5` | Danger fill hover |
+| `danger-soft` (new) | `#ef44441f` | `#f871712e` | Danger badge background, danger flat hover |
+| `success` (new) | `#22c55e` | `#34d399` | Connected dot, success badge text |
+| `success-soft` (new) | `#22c55e1f` | `#34d3992e` | Success badge background |
+| `warning` (new) | `#f59e0b` | `#fbbf24` | Warning badge text/dot |
+| `warning-soft` (new) | `#f59e0b1f` | `#fbbf242e` | Warning badge background |
+| `hover` (new) | `#1e293b0d` | `#ffffff0f` | Hover fill on transparent items (nav, rows, flat buttons) |
+| `pressed` (new) | `#1e293b17` | `#ffffff1f` | Pressed fill |
+| `selected` (new) | `#1e293b14` | `#ffffff1a` | Active nav item, active list row |
+| `control` (new) | `#1e293b12` | `#ffffff1a` | Secondary button fill, segmented track |
+| `control-hover` (new) | `#d9dee5` | `#2f3547` | Secondary button hover (equals old behaviour) |
+| `field-bg` (new) | `#ffffff` | `#171a24` | Input fill when NOT inside a card (dialogs, settings rows). Inside cards inputs stay transparent |
+| `search-bg` (new) | `#ffffffb3` | `#171a24` | Header search field fill |
+| `focus-ring` (new) | `#6366f1` | `#818cf8` | Focus border (1px) of Input/Select/TextArea |
 | `scrim` (new) | `#14172999` | `#000000a6` | Modal backdrop |
-| `tab-bg` (new) | `#32364a` | `#1c1f30` | Title-bar inactive tab |
-| `tab-hover` (new) | `#3b3f55` | `#242842` | Title-bar tab hover |
-| `tab-active` (new) | `#454a63` | `#2f3450` | Title-bar active tab |
-| `titlebar-fg` (new) | `#8d91a5` | `#8d91a5` | Title-bar icons (menu, +, window buttons) |
-| `tile-host` (new) | `#00527c` | `#0b6aa0` | Host / group / key icon tile fill (white glyph). Replaces `#00527c` and `#0f5774` (unify!) |
+| `tab-bg` (new) | `#ffffff66` | `#1c2030` | Title-bar inactive tab |
+| `tab-hover` (new) | `#ffffffa6` | `#252a3d` | Title-bar tab hover |
+| `tab-active` (new) | `#ffffff` | `#2f3550` | Title-bar active tab |
+| `titlebar-fg` (new) | `#6b7280` | `#8d93a8` | Title-bar icons (menu, +, window buttons) |
+| `tile-host` (new) | `#4f46e5` | `#4f46e5` | Host / group / key icon tile fill (white glyph). Replaces `#00527c` and `#0f5774` (unify!) |
 | `folder` (new) | `#66ccef` | `#66ccef` | Folder glyph |
 | `terminal-bg` (new) | `#141729` | `#0f111c` | Terminal area background |
 | `terminal-fg` (new) | `#e6e9f2` | `#e6e9f2` | Default terminal foreground (Rust may override per cell) |
 | `terminal-selection` (new) | `#2091f640` | `#3b9dff40` | Terminal selection |
 | `terminal-cursor` (new) | `#ffffff80` | `#ffffff80` | Terminal cursor block |
+
+OpenTermius ships a single light "glass" theme (`Theme.dark` is always false since 0.4.0); the dark column is kept so the palette test still covers every token.
 
 Rules:
 - Text on `high`/`highest`/`base` is `text` or `secondary` only. Never use `muted` for information the user must read (only placeholders/disabled).

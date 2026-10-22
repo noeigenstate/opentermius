@@ -34,6 +34,17 @@ pub fn install(ui: &AppWindow) {
 
     ui.global::<SettingsBridge>()
         .on_open_config_folder(open_config_folder);
+
+    // Importers and export live in Settings > Data and reuse the window's handlers.
+    let bridge = ui.global::<SettingsBridge>();
+    let weak = ui.as_weak();
+    bridge.on_import_hosts(move || if let Some(ui) = weak.upgrade() { ui.invoke_import_hosts() });
+    let weak = ui.as_weak();
+    bridge.on_import_xshell(move || if let Some(ui) = weak.upgrade() { ui.invoke_import_xshell() });
+    let weak = ui.as_weak();
+    bridge.on_import_windterm(move || if let Some(ui) = weak.upgrade() { ui.invoke_import_windterm() });
+    let weak = ui.as_weak();
+    bridge.on_export_hosts(move || if let Some(ui) = weak.upgrade() { ui.invoke_export_hosts() });
 }
 
 fn current() -> Settings {
@@ -124,8 +135,8 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     bridge.set_appearance(settings.appearance.index());
     bridge.set_language(settings.language.index());
     bridge.set_gpu_rendering(settings.gpu_rendering);
-    ui.global::<Theme>()
-        .set_dark(settings.appearance.is_dark(settings::system_dark()));
+    // One light "glass" theme; a dark preference saved by older versions is ignored.
+    ui.global::<Theme>().set_dark(false);
     bridge.set_keepalive_seconds(settings.keepalive_seconds.min(i32::MAX as u32) as i32);
     bridge.set_connection_timeout_seconds(
         settings.connection_timeout_seconds.min(i32::MAX as u32) as i32
@@ -254,28 +265,26 @@ mod tests {
         install(&ui);
         ui.show().unwrap();
         assert!(
-            ui.global::<Theme>().get_dark(),
-            "saved appearance applies at startup"
+            !ui.global::<Theme>().get_dark(),
+            "the single light theme ignores a saved dark preference"
         );
 
         let bridge = ui.global::<SettingsBridge>();
         assert!(!bridge.get_gpu_rendering());
         ui.invoke_open_section("settings".into());
-        // Settings uses main's 720px column; click the GPU switch in Appearance.
-        click(&ui, 887., 293.);
+        // Settings uses main's 720px column; click the GPU switch in Appearance
+        // (the row right below Language now that the theme choice is gone).
+        click(&ui, 887., 241.);
         assert!(current().gpu_rendering);
         assert!(opentermius::store::Store::open(path.clone()).unwrap().data.settings.gpu_rendering);
-        click(&ui, 887., 293.);
+        click(&ui, 887., 241.);
         assert!(!current().gpu_rendering);
-        click(&ui, 887., 293.);
+        click(&ui, 887., 241.);
         assert!(current().gpu_rendering);
         for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
             bridge.set_appearance(appearance.index());
             bridge.invoke_apply();
-            assert_eq!(
-                ui.global::<Theme>().get_dark(),
-                appearance.is_dark(settings::system_dark())
-            );
+            assert!(!ui.global::<Theme>().get_dark());
             assert_eq!(
                 opentermius::store::Store::open(path.clone())
                     .unwrap()
@@ -345,13 +354,6 @@ mod tests {
         // Both visible Settings entries must navigate away from a terminal.
         ui.invoke_open_section("hosts".into());
         ui.invoke_activate_session("test".into());
-        ui.set_menu_open(true);
-        // Settings is the last menu item (after the three importers, export and backup).
-        click(&ui, 70., 263.);
-        assert!(!ui.get_menu_open());
-        assert_eq!(ui.get_section(), "settings");
-        ui.invoke_open_section("hosts".into());
-        ui.invoke_activate_session("test".into());
         click(&ui, 70., 744.);
         assert_eq!(ui.get_section(), "settings");
 
@@ -383,7 +385,7 @@ mod tests {
             .unwrap();
         });
         reload(&ui);
-        assert!(ui.global::<Theme>().get_dark());
+        assert!(!ui.global::<Theme>().get_dark(), "reloaded preferences keep the single light theme");
         assert_eq!(bridge.get_terminal_font_size(), 18);
         assert_eq!(current().font_size, 18);
 

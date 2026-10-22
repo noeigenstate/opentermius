@@ -2575,3 +2575,36 @@ msgstr "已恢复 {} 台主机、{} 个密钥、{} 条片段、{} 个密钥文�
 
 msgid "Connected, but cannot save the credentials: {error}"
 msgstr "已连接，但无法保存凭据：{error}"
+
+msgid "Search, or ssh user@host"
+msgstr "搜索，或输入 ssh user@host"
+
+msgid "CPU"
+msgstr "CPU"
+
+msgid "MEM"
+msgstr "内存"
+
+msgid "DISK"
+msgstr "磁盘"
+
+msgid "Import…"
+msgstr "导入…"
+
+msgid "Export…"
+msgstr "导出…"
+
+msgid "From an OpenTermius host JSON export"
+msgstr "从 OpenTermius 主机 JSON 导出文件导入"
+
+msgid "Sessions folder; passwords are not imported"
+msgstr "读取 Sessions 文件夹；不导入密码"
+
+msgid "Finds WindTerm automatically; passwords are not imported"
+msgstr "自动查找 WindTerm；不导入密码"
+
+msgid "JSON without saved credentials"
+msgstr "导出为 JSON，不含已保存的凭据"
+
+msgid "Server output is too large"
+msgstr "服务器输出过大"

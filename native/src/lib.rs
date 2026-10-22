@@ -6,6 +6,7 @@ pub mod keychain;
 pub mod local;
 pub mod logs;
 pub mod recovery;
+pub mod server_stats;
 pub mod settings;
 pub mod snippets;
 pub mod ssh;

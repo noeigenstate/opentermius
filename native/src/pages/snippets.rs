@@ -261,7 +261,8 @@ mod tests {
         slint::platform::update_timers_and_animations();
         let page = ui.window().take_snapshot().unwrap();
         let page_pixel = page.as_slice()[650 * 1240 + 1000];
-        assert_eq!((page_pixel.r, page_pixel.g, page_pixel.b), (237, 241, 242));
+        // The glass theme's page background (Theme.base, #e8ebf0).
+        assert_eq!((page_pixel.r, page_pixel.g, page_pixel.b), (232, 235, 240));
 
         if let Some(output) = std::env::var_os("OPENTERMIUS_SNIPPETS_SCREENSHOTS") {
             let bridge = ui.global::<SnippetsBridge>();

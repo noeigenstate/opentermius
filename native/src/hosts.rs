@@ -156,6 +156,9 @@ pub fn matches_search(profile: &Profile, query_lower: &str) -> bool {
 
 /// Hosts visible for the current search, group and tag filters, sorted by the
 /// chosen order. The returned references preserve the original profile data.
+/// Group filter value selecting hosts that are not in any group.
+pub const NO_GROUP: &str = "\u{1}";
+
 pub fn visible_hosts<'a>(
     hosts: &'a [Profile],
     search: &str,
@@ -166,7 +169,7 @@ pub fn visible_hosts<'a>(
     let query = search.trim().trim_start_matches('#').to_lowercase();
     let mut visible: Vec<&Profile> = hosts
         .iter()
-        .filter(|profile| group.is_empty() || profile.group == group)
+        .filter(|profile| group.is_empty() || profile.group == group || (group == NO_GROUP && profile.group.is_empty()))
         .filter(|profile| has_tag(profile, tag))
         .filter(|profile| matches_search(profile, &query))
         .collect();

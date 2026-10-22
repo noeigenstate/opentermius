@@ -360,6 +360,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("Import file must not exceed 5 MB", "导入文件不能超过 5 MB"),
     ("Import from Xshell", "从 Xshell 导入"),
     ("Import from WindTerm", "从 WindTerm 导入"),
+    ("Server output is too large", "服务器输出过大"),
     ("Connected, but cannot save the credentials: {error}", "已连接，但无法保存凭据：{error}"),
     ("Invalid release information", "发布信息无效"),
     ("The release has no Windows installer", "该版本没有 Windows 安装程序"),

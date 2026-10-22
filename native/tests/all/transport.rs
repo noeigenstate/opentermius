@@ -30,6 +30,7 @@ struct State {
     disconnected: Arc<AtomicUsize>,
     terminal_queries: Arc<AtomicUsize>,
     received_responses: Arc<Mutex<Vec<u8>>>,
+    stats_calls: Arc<AtomicUsize>,
 }
 #[derive(Clone)]
 struct Server(State);
@@ -177,6 +178,31 @@ impl server::Handler for Peer {
                 s.data(id, data.to_vec())?;
             }
         }
+        Ok(())
+    }
+    // Answers the usage poller like a small Linux server whose CPU counters advance.
+    async fn exec_request(
+        &mut self,
+        id: ChannelId,
+        command: &[u8],
+        s: &mut server::Session,
+    ) -> Result<(), Self::Error> {
+        if command != opentermius::server_stats::COMMAND.as_bytes() {
+            s.channel_failure(id)?;
+            return Ok(());
+        }
+        let call = self.state.stats_calls.fetch_add(1, Ordering::SeqCst) as u64;
+        s.channel_success(id)?;
+        let output = format!(
+            "cpu  {} 0 {} {} 0 0 0 0 0 0\nMemTotal: 4000000 kB\nMemAvailable: 1000000 kB\n/dev/sda1 100 42 58 42% /\n",
+            100 + call * 30,
+            100 + call * 30,
+            800 + call * 40
+        );
+        s.data(id, output.into_bytes())?;
+        s.exit_status_request(id, 0)?;
+        s.eof(id)?;
+        s.close(id)?;
         Ok(())
     }
     async fn subsystem_request(
@@ -391,6 +417,38 @@ async fn connected(rx: &mut mpsc::Receiver<Event>) {
             _ => {}
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn connected_sessions_report_server_usage() {
+    let (port, key, state, server) = fixture(false).await;
+    let (tx, mut rx) = mpsc::channel(128);
+    let _session = ssh::spawn(
+        &tokio::runtime::Handle::current(),
+        "test".into(),
+        profile(port),
+        "test-password".into(),
+        Some(key),
+        tx,
+    );
+    connected(&mut rx).await;
+    // The first reading has memory and disk; CPU needs a second sample.
+    let stats = timeout(Duration::from_secs(10), async {
+        loop {
+            if let Event::Stats { stats, .. } = next(&mut rx).await {
+                if stats.cpu.is_some() {
+                    break stats;
+                }
+                assert_eq!((stats.memory, stats.disk), (Some(75), Some(42)));
+            }
+        }
+    })
+    .await
+    .expect("no usage reading with CPU");
+    // Each poll adds 60 busy of 100 total ticks.
+    assert_eq!((stats.cpu, stats.memory, stats.disk), (Some(60), Some(75), Some(42)));
+    assert!(state.stats_calls.load(Ordering::SeqCst) >= 2);
+    server.abort();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

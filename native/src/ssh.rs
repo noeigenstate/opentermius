@@ -136,6 +136,11 @@ pub struct TreeSummary {
     pub bytes: u64,
 }
 pub enum Event {
+    /// Live CPU/memory/disk usage of a connected server.
+    Stats {
+        id: String,
+        stats: crate::server_stats::Stats,
+    },
     Status {
         id: String,
         connected: bool,
@@ -500,6 +505,54 @@ async fn connect(
 }
 
 
+/// Reads server usage every few seconds over a short exec channel on the same connection.
+/// Gives up after repeated failures or when the server reports nothing (not Linux).
+async fn poll_stats(ssh: Arc<client::Handle<Client>>, events: mpsc::Sender<Event>, id: String) {
+    let mut previous = None;
+    let mut failures = 0;
+    let mut empty = 0;
+    // A second sample one second later gives the first CPU reading quickly.
+    let mut delay = Duration::from_millis(300);
+    loop {
+        tokio::time::sleep(delay).await;
+        delay = if previous.is_some() { Duration::from_secs(5) } else { Duration::from_secs(1) };
+        match timeout(Duration::from_secs(10), exec_output(&ssh, crate::server_stats::COMMAND)).await {
+            Ok(Ok(output)) => {
+                failures = 0;
+                let (stats, sample) = crate::server_stats::parse(&output, previous);
+                previous = sample;
+                empty = if stats.is_empty() { empty + 1 } else { 0 };
+                if empty >= 2 || events.send(Event::Stats { id: id.clone(), stats }).await.is_err() {
+                    return;
+                }
+            }
+            _ => {
+                failures += 1;
+                if failures >= 3 {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+async fn exec_output(ssh: &client::Handle<Client>, command: &str) -> Result<String> {
+    let mut channel = ssh.channel_open_session().await?;
+    channel.exec(true, command).await?;
+    let mut output = Vec::new();
+    while let Some(message) = channel.wait().await {
+        match message {
+            ChannelMsg::Data { data } => {
+                output.extend_from_slice(&data);
+                ensure!(output.len() <= 64 * 1024, "{}", crate::i18n::t("Server output is too large"));
+            }
+            ChannelMsg::Close => break,
+            _ => {}
+        }
+    }
+    Ok(String::from_utf8_lossy(&output).into_owned())
+}
+
 // Cancelling the owning session also cancels the SFTP task and closes its channels.
 struct AbortOnDrop(JoinHandle<()>);
 impl Drop for AbortOnDrop {
@@ -580,6 +633,8 @@ async fn run(
     let mut terminal = Terminal::with_scrollback(rows, cols, options.scrollback_lines);
     let mut stage = 0;
     let mut connected = false;
+    // Stops with the session: dropping it aborts the poller.
+    let mut _stats_poller: Option<AbortOnDrop> = None;
     let mut setup_timeout = Box::pin(tokio::time::sleep(Duration::from_secs(30)));
     let mut dirty = true;
     let mut frame = interval(Duration::from_millis(34));
@@ -635,7 +690,8 @@ async fn run(
                 },
                 Some(ChannelMsg::Success) if !connected=>{
                     if stage==0 {stage=1;pending_control=Some(Write::Shell);setup_timeout.as_mut().reset(tokio::time::Instant::now()+Duration::from_secs(30));}
-                    else {connected=true;events.send(Event::Status{id:id.into(),connected:true,message:crate::i18n::t("Connected").into(),error:false}).await.context(crate::i18n::t("Window closed"))?;}
+                    else {connected=true;events.send(Event::Status{id:id.into(),connected:true,message:crate::i18n::t("Connected").into(),error:false}).await.context(crate::i18n::t("Window closed"))?;
+                        _stats_poller=Some(AbortOnDrop(tokio::spawn(poll_stats(ssh.clone(),events.clone(),id.to_string()))));}
                 },
                 None|Some(ChannelMsg::Close)=>break,
                 Some(ChannelMsg::Failure)=>bail!("{}", crate::i18n::t("Server rejected terminal request")),

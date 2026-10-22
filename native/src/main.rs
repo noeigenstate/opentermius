@@ -86,6 +86,8 @@ struct State {
     pending_sftp: Option<String>,
     /// Password/passphrase typed at the connect prompt, saved to the host once it connects.
     typed_secrets: BTreeMap<String, zeroize::Zeroizing<String>>,
+    /// Latest usage reported by each connected session.
+    server_stats: BTreeMap<String, opentermius::server_stats::Stats>,
     /// Sessions whose tab currently shows its SFTP view instead of the terminal.
     sftp_views: std::collections::BTreeSet<String>,
     remote_entries: Vec<ssh::RemoteFile>,
@@ -266,7 +268,18 @@ impl State {
                 store.data.hosts_view.sort_mode(),
             )
             .into_iter()
-            .map(|p| HostRow {
+            .map(|p| {
+                // Live usage comes from any connected terminal of this host.
+                let live = self.order.iter().find_map(|id| {
+                    self.sessions.get(id).filter(|s| s.connected && !s.local && s.profile.id == p.id).map(|_| id)
+                });
+                let stats = live.and_then(|id| self.server_stats.get(id)).copied().unwrap_or_default();
+                let value = |v: Option<u8>| v.map_or(-1, i32::from);
+                HostRow {
+                online: live.is_some(),
+                cpu: value(stats.cpu),
+                memory: value(stats.memory),
+                disk: value(stats.disk),
                 id: p.id.clone().into(),
                 name: p.name.clone().into(),
                 address: format!("{}@{}:{}", p.username, p.host, p.port).into(),
@@ -284,8 +297,9 @@ impl State {
                     .collect::<Vec<_>>()
                     .join(" ")
                     .into(),
-            })
+            }})
             .collect();
+            ui.set_ungrouped_count(store.data.hosts.iter().filter(|p| p.group.is_empty()).count() as i32);
             let selected = ui.get_selected_host();
             if !selected.is_empty() && !rows.iter().any(|row| row.id == selected) {
                 ui.set_selected_host("".into());
@@ -854,6 +868,7 @@ impl State {
     fn close(&mut self, id: &str) {
         pages::logs::closed(id);
         self.typed_secrets.remove(id);
+        self.server_stats.remove(id);
         self.sftp_views.remove(id);
         if let Some(view) = self.sessions.remove(id) {
             if let Some(transport) = view.transport {
@@ -1265,7 +1280,7 @@ impl State {
             | Event::AuthPrompt { id, .. } | Event::Files { id, .. } | Event::Transfer { id, .. }
             | Event::OverwriteRequired { id, .. } | Event::Closed { id } | Event::Bell { id }
             | Event::DeleteRequired { id, .. } | Event::TransferProgress { id, .. }
-            | Event::TransferFinished { id, .. } => id,
+            | Event::TransferFinished { id, .. } | Event::Stats { id, .. } => id,
         };
         if !self.sessions.contains_key(id) {
             return;
@@ -1479,6 +1494,11 @@ impl State {
                         ui.set_file_busy(false)
                     }
                 }
+            }
+            Event::Stats { id, stats } => {
+                // Rows are rebuilt below; a status change alone also refreshes them.
+                self.server_stats.insert(id, stats);
+                self.hosts();
             }
             Event::Bell { id } => {
                 if self.settings.bell == BellMode::Visual && self.active.as_deref() == Some(&id) {
@@ -2377,6 +2397,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             pending_sftp: None,
             sftp_views: Default::default(),
             typed_secrets: BTreeMap::new(),
+            server_stats: BTreeMap::new(),
             remote_entries: Vec::new(),
             local_entries: Vec::new(),
             transfers: BTreeMap::new(),
@@ -2438,14 +2459,12 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     });
     ui.on_search_hosts(|query| {
         with_state(|s| {
-            s.group_filter.clear();
             s.search = query.to_lowercase();
             s.hosts()
         });
     });
     ui.on_select_group(|name| {
         with_state(|s| {
-            s.search.clear();
             s.group_filter = name.to_string();
             s.hosts();
         });
@@ -2881,6 +2900,39 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             ui.invoke_connect_host(id)
         }
     }
+    if smoke && scene == "host-cards" {
+        // Synthetic hosts; three have fake connected sessions with usage figures.
+        with_state(|s| {
+            let samples = [
+                ("jp", "JP VPS", "VPS", Some((5, 29, 49))),
+                ("au", "AU VPS", "VPS", Some((0, 4, 2))),
+                ("us", "US VPS", "VPS", Some((74, 61, 93))),
+                ("de", "DE build box", "Lab", None),
+                ("nas", "Home NAS", "", None),
+            ];
+            for (id, name, group, usage) in samples {
+                let profile = Profile {
+                    id: id.into(), name: name.into(), host: format!("{id}.example.invalid"), port: 22,
+                    username: "dev".into(), auth_type: "password".into(), private_key_path: String::new(),
+                    key_id: String::new(), group: group.into(), encrypted_secret: None, tags: Vec::new(),
+                    last_connected: None, created_at: None,
+                };
+                let _ = s.store.lock().unwrap().save(profile.clone(), None, false);
+                if let Some((cpu, memory, disk)) = usage {
+                    let session = format!("cards-{id}");
+                    s.sessions.insert(session.clone(), SessionView {
+                        local: false, profile, transport: None, snapshot: Terminal::new(s.rows, s.cols).snapshot(),
+                        status: crate::i18n::t("Connected").into(), connected: true, ended: false, selection: None,
+                    });
+                    s.order.push(session.clone());
+                    s.server_stats.insert(session, opentermius::server_stats::Stats { cpu: Some(cpu), memory: Some(memory), disk: Some(disk) });
+                }
+            }
+            s.tabs();
+            s.hosts();
+        });
+        ui.invoke_open_section("hosts".into());
+    }
     if smoke && scene == "editor" {
         ui.invoke_new_host();
     }
@@ -3103,7 +3155,7 @@ mod terminal_ux_tests {
             queue: VecDeque::new(), prompt: None, cols: 80, rows: 24,
             file_path: String::new(), search: String::new(), group_filter: String::new(),
             tag_filter: String::new(),
-            local_path: PathBuf::new(), local_request: 0, pending_sftp: None, sftp_views: Default::default(), typed_secrets: BTreeMap::new(),
+            local_path: PathBuf::new(), local_request: 0, pending_sftp: None, sftp_views: Default::default(), typed_secrets: BTreeMap::new(), server_stats: BTreeMap::new(),
             remote_entries: Vec::new(), local_entries: Vec::new(),
             transfers: BTreeMap::new(), next_transfer: 0,
             render_model: Rc::new(VecModel::from(Vec::new())),

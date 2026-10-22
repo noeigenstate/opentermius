@@ -35,6 +35,10 @@ export global SettingsBridge {
     callback apply;
     callback restore-defaults;
     callback open-config-folder;
+    callback import-hosts;
+    callback import-xshell;
+    callback import-windterm;
+    callback export-hosts;
     callback check-updates;
     callback install-update;
 }
@@ -104,13 +108,6 @@ export component SettingsPage inherits Rectangle {
                     Select {
                         width: 200px; options: [@tr("English"), @tr("简体中文"), @tr("System")];
                         current-index <=> SettingsBridge.language;
-                        changed(index) => { SettingsBridge.apply(); }
-                    }
-                }
-                SettingRow {
-                    label: @tr("Theme");
-                    Segmented {
-                        options: [@tr("Light"), @tr("Dark"), @tr("System")]; current-index <=> SettingsBridge.appearance;
                         changed(index) => { SettingsBridge.apply(); }
                     }
                 }
@@ -199,6 +196,22 @@ export component SettingsPage inherits Rectangle {
 
             SettingsGroup {
                 title: @tr("Data");
+                SettingRow {
+                    label: @tr("Import hosts"); description: @tr("From an OpenTermius host JSON export");
+                    Action { kind: "secondary"; text: @tr("Import…"); clicked => { SettingsBridge.import-hosts(); } }
+                }
+                SettingRow {
+                    label: @tr("Import from Xshell"); description: @tr("Sessions folder; passwords are not imported");
+                    Action { kind: "secondary"; text: @tr("Import…"); clicked => { SettingsBridge.import-xshell(); } }
+                }
+                SettingRow {
+                    label: @tr("Import from WindTerm"); description: @tr("Finds WindTerm automatically; passwords are not imported");
+                    Action { kind: "secondary"; text: @tr("Import…"); clicked => { SettingsBridge.import-windterm(); } }
+                }
+                SettingRow {
+                    label: @tr("Export hosts"); description: @tr("JSON without saved credentials");
+                    Action { kind: "secondary"; text: @tr("Export…"); clicked => { SettingsBridge.export-hosts(); } }
+                }
                 SettingRow {
                     label: @tr("Backup & Restore"); description: @tr("Move your configuration between machines, offline"); divider: false;
                     Action { kind: "secondary"; text: @tr("Open…"); clicked => { RecoveryBridge.visible = true; } }
