@@ -1,5 +1,9 @@
 /** Chinese strings for the app shell and Hosts page (one file per feature in this folder). */
 export default {
+  Navigation: "导航",
+  Workspace: "工作区",
+  Activity: "活动记录",
+  "Stored on this device": "数据保存在此设备",
   Hosts: "主机",
   Keychain: "密钥管理",
   Snippets: "代码片段",

@@ -1,5 +1,9 @@
 export default {
   "Keychain": "密钥串", "Snippets": "命令片段", "Known Hosts": "已知主机", "Logs": "连接日志",
+  "Manage the keys you use to connect.": "管理用于连接主机的身份密钥。",
+  "Keep your frequently used commands within reach.": "保存常用命令，随时用于终端会话。",
+  "Review the fingerprints of hosts you trust.": "查看并管理已信任主机的指纹。",
+  "Review recent connections and session activity.": "查看最近的连接记录与会话状态。",
   "Search keys": "搜索密钥", "Import key": "导入密钥", "New key": "新建密钥",
   "Import private key": "导入私钥", "Rename key": "重命名密钥", "Label": "名称",
   "Key type": "密钥类型", "Passphrase": "私钥口令", "Passphrase (optional)": "私钥口令（可选）",

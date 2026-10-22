@@ -15,7 +15,7 @@ export function SessionBar({ session, view, onViewChange }: {
         </div>
       )}
       <span className="session-host" title={session.title}>{session.title}</span>
-      <span className={`dot ${session.connected ? "dot-online" : "dot-disconnected"}`} title={t(session.connected ? "Connected" : "Disconnected")} />
+      <span className="session-connection"><span className={`dot ${session.connected ? "dot-online" : "dot-disconnected"}`} />{t(session.connected ? "Connected" : "Disconnected")}</span>
     </div>
   );
 }

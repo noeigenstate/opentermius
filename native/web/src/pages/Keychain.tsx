@@ -71,11 +71,11 @@ export function KeychainPage() {
   const query = search.trim().toLowerCase();
   const visible = keys.filter(key => [key.label, key.kind, key.fingerprint, ...key.usedBy].some(value => value.toLowerCase().includes(query)));
   return <section className="page feature-page">
-    <header className="feature-header glass">
-      <h1>{t("Keychain")}</h1>
-      <label className="search glass"><Icon name="search" /><input aria-label={t("Search keys")} placeholder={t("Search keys")} value={search} onChange={e => setSearch(e.target.value)} /></label>
+    <header className="feature-header">
+      <div className="feature-heading"><h1>{t("Keychain")}</h1><p>{t("Manage the keys you use to connect.")}</p></div>
+      <label className="search"><Icon name="search" /><input aria-label={t("Search keys")} placeholder={t("Search keys")} value={search} onChange={e => setSearch(e.target.value)} /></label>
       <button className="feature-button" disabled={busy} onClick={() => void chooseImport()}>{t("Import key")}</button>
-      <button className="feature-button primary" disabled={busy} onClick={newKey}><Icon name="plus" />{t("New key")}</button>
+      <button className="feature-button primary" data-depth="true" disabled={busy} onClick={newKey}><Icon name="plus" />{t("New key")}</button>
     </header>
     {error && <div className="feature-error" role="alert">{error}</div>}
     {message && <p className="feature-notice" role="status">{message}</p>}
@@ -85,9 +85,9 @@ export function KeychainPage() {
       <label>{t("Label")}<input autoFocus value={label} onChange={e => setLabel(e.target.value)} maxLength={128} required={editor === "rename"} disabled={busy} /></label>
       {editor === "generate" && <label>{t("Key type")}<select value={kind} onChange={e => setKind(e.target.value as api.KeyKind)} disabled={busy}><option value="ed25519">Ed25519</option><option value="rsa3072">RSA 3072</option><option value="rsa4096">RSA 4096</option></select></label>}
       {editor === "import" && <label>{requiresPassphrase ? t("Passphrase") : t("Passphrase (optional)")}<input type="password" autoComplete="off" required={requiresPassphrase} value={passphrase} onChange={e => setPassphrase(e.target.value)} disabled={busy} /></label>}
-      <div className="feature-actions"><button className="feature-button" type="button" disabled={busy} onClick={closeEditor}>{t("Cancel")}</button><button className="feature-button primary" disabled={busy}>{t(editor === "generate" ? "Generate" : "Save")}</button></div>
+      <div className="feature-actions"><button className="feature-button" type="button" disabled={busy} onClick={closeEditor}>{t("Cancel")}</button><button className="feature-button primary" data-depth="true" disabled={busy}>{t(editor === "generate" ? "Generate" : "Save")}</button></div>
     </form>}
-    {loading ? <p role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="feature-empty"><Icon name="keychain" size={40} /><h2>{t(keys.length ? "No matching keys" : "No keys yet")}</h2><p>{t("Generate a key or import an existing private key.")}</p><button className="feature-button primary" disabled={busy} onClick={newKey}>{t("New key")}</button></div> : <div className="feature-list">
+    {loading ? <p role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="feature-empty"><span className="feature-empty-symbol"><Icon name="keychain" size={34} /></span><h2>{t(keys.length ? "No matching keys" : "No keys yet")}</h2><p>{t("Generate a key or import an existing private key.")}</p><button className="feature-button primary" data-depth="true" disabled={busy} onClick={newKey}><Icon name="plus" />{t("New key")}</button></div> : <div className="feature-list">
       {visible.map(key => <article className="feature-row" key={key.id}>
         <div className="feature-row-title"><Icon name="keychain" size={22} /><h2>{key.label}</h2><span className="feature-tag">{key.kind}</span></div>
         <p className="feature-mono feature-wrap">{key.fingerprint}</p>

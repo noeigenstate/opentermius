@@ -1,5 +1,6 @@
 export default {
   "Settings": "设置",
+  "Customize your workspace and connections.": "调整工作区外观、终端与连接偏好。",
   "Appearance": "外观",
   "Language": "语言",
   "English": "English",

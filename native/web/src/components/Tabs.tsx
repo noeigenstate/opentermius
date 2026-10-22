@@ -52,7 +52,7 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
       }}>
         <button className={`tab${activeSessionId === null ? " tab-active" : ""}`} role="tab" aria-selected={activeSessionId === null}
           tabIndex={activeSessionId === null ? 0 : -1} aria-controls="hosts-panel" onClick={() => onSelect(null)}>
-          <img src="/logo.svg" alt="" width={18} height={18} /><span>{t("Hosts")}</span>
+          <img src="/logo.svg" alt="" width={18} height={18} /><span>{t("Workspace")}</span>
         </button>
         {sessions.map((session) => (
           <div className={`tab session-tab${activeSessionId === session.sessionId ? " tab-active" : ""}`} key={session.sessionId}>
@@ -61,16 +61,16 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
               <span className={`dot ${session.connected ? "dot-online" : "dot-disconnected"}`} aria-label={t(session.connected ? "Connected" : "Disconnected")} />
               <span className="session-tab-title">{session.title}</span>
             </button>
-            <button className="tab-action" aria-label={t("Session menu")} aria-expanded={menu?.sessionId === session.sessionId} onClick={(event) => {
+            <button className="tab-action" data-tooltip={t("Session menu")} aria-label={t("Session menu")} aria-expanded={menu?.sessionId === session.sessionId} onClick={(event) => {
               menuTrigger.current = event.currentTarget;
               const rect = event.currentTarget.getBoundingClientRect();
               setMenu(menu?.sessionId === session.sessionId ? null : { sessionId: session.sessionId, left: Math.max(8, Math.min(rect.left, window.innerWidth - 208)), top: rect.bottom + 5 });
             }}>⋯</button>
-            <button className="tab-action tab-close" aria-label={t("Close session")} onClick={() => onClose(session.sessionId)}>×</button>
+            <button className="tab-action tab-close" data-tooltip={t("Close session")} aria-label={t("Close session")} onClick={() => onClose(session.sessionId)}>×</button>
           </div>
         ))}
       </div>
-      <button className="new-terminal" onClick={onNew} aria-label={t("Open local terminal")} title={t("Open local terminal")}>+</button>
+      <button className="new-terminal" data-depth data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}>+</button>
       {menu && selected && createPortal(
         <div ref={menuRef} className="session-menu" style={{ left: menu.left, top: menu.top }} aria-label={t("Session menu")}>
           <button onClick={() => { setMenu(null); onReconnect(selected.sessionId); }}>{t("Reconnect")}</button>

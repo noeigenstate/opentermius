@@ -9,6 +9,7 @@ import { Sidebar, type Section } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { HostsPage } from "./pages/Hosts";
 import { PromptDialog } from "./components/PromptDialog";
+import { SurfaceEffects } from "./components/SurfaceEffects";
 
 const SessionPage = lazy(() => import("./pages/Session").then((module) => ({ default: module.SessionPage })));
 import { KeychainPage } from "./pages/Keychain";
@@ -148,7 +149,8 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div className="app" data-glass={settings?.glassEffect ?? true}>
+      <SurfaceEffects />
       <TitleBar tabs={{ sessions, activeSessionId, onSelect: (id) => { setActiveSessionId(id); if (id === null) setSection("hosts"); },
         onNew: () => { void run("local", async () => {
           await addSession(await openLocalTerminal());
@@ -166,7 +168,7 @@ export default function App() {
               : section === "keychain" ? <KeychainPage />
               : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
               : section === "known-hosts" ? <KnownHostsPage />
-              : section === "logs" ? <LogsPage onConnect={connect} />
+              : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
               : section === "settings" ? <SettingsPage settings={settings} saving={saving} onChange={changeSettings} onDataChanged={reloadData} updates={updates} />
               : <div className="empty">{t(titles[section])}</div>}
           </div>

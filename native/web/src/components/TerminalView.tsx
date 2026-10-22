@@ -31,8 +31,8 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       fontFamily: FONT_FAMILY, fontSize: 14, cursorBlink: true,
       scrollback: 10000, allowProposedApi: false,
       theme: {
-        background: "#f8fafc", foreground: "#1f2430", cursor: "#4f46e5", cursorAccent: "#f8fafc",
-        selectionBackground: "#c7d2fe", selectionForeground: "#1f2430",
+        background: "#ffffff", foreground: "#1d1d1f", cursor: "#007aff", cursorAccent: "#ffffff",
+        selectionBackground: "#cce4ff", selectionForeground: "#1d1d1f",
         black: "#263238", red: "#b91c1c", green: "#166534", yellow: "#854d0e",
         blue: "#1d4ed8", magenta: "#86198f", cyan: "#0e7490", white: "#cbd5e1",
         brightBlack: "#64748b", brightRed: "#dc2626", brightGreen: "#15803d", brightYellow: "#a16207",

@@ -10,9 +10,9 @@ export function TitleBar({ tabs }: { tabs: TabsProps }) {
     <header className="titlebar">
       <Tabs {...tabs} />
       <div className="titlebar-spacer" data-tauri-drag-region />
-      <button className="chrome" onClick={() => win.minimize()} aria-label={t("Minimize")}><Icon name="minimize" /></button>
-      <button className="chrome" onClick={() => win.toggleMaximize()} aria-label={t("Maximize")}><Icon name="maximize" size={14} /></button>
-      <button className="chrome chrome-close" onClick={() => win.close()} aria-label={t("Close")}><Icon name="close" /></button>
+      <button className="chrome" data-tooltip={t("Minimize")} onClick={() => win.minimize()} aria-label={t("Minimize")}><Icon name="minimize" /></button>
+      <button className="chrome" data-tooltip={t("Maximize")} onClick={() => win.toggleMaximize()} aria-label={t("Maximize")}><Icon name="maximize" size={14} /></button>
+      <button className="chrome chrome-close" data-tooltip={t("Close")} onClick={() => win.close()} aria-label={t("Close")}><Icon name="close" /></button>
     </header>
   );
 }

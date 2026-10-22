@@ -1,0 +1,141 @@
+.hosts-page .hosts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.hosts-page .hosts-header h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -.9px;
+}
+
+.hosts-page .hosts-header p {
+  margin: 8px 0 0;
+  color: var(--secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hosts-page .host-create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(0, 85, 210, .18);
+  border-radius: 11px;
+  background: linear-gradient(180deg, #0071e3, #0066cc);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 2px 3px rgba(0,85,210,.14);
+  transition: box-shadow var(--duration-fast, 160ms), filter var(--duration-fast, 160ms), transform var(--duration-fast, 160ms) var(--ease-out, ease-out);
+}
+
+.hosts-page .host-create:hover:not(:disabled) { filter: brightness(1.05); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 5px 12px rgba(0,85,210,.18); }
+.hosts-page .host-create:active:not(:disabled) { filter: brightness(.96); box-shadow: inset 0 1px 3px rgba(0,40,100,.2); }
+
+.hosts-page .hosts-summary { display: flex; align-items: center; gap: 20px; margin-bottom: 18px; color: var(--secondary); font-size: 12px; }
+.hosts-page .hosts-summary > span { display: inline-flex; align-items: center; gap: 6px; }
+.hosts-page .hosts-summary strong { font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.hosts-page .hosts-summary > span + span { padding-left: 20px; border-left: 1px solid var(--card-border); }
+
+.hosts-page .host-indicator { display: inline-block; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: #acacb1; box-shadow: inset 0 1px 1px rgba(0,0,0,.14), 0 0 0 2px rgba(142,142,147,.08); }
+.hosts-page .host-indicator-online { background: var(--success); box-shadow: inset 0 1px 1px rgba(255,255,255,.32), 0 0 0 2px rgba(36,138,61,.08), 0 0 6px rgba(36,138,61,.2); }
+
+.hosts-page .hosts-controls { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.hosts-page .hosts-groups { width: fit-content; max-width: 65%; padding: 3px; border: 1px solid rgba(60,60,67,.06); border-radius: 10px; background: #eaeaed; overflow-x: auto; scrollbar-width: thin; }
+.hosts-page .hosts-groups .pill { height: 29px; flex: none; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; transition: color 150ms, background 150ms, box-shadow 150ms; }
+.hosts-page .hosts-groups .pill-active { color: var(--text); background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.1), 0 0 0 1px rgba(0,0,0,.02); }
+.hosts-page .hosts-search { width: 270px; min-width: 190px; height: 36px; padding: 0 10px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card); box-shadow: inset 0 1px 2px rgba(0,0,0,.025); transition: border-color 150ms, box-shadow 150ms; }
+.hosts-page .hosts-search:focus-within { border-color: rgba(0,122,255,.55); box-shadow: 0 0 0 3px rgba(0,122,255,.1); }
+.hosts-page .hosts-search input { min-width: 0; width: 100%; font-size: 12px; }
+.hosts-page .hosts-search input::placeholder { color: var(--secondary); }
+.hosts-page .hosts-clear { display: inline-grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; padding: 0; border-radius: 50%; color: var(--secondary); background: var(--surface); }
+.hosts-page .hosts-clear:hover { color: var(--text); background: #e5e5ea; }
+
+.hosts-page .hosts-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.hosts-page .hosts-section-heading h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text); font-size: 14px; font-weight: 600; }
+.hosts-page .hosts-section-heading h2 span { display: inline-grid; place-items: center; min-width: 20px; height: 19px; padding: 0 5px; color: var(--secondary); background: #e9e9ed; border-radius: 5px; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.hosts-page .hosts-section-heading > span { color: var(--secondary); font-size: 11px; }
+.hosts-page .hosts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); align-items: start; gap: 16px; }
+
+.hosts-page .host-card { position: relative; min-width: 0; padding: 16px 18px 0; border: 1px solid var(--card-border); border-radius: 18px; background: var(--card); box-shadow: 0 2px 5px rgba(0,0,0,.025); cursor: default; transition: transform 200ms var(--ease-out, ease-out), border-color 180ms, box-shadow 200ms; animation: host-arrive 300ms var(--ease-out, ease-out) backwards; }
+.hosts-page .host-card:nth-child(2) { animation-delay: 35ms; }
+.hosts-page .host-card:nth-child(3) { animation-delay: 70ms; }
+.hosts-page .host-card:nth-child(4) { animation-delay: 100ms; }
+.hosts-page .host-card:nth-child(n + 5) { animation-delay: 125ms; }
+.hosts-page .host-card:hover { transform: translateY(-3px); border-color: rgba(60,60,67,.17); box-shadow: 0 8px 22px rgba(0,0,0,.06), 0 2px 5px rgba(0,0,0,.025); }
+.hosts-page .host-card-selected { border-color: rgba(0,122,255,.58); box-shadow: 0 0 0 2px rgba(0,122,255,.08), 0 2px 5px rgba(0,0,0,.025); }
+.hosts-page .host-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hosts-page .host-card-selected:hover { border-color: rgba(0,122,255,.65); box-shadow: 0 0 0 2px rgba(0,122,255,.08), 0 8px 22px rgba(0,0,0,.06); }
+.hosts-page .host-card-header { display: flex; align-items: center; gap: 11px; }
+.hosts-page .host-server-glyph { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; width: 40px; height: 40px; border: 1px solid rgba(0,122,255,.08); border-radius: 12px; color: var(--accent); background: linear-gradient(160deg, #f0f7ff, #e5f0ff); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 2px 3px rgba(0,80,170,.04); overflow: visible; transition: transform 200ms var(--ease-out, ease-out), box-shadow 200ms; }
+.hosts-page .host-server-glyph::after { content: ""; position: absolute; inset: 1px; border-radius: 10px; opacity: 0; background: linear-gradient(120deg, transparent 20%, rgba(255,255,255,.7) 45%, transparent 70%); pointer-events: none; }
+.hosts-page .host-card:hover .host-server-glyph { transform: translateY(-1px) rotate(-3deg); box-shadow: inset 0 1px 0 white, 1px 4px 6px rgba(0,80,170,.08); }
+.hosts-page .host-card:hover .host-server-glyph::after { animation: host-glyph-glint 550ms ease-out; }
+.hosts-page .host-server-glyph > .host-indicator { position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px; border: 2px solid var(--card); box-sizing: content-box; }
+.hosts-page .host-card-identity { flex: 1; min-width: 0; }
+.hosts-page .host-card-identity h3 { margin: 0 0 5px; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 650; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -.15px; }
+.hosts-page .host-connection-state { display: block; color: var(--secondary); font-size: 11px; line-height: 1.2; }
+.hosts-page .host-connection-state.is-connected { color: var(--success); }
+.hosts-page .host-more { align-self: flex-start; width: 26px; height: 26px; margin: -2px -5px 0 0; border-radius: 7px; color: #8e8e93; }
+.hosts-page .host-more:hover { color: var(--text); background: var(--surface); }
+.hosts-page .host-endpoint { display: flex; min-width: 0; margin: 12px 0 7px; color: var(--secondary); font: 11px/1.5 "SFMono-Regular", Consolas, monospace; letter-spacing: -.1px; }
+.hosts-page .host-endpoint > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hosts-page .host-port-number { flex-shrink: 0; color: var(--secondary); }
+.hosts-page .host-card-labels { display: flex; align-items: center; gap: 5px; min-height: 18px; margin-bottom: 10px; overflow: hidden; }
+.hosts-page .host-protocol, .hosts-page .host-tag { overflow: hidden; max-width: 100px; padding: 3px 6px; color: var(--secondary); background: var(--surface); border-radius: 5px; font-size: 10px; font-weight: 500; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.hosts-page .host-protocol { flex-shrink: 0; color: var(--secondary); font-size: 10px; letter-spacing: .4px; }
+.hosts-page .host-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 0; border-top: 1px solid rgba(60,60,67,.07); }
+.hosts-page .host-metrics .ring { gap: 4px; }
+.hosts-page .host-metrics .ring svg { width: 40px; height: 40px; }
+.hosts-page .host-metrics .ring text { fill: var(--text); font-size: 10px; font-weight: 600; letter-spacing: -.2px; }
+.hosts-page .host-metrics .ring-label { font-size: 11px; font-weight: 500; color: var(--secondary); letter-spacing: .4px; }
+.usage-ring-progress { transition: stroke-dasharray 450ms ease-out, stroke 200ms; }
+.hosts-page .host-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; margin: 0 -18px; padding: 0 15px 0 18px; border-top: 1px solid rgba(60,60,67,.07); border-radius: 0 0 18px 18px; background: rgba(245,245,247,.45); }
+.hosts-page .host-usage-note { min-width: 0; color: var(--secondary); font-size: 10px; white-space: nowrap; }
+.hosts-page .host-connect { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 6px; border-radius: 6px; color: var(--accent-hover); font-size: 11px; font-weight: 500; transition: background 150ms, transform 150ms; }
+.hosts-page .host-connect:hover:not(:disabled) { background: rgba(0,122,255,.07); }
+.hosts-page .host-connect:active:not(:disabled) { transform: translateY(1px); background: rgba(0,122,255,.12); }
+
+.hosts-page .hosts-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; padding: 40px 20px; text-align: center; animation: host-arrive 300ms ease-out backwards; }
+.hosts-page .hosts-empty-glyph { display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 22px; border: 1px solid rgba(0,122,255,.1); border-radius: 23px; color: var(--accent); background: linear-gradient(150deg, #fff, #eaf3ff); box-shadow: inset 0 1px 0 #fff, 0 6px 14px rgba(0,80,160,.04); }
+.hosts-page .hosts-empty h2 { margin: 0; color: var(--text); font-size: 19px; font-weight: 600; letter-spacing: -.4px; }
+.hosts-page .hosts-empty p { max-width: 340px; margin: 9px 0 24px; color: var(--secondary); font-size: 13px; line-height: 1.6; }
+.hosts-page .host-empty-reset { display: inline-flex; align-items: center; gap: 7px; min-height: 35px; padding: 0 13px; border: 1px solid var(--card-border); border-radius: 9px; color: var(--text); background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.hosts-page .host-empty-reset:hover { border-color: rgba(60,60,67,.2); background: #fafafa; }
+
+@keyframes host-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes host-glyph-glint { 0% { opacity: 0; transform: translateX(-7px); } 35% { opacity: 1; } 100% { opacity: 0; transform: translateX(7px); } }
+
+@media (max-width: 1000px) {
+  .hosts-page .hosts-controls { align-items: flex-start; gap: 14px; }
+  .hosts-page .hosts-groups { max-width: 55%; }
+  .hosts-page .hosts-search { width: 240px; }
+}
+
+@media (max-width: 760px) {
+  .hosts-page .hosts-header { align-items: flex-start; gap: 14px; }
+  .hosts-page .hosts-header h1 { font-size: 26px; }
+  .hosts-page .hosts-controls { flex-wrap: wrap; }
+  .hosts-page .hosts-groups { max-width: 100%; }
+  .hosts-page .hosts-search { width: 100%; }
+  .hosts-page .hosts-section-heading > span { display: none; }
+  .hosts-page .hosts-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hosts-page .host-card, .hosts-page .hosts-empty, .hosts-page .host-server-glyph::after { animation: none; }
+  .hosts-page .host-card, .hosts-page .host-server-glyph, .hosts-page .host-create, .hosts-page .host-connect, .usage-ring-progress { transition: none; }
+  .hosts-page .host-card:hover, .hosts-page .host-card:hover .host-server-glyph, .hosts-page .host-connect:active:not(:disabled) { transform: none; }
+  .hosts-page .host-card:hover .host-server-glyph::after { animation: none; }
+}

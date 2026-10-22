@@ -5,6 +5,7 @@ import { Icon } from "../icons";
 import { UsageRing } from "../components/UsageRing";
 import { HostEditor } from "../components/HostEditor";
 import { HostModal, Menu } from "../components/Menu";
+import "../hosts.css";
 
 /** Group filter value for hosts without a group (matches the Rust core's NO_GROUP). */
 const NO_GROUP = "\u0001";
@@ -12,18 +13,33 @@ const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
 function HostCard({ host, usage, online, selected, onSelect, onConnect, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; onSelect: () => void; onConnect?: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
   return (
-    <article className={`card${selected ? " card-selected" : ""}`} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
-      <header className="card-head">
-        <span className={`dot${online ? " dot-online" : ""}`} />
-        <h3 title={`${host.username}@${host.host}:${host.port}`}>{host.name}</h3>
-        <button className="icon-button" disabled={!onConnect} aria-label={t("Connect")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="terminal" /></button>
-        <button className="icon-button" aria-label={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onSelect(); onMenu(rect.right - 172, rect.bottom + 4); }}><Icon name="more" /></button>
+    <article className={`host-card${selected ? " host-card-selected" : ""}`} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
+      <header className="host-card-header">
+        <span className="host-server-glyph"><Icon name="hosts" size={23} /><i className={`host-indicator${online ? " host-indicator-online" : ""}`} /></span>
+        <div className="host-card-identity">
+          <h3 title={host.name}>{host.name}</h3>
+          <span className={`host-connection-state${online ? " is-connected" : ""}`}>{online ? t("Connected") : t("Disconnected")}</span>
+        </div>
+        <button className="icon-button host-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onSelect(); onMenu(rect.right - 172, rect.bottom + 4); }}><Icon name="more" /></button>
       </header>
-      <div className="card-rings">
+      <p className="host-endpoint" title={`${host.username ? `${host.username}@` : ""}${host.host}:${host.port}`}>
+        <span>{host.username && `${host.username}@`}{host.host}</span><span className="host-port-number">:{host.port}</span>
+      </p>
+      <div className="host-card-labels">
+        <span className="host-protocol">{t("SSH")}</span>
+        {host.group && <span className="host-tag" title={host.group}>{host.group}</span>}
+        {host.tags.slice(0, 2).map((tag) => <span key={tag} className="host-tag" title={tag}>{tag}</span>)}
+        {host.tags.length > 2 && <span className="host-tag" data-tooltip={host.tags.slice(2).join(", ")}>+{host.tags.length - 2}</span>}
+      </div>
+      <div className="host-metrics">
         <UsageRing value={usage.cpu} label={t("CPU")} />
         <UsageRing value={usage.memory} label={t("MEM")} />
         <UsageRing value={usage.disk} label={t("DISK")} />
       </div>
+      <footer className="host-card-footer">
+        <span className="host-usage-note">{online ? t("Session metrics") : t("No active session")}</span>
+        <button className="host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="terminal" size={14} />{t("Connect")}</button>
+      </footer>
     </article>
   );
 }
@@ -60,6 +76,8 @@ export function HostsPage({ hosts, onHostsChange, onConnect, onQuickConnect, usa
   const visible = hosts
     .filter((h) => activeGroup === "" || (activeGroup === NO_GROUP ? !h.group : h.group === activeGroup))
     .filter((h) => !query || [h.name, h.host, h.username, h.group, ...(h.tags ?? [])].some((v) => v.toLowerCase().includes(query)));
+  const connectedCount = hosts.filter((host) => onlineHostIds.has(host.id)).length;
+  const addHost = () => setEditor(newHostDraft(activeGroup === NO_GROUP ? "" : activeGroup));
 
   const refresh = async () => {
     try { onHostsChange?.(await listHosts()); }
@@ -119,34 +137,53 @@ export function HostsPage({ hosts, onHostsChange, onConnect, onQuickConnect, usa
   };
 
   const pill = (value: string, label: string) => (
-    <button key={value} className={`pill${activeGroup === value ? " pill-active" : ""}`} onClick={() => setGroup(value)} onContextMenu={value && value !== NO_GROUP ? (event) => { event.preventDefault(); setDialogError(""); setRenaming({ old: value, value }); } : undefined} onKeyDown={(event) => {
+    <button key={value} className={`pill${activeGroup === value ? " pill-active" : ""}`} aria-pressed={activeGroup === value} onClick={() => setGroup(value)} onContextMenu={value && value !== NO_GROUP ? (event) => { event.preventDefault(); setDialogError(""); setRenaming({ old: value, value }); } : undefined} onKeyDown={(event) => {
       if (value && value !== NO_GROUP && (event.key === "F2" || (event.shiftKey && event.key === "F10"))) { event.preventDefault(); setDialogError(""); setRenaming({ old: value, value }); }
     }}>{label}</button>
   );
 
   return (
     <section className="page hosts-page" aria-busy={busy}>
-      <div className="toolbar">
-        <div className="pills glass">
+      <header className="hosts-header">
+        <div>
+          <h1>{t("Hosts")}</h1>
+          <p>{t("Manage saved connections and open SSH sessions.")}</p>
+        </div>
+        <button className="host-create" data-depth disabled={busy} onClick={addHost}><Icon name="plus" size={17} />{t("New host")}</button>
+      </header>
+      <div className="hosts-summary" aria-label={t("Connection overview")}>
+        <span><Icon name="hosts" size={14} /><strong>{hosts.length}</strong>{t("Saved hosts")}</span>
+        <span><i className={`host-indicator${connectedCount ? " host-indicator-online" : ""}`} /><strong>{connectedCount}</strong>{t("Connected")}</span>
+      </div>
+      <div className="hosts-controls">
+        <div className="pills hosts-groups" role="group" aria-label={t("Filter by group")}>
           {pill("", t("All"))}
           {groups.map((g) => pill(g, g))}
           {groups.length > 0 && hasUngrouped && pill(NO_GROUP, t("No group"))}
         </div>
-        <div className="toolbar-spacer" />
-        <button className="add-button" disabled={busy} aria-label={t("New host")} onClick={() => setEditor(newHostDraft(activeGroup === NO_GROUP ? "" : activeGroup))}><Icon name="plus" /></button>
-        <label className="search glass">
+        <label className="search hosts-search">
           <Icon name="search" />
           <input aria-label={t("Search, or ssh user@host")} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search, or ssh user@host")} onKeyDown={(event) => {
             if (event.key === "Enter" && /^ssh(?:\s|$)/i.test(search.trim())) { event.preventDefault(); quickConnect(); }
             if (event.key === "ArrowDown" && visible.length) { event.preventDefault(); (grid.current?.children[0] as HTMLElement | undefined)?.focus(); }
           }} />
+          {search && <button type="button" className="hosts-clear" aria-label={t("Clear search")} data-tooltip={t("Clear search")} onClick={() => setSearch("")}><Icon name="close" size={13} /></button>}
         </label>
       </div>
       {error && <div className="host-error" role="alert">{error}</div>}
+      <div className="hosts-section-heading">
+        <h2>{activeGroup === NO_GROUP ? t("No group") : activeGroup || t("All hosts")}<span>{visible.length}</span></h2>
+        <span>{onConnect ? t("Double-click to connect") : t("Double-click to edit")}</span>
+      </div>
       {visible.length === 0 ? (
-        <div className="empty">{hosts.length === 0 ? t("No hosts yet") : t("No matching hosts")}</div>
+        <div className="hosts-empty">
+          <span className="hosts-empty-glyph"><Icon name={hosts.length === 0 ? "hosts" : "search"} size={34} /></span>
+          <h2>{hosts.length === 0 ? t("No hosts yet") : t("No matching hosts")}</h2>
+          <p>{hosts.length === 0 ? t("Add a host to keep its connection details in one place.") : t("Try another search or choose a different group.")}</p>
+          <button className={hosts.length === 0 ? "host-create" : "host-empty-reset"} data-depth disabled={busy} onClick={hosts.length === 0 ? addHost : () => { setSearch(""); setGroup(""); }}><Icon name={hosts.length === 0 ? "plus" : "close"} size={16} />{hosts.length === 0 ? t("New host") : t("Clear filters")}</button>
+        </div>
       ) : (
-        <div className="grid" ref={grid} onKeyDown={moveSelection}>
+        <div className="hosts-grid" ref={grid} onKeyDown={moveSelection}>
           {visible.map((h) => (
             <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
           ))}

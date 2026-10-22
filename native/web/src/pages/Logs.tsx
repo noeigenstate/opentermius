@@ -17,7 +17,7 @@ function duration(entry: api.LogEntry, now: number) {
   return t("{days}d {hours}h", { days: Math.floor(hours / 24), hours: hours % 24 });
 }
 
-export function LogsPage({ onConnect }: { onConnect?: (hostId: string) => void | Promise<void> }) {
+export function LogsPage({ onConnect, visible: pageVisible = true }: { onConnect?: (hostId: string) => void | Promise<void>; visible?: boolean }) {
   const [entries, setEntries] = useState<api.LogEntry[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -27,19 +27,29 @@ export function LogsPage({ onConnect }: { onConnect?: (hostId: string) => void |
   const [now, setNow] = useState(Date.now());
   const refresh = () => api.listLogs().then(setEntries);
   useEffect(() => {
+    if (!pageVisible) return;
     let active = true;
     let fetching = false;
+    let timer: number | undefined;
     const update = async () => {
-      if (fetching) return;
+      if (fetching || !active || document.visibilityState !== "visible") return;
       fetching = true;
       try { const rows = await api.listLogs(); if (active) { setEntries(rows); setError(""); } }
       catch (e) { if (active) setError(String(e)); }
       finally { fetching = false; if (active) setLoading(false); }
     };
-    void update();
-    const timer = window.setInterval(() => { setNow(Date.now()); void update(); }, 5000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
+    const schedule = () => {
+      window.clearInterval(timer);
+      timer = undefined;
+      if (document.visibilityState !== "visible") return;
+      setNow(Date.now());
+      void update();
+      timer = window.setInterval(() => { setNow(Date.now()); void update(); }, 5000);
+    };
+    schedule();
+    document.addEventListener("visibilitychange", schedule);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", schedule); };
+  }, [pageVisible]);
   async function act(action: () => Promise<unknown>) {
     setBusy(true); setError("");
     try { await action(); } catch (e) { setError(String(e)); } finally { setBusy(false); }
@@ -58,14 +68,14 @@ export function LogsPage({ onConnect }: { onConnect?: (hostId: string) => void |
   const query = search.trim().toLowerCase();
   const visible = entries.filter(entry => (!status || entry.status === status) && [entry.label, entry.address, entry.kind, entry.status, t(statuses[entry.status]), entry.error || ""].some(value => value.toLowerCase().includes(query)));
   return <section className="page feature-page">
-    <header className="feature-header glass">
-      <h1>{t("Logs")}</h1>
-      <label className="search glass"><Icon name="search" /><input aria-label={t("Filter logs")} placeholder={t("Filter logs")} value={search} onChange={e => setSearch(e.target.value)} /></label>
+    <header className="feature-header">
+      <div className="feature-heading"><h1>{t("Logs")}</h1><p>{t("Review recent connections and session activity.")}</p></div>
+      <label className="search"><Icon name="search" /><input aria-label={t("Filter logs")} placeholder={t("Filter logs")} value={search} onChange={e => setSearch(e.target.value)} /></label>
       <label className="feature-filter"><span>{t("Status")}</span><select value={status} onChange={e => setStatus(e.target.value)}><option value="">{t("All")}</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
       <button className="feature-button danger" disabled={busy || !entries.length} onClick={() => void clearHistory()}>{t("Clear logs")}</button>
     </header>
     {error && <div className="feature-error" role="alert">{error}</div>}
-    {loading ? <p role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="feature-empty"><Icon name="logs" size={40} /><h2>{t(entries.length ? "No matching sessions" : "No log entries")}</h2><p>{t("Connect to a host or open a terminal to see it here.")}</p><button className="feature-button" disabled={busy} onClick={() => { setSearch(""); setStatus(""); void act(refresh); }}>{t("Refresh")}</button></div> : <div className="feature-table-wrap"><table className="feature-table feature-log-table"><thead><tr>{["Time", "Host", "Address", "Protocol", "Status", "Duration", "Error", "Actions"].map(label => <th key={label}>{t(label)}</th>)}</tr></thead><tbody>
+    {loading ? <p role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="feature-empty"><span className="feature-empty-symbol"><Icon name="logs" size={34} /></span><h2>{t(entries.length ? "No matching sessions" : "No log entries")}</h2><p>{t("Connect to a host or open a terminal to see it here.")}</p><button className="feature-button" disabled={busy} onClick={() => { setSearch(""); setStatus(""); void act(refresh); }}>{t("Refresh")}</button></div> : <div className="feature-table-wrap"><table className="feature-table feature-log-table"><thead><tr>{["Time", "Host", "Address", "Protocol", "Status", "Duration", "Error", "Actions"].map(label => <th key={label}>{t(label)}</th>)}</tr></thead><tbody>
       {visible.map(entry => <tr key={entry.id}>
         <td>{new Date(entry.startedAt).toLocaleString()}</td>
         <td>{entry.kind === "local" ? t("Local Terminal") : entry.label}</td>

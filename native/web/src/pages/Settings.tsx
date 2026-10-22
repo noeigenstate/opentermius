@@ -4,10 +4,11 @@ import { getAppInfo, openConfigFolder, type AppInfo, type Settings } from "../ap
 import { detectXshellFolder, exportHosts, importHostsJson, importWindterm, importXshell } from "../api/data";
 import type { Updates } from "../api/updates";
 import { t } from "../i18n";
+import { Icon, type IconName } from "../icons";
 import { Recovery } from "./Recovery";
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="settings-group" aria-label={t(title)}><h2>{t(title)}</h2><div className="settings-card">{children}</div></section>;
+function Group({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
+  return <section className="settings-group" aria-label={t(title)}><h2><Icon name={icon} />{t(title)}</h2><div className="settings-card">{children}</div></section>;
 }
 
 function Toggle({ label, value, onChange, hint }: { label: string; value: boolean; onChange: (value: boolean) => void; hint?: string }) {
@@ -101,15 +102,15 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
   if (!settings) return <div className="empty" role="status">{t("Loading settings…")}</div>;
 
   return <div className="page settings-page">
-    <div className="settings-heading"><h1>{t("Settings")}</h1><span role="status">{saving ? t("Saving…") : t("Changes save automatically")}</span></div>
+    <div className="settings-heading"><div className="settings-heading-copy"><h1>{t("Settings")}</h1><p>{t("Customize your workspace and connections.")}</p></div><span className="settings-save-state" data-saving={saving} role="status">{saving ? t("Saving…") : t("Changes save automatically")}</span></div>
     {error && <p className="settings-error" role="alert">{error}</p>}
     {message && <p className="settings-notice" role="status">{message}</p>}
     <fieldset className="settings-fields" disabled={saving || busy || recovery}>
-      <Group title="Appearance">
+      <Group title="Appearance" icon="settings">
         <label className="settings-row"><span>{t("Language")}</span><select aria-label={t("Language")} value={settings.language} onChange={e => change("language", e.target.value as Settings["language"])}><option value="en">{t("English")}</option><option value="zh-CN">{t("Simplified Chinese")}</option><option value="system">{t("System")}</option></select></label>
         <Toggle label="Glass effect" hint="Takes effect after restart" value={settings.glassEffect} onChange={v => change("glassEffect", v)} />
       </Group>
-      <Group title="Terminal">
+      <Group title="Terminal" icon="terminal">
         <NumberSetting label="Font size" value={settings.fontSize} min={10} max={24} onChange={v => change("fontSize", v)} />
         <NumberSetting label="Scrollback lines" value={settings.scrollbackLines} min={1000} max={100000} step={1000} onChange={v => change("scrollbackLines", v)} />
         <Toggle label="Cursor blink" value={settings.cursorBlink} onChange={v => change("cursorBlink", v)} />
@@ -117,23 +118,23 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
         <Toggle label="Confirm multi-line paste" value={settings.confirmMultilinePaste} onChange={v => change("confirmMultilinePaste", v)} />
         <label className="settings-row"><span>{t("Bell")}</span><select aria-label={t("Bell")} value={settings.bell} onChange={e => change("bell", e.target.value as Settings["bell"])}><option value="none">{t("None")}</option><option value="visual">{t("Visual")}</option></select></label>
       </Group>
-      <Group title="SSH">
+      <Group title="SSH" icon="hosts">
         <NumberSetting label="Keepalive (seconds, 0 disables)" value={settings.keepaliveSeconds} min={0} max={3600} onChange={v => change("keepaliveSeconds", v)} />
         <NumberSetting label="Connection timeout (seconds)" value={settings.connectionTimeoutSeconds} min={1} max={300} onChange={v => change("connectionTimeoutSeconds", v)} />
       </Group>
-      <Group title="SFTP">
+      <Group title="SFTP" icon="snippets">
         <Toggle label="Confirm overwrite" value={settings.confirmOverwrite} onChange={v => change("confirmOverwrite", v)} />
         <Toggle label="Show hidden files" value={settings.showHiddenFiles} onChange={v => change("showHiddenFiles", v)} />
       </Group>
-      <Group title="Data">
+      <Group title="Data" icon="keychain">
         <div className="settings-actions"><button className="settings-button" onClick={() => void dataAction(importJson, true)}>{t("Import hosts JSON")}</button><button className="settings-button" onClick={() => void dataAction(xshell, true)}>{t("Import from Xshell")}</button><button className="settings-button" onClick={() => void dataAction(windterm, true)}>{t("Import from WindTerm")}</button><button className="settings-button" onClick={() => void dataAction(exportJson)}>{t("Export hosts")}</button><button className="settings-button" onClick={() => setRecovery(true)}>{t("Backup & Restore")}</button></div>
         <p className="settings-hint">{t("Host imports and exports exclude credentials. Use a recovery code for a complete backup.")}</p>
       </Group>
-      <Group title="About">
-        <div className="settings-row"><span>{t("Version")}</span><span>{info?.version ?? "—"}</span></div>
+      <Group title="About" icon="hosts">
+        <div className="settings-row"><span>{t("Version")}</span><span className="settings-version">{info?.version ?? "—"}</span></div>
         <div className="settings-row"><span>{t("Configuration folder")}<small className="settings-path">{info?.configFolder ?? "—"}</small></span><button className="settings-button" onClick={() => void dataAction(async () => { await openConfigFolder(); return null; })}>{t("Open")}</button></div>
         <Toggle label="Check for updates automatically" value={settings.autoUpdate} onChange={v => change("autoUpdate", v)} />
-        <div className="settings-actions"><button className="settings-button" disabled={updates.busy} onClick={() => void updates.check()}>{t("Check now")}</button>{updates.result?.version && <button className="settings-button settings-primary" disabled={updates.busy} onClick={() => void updates.install(updates.result!.version!)}>{t("Update to {version}", { version: updates.result.version })}</button>}</div>
+        <div className="settings-actions"><button className="settings-button" disabled={updates.busy} onClick={() => void updates.check()}>{t("Check now")}</button>{updates.result?.version && <button className="settings-button settings-primary" data-depth="true" disabled={updates.busy} onClick={() => void updates.install(updates.result!.version!)}>{t("Update to {version}", { version: updates.result.version })}</button>}</div>
         <p className="settings-hint" role="status">{updates.busy ? t(updates.installing ? "Downloading and verifying update…" : "Checking for updates…") : updates.result?.upToDate ? t("OpenTermius is up to date") : updates.result?.version ? t("Version {version} is available", { version: updates.result.version }) : t("Build copies open the release page for manual installation.")}</p>
         {updates.error && <p className="settings-error" role="alert">{updates.error}</p>}
       </Group>
