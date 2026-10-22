@@ -84,3 +84,53 @@ input { font: inherit; color: inherit; }
 
 .empty { display: grid; place-items: center; height: 60%; color: var(--secondary); }
 .error { margin: 12px 20px 0; padding: 10px 12px; border-radius: 8px; color: #b91c1c; background: rgba(239, 68, 68, 0.1); }
+
+/* --- Terminal sessions ----------------------------------------------------- */
+[hidden] { display: none !important; }
+.content { position: relative; }
+.session-content { display: flex; flex-direction: column; overflow: hidden; }
+.session-app-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+.session-app-error button { font-size: 20px; }
+.session-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: calc(100% - 220px); overflow-x: auto; scrollbar-width: none; height: 100%; }
+.session-tabs::-webkit-scrollbar { display: none; }
+.session-tabs > .tab { flex: none; }
+.session-tab { padding: 0 5px 0 0; gap: 0; min-width: 140px; max-width: 240px; }
+.session-tab-select { display: flex; align-items: center; gap: 6px; min-width: 0; height: 100%; flex: 1; padding: 0 6px; text-align: left; }
+.session-tab-title { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.tab-action { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 5px; font-size: 18px; }
+.tab-action:hover { background: var(--hover); }
+.tab-close { opacity: 0; transition: opacity 120ms; }
+.session-tab:hover .tab-close, .session-tab:focus-within .tab-close, .tab-active .tab-close { opacity: 1; }
+.dot-disconnected { background: var(--warning); }
+.new-terminal { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 7px; font-size: 24px; color: var(--secondary); }
+.new-terminal:hover { background: var(--hover); }
+.titlebar-spacer { min-width: 24px; }
+.session-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; padding: 5px; min-width: 200px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card); box-shadow: 0 8px 28px rgba(30, 41, 59, 0.18); }
+.session-menu button { text-align: left; padding: 8px 12px; border-radius: 6px; }
+.session-menu button:hover, .session-menu button:focus-visible { background: var(--hover); }
+button:disabled { cursor: default; opacity: 0.5; }
+.session-page { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.session-bar { height: 48px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-width: 0 0 1px; }
+.session-host { flex: 1; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.local-badge { padding: 4px 10px; border-radius: 5px; background: var(--card); font-size: 12px; font-weight: 600; }
+.terminal-view { position: relative; flex: 1; display: flex; min-height: 0; background: #f8fafc; }
+.xterm-container { min-width: 0; min-height: 0; flex: 1; padding: 10px; overflow: hidden; }
+.xterm-container .xterm { height: 100%; }
+.terminal-notice { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--card); box-shadow: 0 3px 16px rgba(30, 41, 59, 0.1); }
+.terminal-notice.terminal-error { bottom: 55px; display: flex; align-items: center; gap: 12px; }
+.terminal-error { color: #b91c1c; overflow-wrap: anywhere; }
+.reconnect-hint { color: var(--secondary); }
+.session-sftp { flex: 1; min-height: 0; overflow: auto; }
+.terminal-dialog { width: min(480px, calc(100vw - 40px)); max-height: calc(100vh - 40px); padding: 24px; color: var(--text); border: 1px solid var(--card-border); border-radius: 14px; background: var(--card); box-shadow: 0 20px 80px rgba(30, 41, 59, 0.24); }
+.terminal-dialog::backdrop { background: rgba(30, 41, 59, 0.26); }
+.terminal-dialog h2 { margin: 0 0 18px; font-size: 18px; }
+.terminal-dialog p { line-height: 1.6; }
+.prompt-message { white-space: pre-wrap; overflow-wrap: anywhere; }
+.host-fingerprint { display: block; padding: 12px; border-radius: 6px; background: var(--hover); overflow-wrap: anywhere; user-select: all; }
+.prompt-field { display: flex; flex-direction: column; gap: 7px; margin: 14px 0; }
+.prompt-field input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--card-border); border-radius: 6px; background: #f8fafc; }
+.prompt-field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.dialog-actions button { padding: 8px 16px; border-radius: 7px; background: var(--hover); }
+.dialog-actions .primary-button { background: var(--accent); color: white; }
+.dialog-actions .primary-button:hover { background: var(--accent-hover); }
