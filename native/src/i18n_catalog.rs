@@ -1,5 +1,11 @@
 // English source text is the stable translation key.
 pub(super) const MESSAGES: &[(&str, &str)] = &[
+    ("Session not found", "会话不存在"),
+    ("Session table is unavailable", "会话列表不可用"),
+    ("Session input queue is unavailable; try again", "会话输入队列不可用，请重试"),
+    ("Authentication prompt has expired", "认证提示已过期"),
+    ("Invalid authentication answers", "认证应答无效"),
+    ("Invalid Username", "用户名无效"),
     ("Local path is outside the selected folder", "本地路径不在所选文件夹内"),
     ("Remote", "远程"),
     ("Dynamic", "动态"),

@@ -2811,13 +2811,16 @@ name = "opentermius-desktop"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "opentermius",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tokio",
+ "uuid",
  "window-vibrancy 0.6.0",
+ "zeroize",
 ]
 
 [[package]]
