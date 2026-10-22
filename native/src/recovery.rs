@@ -36,7 +36,6 @@ pub struct RestoreSummary {
     pub hosts: usize,
     pub keys: usize,
     pub snippets: usize,
-    pub forwards: usize,
     pub key_files: usize,
     pub known_hosts: usize,
     pub skipped: usize,
@@ -45,15 +44,14 @@ pub struct RestoreSummary {
 impl std::fmt::Display for RestoreSummary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&crate::tf!(
-            "Restored {} hosts, {} keys, {} snippets, {} forwarding rules, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)",
+            "Restored {} hosts, {} keys, {} snippets, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)",
             "0" => self.hosts.to_string(),
             "1" => self.keys.to_string(),
             "2" => self.snippets.to_string(),
-            "3" => self.forwards.to_string(),
-            "4" => self.key_files.to_string(),
-            "5" => self.known_hosts.to_string(),
-            "6" => self.skipped.to_string(),
-            "7" => self.fingerprint_conflicts.len().to_string()
+            "3" => self.key_files.to_string(),
+            "4" => self.known_hosts.to_string(),
+            "5" => self.skipped.to_string(),
+            "6" => self.fingerprint_conflicts.len().to_string()
         ))
     }
 }
@@ -123,7 +121,7 @@ fn transform_encrypted_at(
 }
 
 fn validate_ids(data: &Value) -> Result<()> {
-    for section in ["hosts", "keys", "snippets", "forwards"] {
+    for section in ["hosts", "keys", "snippets"] {
         let rows = data[section].as_array().context(crate::i18n::t("Recovery data is missing a list"))?;
         ensure!(rows.len() <= 10_000, "{}", crate::i18n::t("Too many recovery data items"));
         let mut seen = HashSet::new();
@@ -436,18 +434,11 @@ pub fn restore(
         mode,
         &mut summary.skipped,
     )?;
-    summary.forwards = merge_rows(
-        &mut merged["forwards"],
-        &incoming["forwards"],
-        mode,
-        &mut summary.skipped,
-    )?;
     // A new installation may already have persisted its empty default config.
     // Treat that as fresh too, so the one-click default restores preferences.
     let fresh = store.data.hosts.is_empty()
         && store.data.keys.is_empty()
         && store.data.snippets.is_empty()
-        && store.data.forwards.is_empty()
         && store.data.known_hosts.is_empty()
         && merged["settings"] == serde_json::to_value(crate::settings::Settings::default())?
         && merged["hostsView"] == serde_json::to_value(crate::hosts::HostsView::default())?;

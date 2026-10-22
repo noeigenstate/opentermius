@@ -360,6 +360,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("Import file must not exceed 5 MB", "导入文件不能超过 5 MB"),
     ("Import from Xshell", "从 Xshell 导入"),
     ("Import from WindTerm", "从 WindTerm 导入"),
+    ("Connected, but cannot save the credentials: {error}", "已连接，但无法保存凭据：{error}"),
     ("Invalid release information", "发布信息无效"),
     ("The release has no Windows installer", "该版本没有 Windows 安装程序"),
     ("The release has no checksums", "该版本缺少校验信息"),
@@ -696,8 +697,8 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Renamed {from} to {to}", "已将 {from} 重命名为 {to}"),
     (
-        "Restored {} hosts, {} keys, {} snippets, {} forwarding rules, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)",
-        "已恢复 {} 台主机、{} 个密钥、{} 条片段、{} 条转发、{} 个密钥文件、{} 条信任记录；跳过 {} 个已有项目，{} 个指纹冲突（保留本机指纹）",
+        "Restored {} hosts, {} keys, {} snippets, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)",
+        "已恢复 {} 台主机、{} 个密钥、{} 条片段、{} 个密钥文件、{} 条信任记录；跳过 {} 个已有项目，{} 个指纹冲突（保留本机指纹）",
     ),
     ("Rule is running", "规则正在运行"),
     ("Rule not found", "规则不存在"),

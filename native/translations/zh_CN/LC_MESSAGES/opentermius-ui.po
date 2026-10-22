@@ -2569,3 +2569,9 @@ msgstr "无法读取 WindTerm 会话文件"
 
 msgid "The WindTerm sessions file is too large"
 msgstr "WindTerm 会话文件过大"
+
+msgid "Restored {} hosts, {} keys, {} snippets, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)"
+msgstr "已恢复 {} 台主机、{} 个密钥、{} 条片段、{} 个密钥文件、{} 条信任记录；跳过 {} 个已有项目，{} 个指纹冲突（保留本机指纹）"
+
+msgid "Connected, but cannot save the credentials: {error}"
+msgstr "已连接，但无法保存凭据：{error}"

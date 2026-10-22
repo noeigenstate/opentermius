@@ -13,7 +13,7 @@ OpenTermius 的发布产物是 NSIS 3 安装程序，不再提供便携 exe。�
 脚本依次从 `-MakensisPath`、`PATH`、`%ProgramFiles(x86)%\NSIS`、`%ProgramFiles%\NSIS`、`%LOCALAPPDATA%\electron-builder\Cache\nsis\nsis-*` 查找 `makensis.exe`。也可以直接构建，但必须自行准备 `staging/opentermius.exe` 并传入版本：
 
 ```powershell
-makensis /DVERSION=0.3.3 installer.nsi
+makensis /DVERSION=0.3.4 installer.nsi
 ```
 
 输出：`native/releases/OpenTermius-<version>-windows-x64-setup.exe`，SHA-256 写入 `native/releases/checksums.json`。

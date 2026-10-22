@@ -2,25 +2,19 @@
 #[cfg(windows)]
 mod windows {
     use opentermius::{
-        forwarding::{Forward, Phase, RunningRule},
         keychain::{self, KeyKind},
         logs::{self, LogBook},
         recovery::{self, RestoreMode},
+        ssh::{self, Event},
         store::{self, Store},
     };
     use russh::{
-        Channel,
+        Channel, ChannelId,
         server::{self, Auth, Server as _},
     };
     use serde_json::json;
-    use std::{fs, sync::Arc, time::Duration};
-    use tokio::{
-        io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional},
-        net::{TcpListener, TcpStream},
-        task::{JoinHandle, JoinSet},
-        time::{sleep, timeout},
-    };
-    use zeroize::Zeroizing;
+    use std::{collections::HashMap, fs, sync::Arc, time::Duration};
+    use tokio::{net::TcpListener, sync::mpsc, task::JoinHandle, time::timeout};
 
     #[derive(Clone)]
     struct Server {
@@ -31,13 +25,13 @@ mod windows {
         fn new_client(&mut self, _: Option<std::net::SocketAddr>) -> Peer {
             Peer {
                 fingerprint: self.fingerprint.clone(),
-                jobs: JoinSet::new(),
+                channels: HashMap::new(),
             }
         }
     }
     struct Peer {
         fingerprint: String,
-        jobs: JoinSet<()>,
+        channels: HashMap<ChannelId, Channel<server::Msg>>,
     }
     impl server::Handler for Peer {
         type Error = anyhow::Error;
@@ -56,24 +50,33 @@ mod windows {
                 },
             )
         }
-        async fn channel_open_direct_tcpip(
+        async fn channel_open_session(
             &mut self,
             channel: Channel<server::Msg>,
-            host: &str,
-            port: u32,
-            _: &str,
-            _: u32,
             reply: server::ChannelOpenHandle,
             _: &mut server::Session,
         ) -> anyhow::Result<()> {
-            // The fixture is deliberately restricted to local test endpoints.
-            anyhow::ensure!(host == "127.0.0.1");
-            let mut stream = TcpStream::connect((host, port as u16)).await?;
+            self.channels.insert(channel.id(), channel);
             reply.accept().await;
-            self.jobs.spawn(async move {
-                let mut channel = channel.into_stream();
-                let _ = copy_bidirectional(&mut stream, &mut channel).await;
-            });
+            Ok(())
+        }
+        async fn pty_request(
+            &mut self,
+            id: ChannelId,
+            _: &str,
+            _: u32,
+            _: u32,
+            _: u32,
+            _: u32,
+            _: &[(russh::Pty, u32)],
+            s: &mut server::Session,
+        ) -> anyhow::Result<()> {
+            s.channel_success(id)?;
+            Ok(())
+        }
+        async fn shell_request(&mut self, id: ChannelId, s: &mut server::Session) -> anyhow::Result<()> {
+            s.channel_success(id)?;
+            s.data(id, b"restored-login-ok\r\n".to_vec())?;
             Ok(())
         }
     }
@@ -84,23 +87,29 @@ mod windows {
         }
     }
 
-    async fn phase(rule: &RunningRule, expected: Phase) {
+    /// Waits for the terminal to connect and show the server's greeting.
+    async fn logged_in(rx: &mut mpsc::Receiver<Event>) {
         timeout(Duration::from_secs(10), async {
+            let mut connected = false;
             loop {
-                let status = rule.status();
-                assert_ne!(status.phase, Phase::Error, "{}", status.message);
-                if status.phase == expected {
-                    break;
+                match rx.recv().await.expect("session ended") {
+                    Event::Status { connected: true, .. } => connected = true,
+                    Event::Status { error: true, message, .. } => panic!("{message}"),
+                    Event::Screen { snapshot, .. }
+                        if connected && snapshot.lines.iter().any(|l| l.contains("restored-login-ok")) =>
+                    {
+                        break;
+                    }
+                    _ => {}
                 }
-                sleep(Duration::from_millis(10)).await;
             }
         })
         .await
-        .expect("forwarding state timed out");
+        .expect("restored host did not log in");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn recovered_keychain_and_file_keys_forward_bytes_and_log_lifecycle() {
+    async fn recovered_keychain_and_file_keys_authenticate_and_log_lifecycle() {
         let entry = keychain::generate("restored authentication", KeyKind::Ed25519).unwrap();
         let server_key = russh::keys::PrivateKey::random(
             &mut russh::keys::key::safe_rng(),
@@ -125,23 +134,6 @@ mod windows {
         let _server = Task(tokio::spawn(async move {
             server.run_on_socket(config, &listener).await.unwrap();
         }));
-        let echo = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let destination = echo.local_addr().unwrap().port();
-        let _echo = Task(tokio::spawn(async move {
-            let mut jobs = JoinSet::new();
-            loop {
-                tokio::select! {
-                    Some(_) = jobs.join_next(), if !jobs.is_empty() => {},
-                    result = echo.accept() => {
-                        let (mut stream, _) = result.unwrap();
-                        jobs.spawn(async move {
-                            let (mut read, mut write) = stream.split();
-                            let _ = tokio::io::copy(&mut read, &mut write).await;
-                        });
-                    }
-                }
-            }
-        }));
         let source_dir = tempfile::tempdir().unwrap();
         let key_path = source_dir.path().join("source.key");
         fs::write(&key_path, entry.export_private().unwrap().as_bytes()).unwrap();
@@ -160,6 +152,7 @@ mod windows {
             .trust("127.0.0.1", ssh_port, &server_fingerprint)
             .unwrap();
         let code = recovery::generate(&source.data, None, true).unwrap();
+        // The file key must come back from the recovery code, not from the old path.
         fs::remove_file(key_path).unwrap();
         for mode in [RestoreMode::Merge, RestoreMode::Replace] {
             let temp = tempfile::tempdir().unwrap();
@@ -168,17 +161,6 @@ mod windows {
             let store = Store::open(store.path.clone()).unwrap();
             let mut book = LogBook::open(temp.path()).unwrap();
             for host in &store.data.hosts {
-                let reserved = TcpListener::bind("127.0.0.1:0").await.unwrap();
-                let bind_port = reserved.local_addr().unwrap().port();
-                drop(reserved);
-                let rule = Forward {
-                    label: host.name.clone(),
-                    host_id: host.id.clone(),
-                    bind_port,
-                    destination_host: "127.0.0.1".into(),
-                    destination_port: destination,
-                    ..Default::default()
-                };
                 let id = book
                     .start(
                         &host.id,
@@ -201,16 +183,17 @@ mod windows {
                 } else {
                     Some(store.key_material(&host.key_id).unwrap())
                 };
-                let mut running = RunningRule::start(
+                let (tx, mut rx) = mpsc::channel(64);
+                let session = ssh::spawn_with_key_material(
                     &tokio::runtime::Handle::current(),
-                    rule,
+                    host.id.clone(),
                     host.clone(),
-                    Zeroizing::new(String::new()),
+                    String::new(),
                     material,
-                    store.data.known_hosts[&store::key(&host.host, host.port)].clone(),
-                )
-                .unwrap();
-                phase(&running, Phase::Running).await;
+                    Some(store.data.known_hosts[&store::key(&host.host, host.port)].clone()),
+                    tx,
+                );
+                logged_in(&mut rx).await;
                 // Drive the public log lifecycle API after the observed SSH state.
                 book.update(&id, logs::CONNECTED, None).unwrap();
                 assert_eq!(
@@ -222,22 +205,8 @@ mod windows {
                         .status,
                     logs::CONNECTED
                 );
-                timeout(Duration::from_secs(10), async {
-                    let mut stream = TcpStream::connect(("127.0.0.1", bind_port)).await.unwrap();
-                    let bytes: Vec<u8> = (0..=255).cycle().take(32 * 1024).collect();
-                    let mut received = vec![0; bytes.len()];
-                    let (mut read, mut write) = stream.split();
-                    tokio::try_join!(write.write_all(&bytes), read.read_exact(&mut received))
-                        .unwrap();
-                    assert_eq!(received, bytes);
-                })
-                .await
-                .unwrap();
-                timeout(Duration::from_secs(10), running.stop())
-                    .await
-                    .unwrap();
-                assert_eq!(running.status().phase, Phase::Stopped);
-                assert_eq!(running.status().active_connections, 0);
+                let _ = session.commands.send(ssh::Command::Disconnect).await;
+                session.task.abort();
                 book.finish(&id).unwrap();
                 let reopened = LogBook::open(temp.path()).unwrap();
                 let logged = reopened.entries().last().unwrap();

@@ -10,7 +10,7 @@ OpenTermius brings host management, SSH terminals and SFTP file transfers into o
 
 The interface uses English, with Simplified Chinese available in **Settings → Appearance → Language**. Choose **English**, **简体中文**, or **System**. System is the persisted default: it uses Chinese when the Windows UI language is Chinese (or `LANG` starts with `zh` on other platforms), otherwise English. Changes apply immediately to labels, messages and page models. Server responses, terminal output, file names and user-created labels retain their original text. All translations are bundled; no translation service is contacted.
 
-Features include saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local terminals, multiple terminal tabs, SFTP transfers, key management, port forwarding, snippets, connection history, encrypted backup/restore, and one-click import from Xshell and WindTerm (host, port, name, group and key file; passwords are never imported). Credentials are encrypted locally with Windows DPAPI, or AES-256-GCM with a platform-specific master key on macOS/Linux. Host JSON exports omit credentials and trust records.
+Features include saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local terminals, multiple terminal tabs, SFTP transfers, key management, snippets, connection history, encrypted backup/restore, and one-click import from Xshell and WindTerm (host, port, name, group and key file; passwords are never imported). A password typed in Host Details, or at the prompt on a successful connection, is saved encrypted so you are not asked again. Credentials are encrypted locally with Windows DPAPI, or AES-256-GCM with a platform-specific master key on macOS/Linux. Host JSON exports omit credentials and trust records.
 
 Apart from your own SSH connections, the only network request is the update check: shortly after startup the installed app asks GitHub Releases for the latest version, and if one is newer it offers to download it, verifies its size and SHA-256 against the release `checksums.json`, and installs it silently before restarting. Nothing about you or your hosts is sent. Turn it off in **Settings → About → Check for updates automatically**.
 
@@ -115,4 +115,4 @@ SSH/SFTP 使用 russh 与 russh-sftp，终端屏幕使用 vt100，异步任务�
 
 ## 开发状态
 
-当前是预览版本，已包含密钥管理、端口转发、代码片段、已知主机、连接日志、偏好设置及恢复码备份。尚未提供 Mosh、串口、Telnet、FIDO2 或证书认证。终端支持输入法，但尚未覆盖全部 xterm 行为及长期压力场景；macOS/Linux 真机验证仍待完成。
+当前是预览版本，已包含密钥管理、代码片段、已知主机、连接日志、偏好设置及恢复码备份。尚未提供 Mosh、串口、Telnet、FIDO2 或证书认证。终端支持输入法，但尚未覆盖全部 xterm 行为及长期压力场景；macOS/Linux 真机验证仍待完成。

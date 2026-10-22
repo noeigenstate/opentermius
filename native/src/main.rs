@@ -84,6 +84,8 @@ struct State {
     local_path: PathBuf,
     local_request: u64,
     pending_sftp: Option<String>,
+    /// Password/passphrase typed at the connect prompt, saved to the host once it connects.
+    typed_secrets: BTreeMap<String, zeroize::Zeroizing<String>>,
     /// Sessions whose tab currently shows its SFTP view instead of the terminal.
     sftp_views: std::collections::BTreeSet<String>,
     remote_entries: Vec<ssh::RemoteFile>,
@@ -93,9 +95,6 @@ struct State {
     render_model: Rc<VecModel<TerminalRun>>,
     selecting: bool,
     mouse_button: Option<terminal::MouseButton>,
-    forwards: BTreeMap<String, opentermius::forwarding::RunningRule>,
-    forward_errors: BTreeMap<String, String>,
-    forwarding_timer: slint::Timer,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -424,11 +423,13 @@ impl State {
             created_at: None,
         };
         let mut secret = d.secret.to_string();
+        // A password typed in the editor is saved (encrypted) so connecting does not ask again.
+        let remember = d.remember || !secret.is_empty();
         let result = self
             .store
             .lock()
             .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
-            .and_then(|mut s| s.save(p, Some(&secret), d.remember));
+            .and_then(|mut s| s.save(p, Some(&secret), remember));
         secret.zeroize();
         match result {
             Ok(()) => {
@@ -461,7 +462,7 @@ impl State {
                 key_path: p.private_key_path.into(),
                 key_id: p.key_id.into(),
                 secret: SharedString::default(),
-                remember: p.encrypted_secret.is_some(),
+                remember: true,
                 tags: tags.into(),
             }
         } else {
@@ -852,6 +853,7 @@ impl State {
     }
     fn close(&mut self, id: &str) {
         pages::logs::closed(id);
+        self.typed_secrets.remove(id);
         self.sftp_views.remove(id);
         if let Some(view) = self.sessions.remove(id) {
             if let Some(transport) = view.transport {
@@ -1194,6 +1196,9 @@ impl State {
             }
             Some(Prompt::Credential { id }) => {
                 if accepted {
+                    if !answer.is_empty() {
+                        self.typed_secrets.insert(id.clone(), zeroize::Zeroizing::new(answer.clone()));
+                    }
                     self.start(&id, std::mem::take(&mut answer))
                 } else if let Some(s) = self.sessions.get_mut(&id) {
                     s.status = crate::i18n::t("Cancelled").into();
@@ -1307,6 +1312,9 @@ impl State {
                         .get(&id)
                         .filter(|session| !session.local)
                         .map(|session| session.profile.id.clone());
+                    if let Some(profile_id) = &profile_id {
+                        self.remember_typed_credentials(&id, profile_id);
+                    }
                     if let Some(profile_id) = profile_id {
                         let now = hosts::now_rfc3339();
                         let result = self
@@ -1326,6 +1334,8 @@ impl State {
                         }
                     }
                 } else if error {
+                    // A rejected password must not be saved.
+                    self.typed_secrets.remove(&id);
                     pages::logs::failed(&id, &message);
                 }
                 self.status(
@@ -2098,6 +2108,32 @@ impl State {
             }
         });
     }
+    /// After a successful login, keep what the user typed at the prompt (password and a
+    /// username the saved host did not have) so the next connection does not ask again.
+    fn remember_typed_credentials(&mut self, id: &str, profile_id: &str) {
+        let secret = self.typed_secrets.remove(id);
+        let username = self.sessions.get(id).map(|s| s.profile.username.clone()).unwrap_or_default();
+        let result = self
+            .store
+            .lock()
+            .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Configuration lock is unavailable")))
+            .and_then(|mut store| {
+                let Some(mut profile) = store.data.hosts.iter().find(|p| p.id == profile_id).cloned() else { return Ok(false) };
+                let new_username = profile.username.is_empty() && !username.is_empty();
+                if secret.is_none() && !new_username {
+                    return Ok(false);
+                }
+                if new_username {
+                    profile.username = username;
+                }
+                store.save(profile, secret.as_deref().map(String::as_str), true).map(|()| true)
+            });
+        match result {
+            Ok(true) => self.hosts(),
+            Ok(false) => {}
+            Err(error) => self.status(opentermius::tf!("Connected, but cannot save the credentials: {error}", "error" => format!("{error}")), true),
+        }
+    }
     fn show_sftp(&mut self, on: bool) {
         let local = self.active.as_ref().and_then(|id| self.sessions.get(id)).is_some_and(|s| s.local);
         let on = on && !local;
@@ -2340,6 +2376,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             local_request: 0,
             pending_sftp: None,
             sftp_views: Default::default(),
+            typed_secrets: BTreeMap::new(),
             remote_entries: Vec::new(),
             local_entries: Vec::new(),
             transfers: BTreeMap::new(),
@@ -2347,9 +2384,6 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             render_model: Rc::new(VecModel::from(Vec::new())),
             selecting: false,
             mouse_button: None,
-            forwards: BTreeMap::new(),
-            forward_errors: BTreeMap::new(),
-            forwarding_timer: slint::Timer::default(),
         })
     });
     ui.on_save_host(|draft| with_state(|s| s.save(draft)).unwrap_or(false));
@@ -2880,17 +2914,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             ui.set_tab_menu_x(410.0);
         }
     } else if let Some(section) = scene.strip_prefix("section-").filter(|_| smoke) {
-        if section == "forwarding-editor" {
-            ui.invoke_open_section("forwarding".into());
-            let bridge = ui.global::<ForwardingBridge>();
-            bridge.invoke_new_rule();
-            let mut draft = bridge.get_draft();
-            draft.label = crate::i18n::t("Development database").into();
-            draft.bind_port = "8080".into();
-            draft.destination_host = "127.0.0.1".into();
-            draft.destination_port = "5432".into();
-            bridge.set_draft(draft);
-        } else if section == "xshell-import" {
+        if section == "xshell-import" {
             ui.invoke_open_section("hosts".into());
             ui.set_menu_open(true);
         } else {
@@ -2981,10 +3005,6 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
     let platform_result = ui.run().context(rendering::PlatformFailure);
     STATE.with(|slot| {
         if let Some(mut state) = slot.borrow_mut().take() {
-            for forward in state.forwards.values() { forward.request_stop(); }
-            for (_, mut forward) in std::mem::take(&mut state.forwards) {
-                state.runtime.block_on(forward.stop());
-            }
             for (id, mut view) in std::mem::take(&mut state.sessions) {
                 pages::logs::closed(&id);
                 if let Some(transport) = view.transport.take() {
@@ -3083,13 +3103,11 @@ mod terminal_ux_tests {
             queue: VecDeque::new(), prompt: None, cols: 80, rows: 24,
             file_path: String::new(), search: String::new(), group_filter: String::new(),
             tag_filter: String::new(),
-            local_path: PathBuf::new(), local_request: 0, pending_sftp: None, sftp_views: Default::default(),
+            local_path: PathBuf::new(), local_request: 0, pending_sftp: None, sftp_views: Default::default(), typed_secrets: BTreeMap::new(),
             remote_entries: Vec::new(), local_entries: Vec::new(),
             transfers: BTreeMap::new(), next_transfer: 0,
             render_model: Rc::new(VecModel::from(Vec::new())),
             selecting: false, mouse_button: None,
-            forwards: BTreeMap::new(), forward_errors: BTreeMap::new(),
-            forwarding_timer: slint::Timer::default(),
         }
     }
 
@@ -3114,6 +3132,40 @@ mod terminal_ux_tests {
         state.order.push("old".into());
         state.active = Some("old".into());
         rx
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn typed_credentials_are_saved_but_rejected_ones_are_not() {
+        let mut s = state();
+        let temp = tempfile::tempdir().unwrap();
+        s.store = Arc::new(Mutex::new(Store::open(temp.path().join("config.json")).unwrap()));
+        let mut saved = profile();
+        saved.username.clear();
+        s.store.lock().unwrap().save(saved, None, false).unwrap();
+        let secret = |s: &State| {
+            let store = s.store.lock().unwrap();
+            let host = store.data.hosts.iter().find(|p| p.id == "profile").unwrap().clone();
+            (host.username, host.encrypted_secret.map(|e| store::unprotect(&e).unwrap()))
+        };
+
+        // Host editor: a typed password is kept even when the draft says not to remember.
+        let mut draft = s.edit("profile");
+        draft.secret = "editor-secret".into();
+        draft.remember = false;
+        assert!(s.save(draft));
+        assert_eq!(secret(&s).1.as_deref(), Some("editor-secret"));
+
+        // Connect prompt: saved only once the login succeeded, with the typed username.
+        let _rx = session(&mut s);
+        s.typed_secrets.insert("old".into(), zeroize::Zeroizing::new("wrong-secret".into()));
+        s.event(Event::Status { id: "old".into(), connected: false, message: "denied".into(), error: true });
+        assert_eq!(secret(&s), (String::new(), Some("editor-secret".into())));
+        s.typed_secrets.insert("old".into(), zeroize::Zeroizing::new("prompt-secret".into()));
+        s.event(Event::Status { id: "old".into(), connected: true, message: String::new(), error: false });
+        assert_eq!(secret(&s), ("tester".into(), Some("prompt-secret".into())));
+        assert!(s.typed_secrets.is_empty());
+        assert!(!std::fs::read_to_string(temp.path().join("config.json")).unwrap().contains("prompt-secret"));
     }
 
     fn input(rx: &mut mpsc::Receiver<Command>) -> Vec<u8> {

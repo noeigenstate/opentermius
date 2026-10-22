@@ -1,6 +1,5 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use opentermius::{
-    forwarding::Forward,
     keychain::KeyEntry,
     recovery::{self, RestoreMode},
     snippets::Snippet,
@@ -39,10 +38,6 @@ fn data() -> Data {
             id: "snippet-1".into(),
             ..Default::default()
         }],
-        forwards: vec![Forward {
-            id: "forward-1".into(),
-            ..Default::default()
-        }],
         known_hosts: [(
             store::key("example.invalid", 2222),
             "SHA256:original".into(),
@@ -75,10 +70,9 @@ fn both_modes_roundtrip_every_section_and_persist() {
                 result.hosts,
                 result.keys,
                 result.snippets,
-                result.forwards,
                 result.known_hosts
             ),
-            (1, 1, 1, 1, 1)
+            (1, 1, 1, 1)
         );
         let reopened = Store::open(destination.path.clone()).unwrap();
         assert_eq!(
@@ -408,11 +402,11 @@ fn merge_keeps_existing_replace_updates_matching_ids_and_preserves_pins() {
         assert_eq!(result.fingerprint_conflicts, vec![pin.clone()]);
         assert_eq!(destination.data.known_hosts[&pin], "SHA256:local");
         if mode == RestoreMode::Merge {
-            assert_eq!((result.hosts, result.skipped), (0, 4));
+            assert_eq!((result.hosts, result.skipped), (0, 3));
         } else {
             assert_eq!(
-                (result.hosts, result.keys, result.snippets, result.forwards),
-                (1, 1, 1, 1)
+                (result.hosts, result.keys, result.snippets),
+                (1, 1, 1)
             );
         }
     }

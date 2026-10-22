@@ -1,6 +1,5 @@
 //! Adversarial regression checks; all credentials and servers are local fixtures.
 use opentermius::{
-    forwarding::{self, Forward},
     import_xshell, keychain,
     recovery::{self, RestoreMode},
     snippets, ssh,
@@ -79,30 +78,6 @@ fn malformed_private_key_errors_do_not_echo_input() {
     let error = keychain::decode_private_key(&text, Some(secret)).unwrap_err();
     assert!(!format!("{error:#}").contains(secret));
     assert!(!format!("{error:?}").contains(secret));
-}
-
-#[test]
-fn forwarding_rule_count_is_bounded_but_existing_rules_can_be_edited() {
-    let existing: Vec<_> = (0..64)
-        .map(|n| Forward {
-            id: format!("rule-{n}"),
-            label: format!("Rule {n}"),
-            host_id: "host".into(),
-            bind_port: 9000 + n,
-            destination_host: "127.0.0.1".into(),
-            destination_port: 22,
-            ..Default::default()
-        })
-        .collect();
-    let mut additional = Forward {
-        id: String::new(),
-        label: "Additional".into(),
-        ..existing[0].clone()
-    };
-    assert!(additional.validate(&existing).is_err());
-    let mut edit = existing[0].clone();
-    edit.label = "Edited".into();
-    assert!(edit.validate(&existing).is_ok());
 }
 
 #[test]
@@ -354,7 +329,7 @@ fn bracketed_paste_cannot_break_out_and_query_replies_are_bounded() {
 }
 
 #[test]
-fn quick_connect_has_no_shell_side_effects_and_forward_defaults_are_loopback() {
+fn quick_connect_has_no_shell_side_effects() {
     let temp = tempfile::tempdir().unwrap();
     let marker = temp.path().join("must-not-exist");
     for command in [
@@ -365,39 +340,6 @@ fn quick_connect_has_no_shell_side_effects_and_forward_defaults_are_loopback() {
         assert!(store::parse_quick_connect(&command).is_err());
     }
     assert!(!marker.exists());
-    let rule: Forward = serde_json::from_str("{}").unwrap();
-    assert_eq!(rule.bind_address, "127.0.0.1");
-    let explicit: Forward = serde_json::from_str(r#"{"bindAddress":"0.0.0.0"}"#).unwrap();
-    assert_eq!(explicit.bind_address, "0.0.0.0");
-}
-
-#[tokio::test]
-async fn malformed_socks5_inputs_return_errors_without_panics() {
-    use tokio::io::{AsyncWriteExt, duplex};
-    let valid = [5, 1, 0, 5, 1, 0, 1, 127, 0, 0, 1, 0, 22];
-    let mut cases: Vec<Vec<u8>> = (0..valid.len()).map(|n| valid[..n].to_vec()).collect();
-    for index in [0, 3, 4, 5, 6] {
-        let mut bytes = valid.to_vec();
-        bytes[index] = 255;
-        cases.push(bytes);
-    }
-    cases.extend([
-        vec![5, 0],
-        vec![5, 1, 0, 5, 1, 0, 3, 0, 0, 22],
-        vec![5, 1, 0, 5, 1, 0, 3, 1, 0xff, 0, 22],
-    ]);
-    for bytes in cases {
-        let (mut writer, mut parser) = duplex(1024);
-        writer.write_all(&bytes).await.unwrap();
-        writer.shutdown().await.unwrap();
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            forwarding::socks5_connect(&mut parser),
-        )
-        .await
-        .unwrap();
-        assert!(result.is_err());
-    }
 }
 
 mod loopback {
@@ -713,7 +655,7 @@ mod loopback {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn untrusted_keys_block_terminal_sftp_and_forwarding_before_authentication() {
+    async fn untrusted_keys_block_terminal_and_sftp_before_authentication() {
         let fixture = Fixture::new().await;
         for known in [None, Some("SHA256:changed".into())] {
             let (tx, mut rx) = mpsc::channel(32);
@@ -745,43 +687,6 @@ mod loopback {
             }
             session.task.await.unwrap();
         }
-        let host = fixture.profile();
-        let rule = Forward {
-            label: "Test".into(),
-            host_id: host.id.clone(),
-            bind_port: 9999,
-            destination_host: "127.0.0.1".into(),
-            destination_port: 22,
-            ..Default::default()
-        };
-        assert!(
-            forwarding::RunningRule::start(
-                &tokio::runtime::Handle::current(),
-                rule.clone(),
-                host.clone(),
-                zeroize::Zeroizing::new(ECHOED_SECRET.into()),
-                None,
-                String::new()
-            )
-            .is_err()
-        );
-        let mut running = forwarding::RunningRule::start(
-            &tokio::runtime::Handle::current(),
-            rule,
-            host,
-            zeroize::Zeroizing::new(ECHOED_SECRET.into()),
-            None,
-            "SHA256:changed".into(),
-        )
-        .unwrap();
-        timeout(Duration::from_secs(15), async {
-            while running.status().phase != forwarding::Phase::Error {
-                tokio::time::sleep(Duration::from_millis(20)).await;
-            }
-        })
-        .await
-        .unwrap();
-        running.stop().await;
         assert_eq!(fixture.counters.auth.load(Ordering::SeqCst), 0);
         assert_eq!(fixture.counters.opens.load(Ordering::SeqCst), 0);
     }

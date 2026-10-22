@@ -197,6 +197,17 @@ fn validate_accepts_unicode_names_groups_and_users() {
 }
 
 #[test]
+fn configs_saved_with_port_forwarding_rules_still_load() {
+    // Port forwarding was removed; older configs keep loading and drop the rules on save.
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(&path, r#"{"version":2,"hosts":[],"forwards":[{"id":"old-rule","hostId":"h","bindPort":8080}]}"#).unwrap();
+    let store = Store::open(path.clone()).unwrap();
+    store.persist().unwrap();
+    assert!(!std::fs::read_to_string(&path).unwrap().contains("old-rule"));
+}
+
+#[test]
 fn open_missing_file_returns_an_empty_unwritten_store() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("nested").join("config.json");
@@ -205,7 +216,6 @@ fn open_missing_file_returns_an_empty_unwritten_store() {
     assert!(store.data.hosts.is_empty());
     assert!(store.data.known_hosts.is_empty());
     assert!(store.data.keys.is_empty());
-    assert!(store.data.forwards.is_empty());
     assert!(store.data.snippets.is_empty());
     assert!(!path.exists(), "opening must not create a config file");
 }

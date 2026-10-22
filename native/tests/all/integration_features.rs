@@ -1,6 +1,5 @@
 //! Cross-feature workflows using real persistence, DPAPI and loopback SSH only.
 use opentermius::{
-    forwarding::Forward,
     import_xshell,
     keychain::{self, KeyKind},
     recovery::{self, RestoreMode},
@@ -48,7 +47,6 @@ fn legacy_defaults_then_current_config_is_a_golden_roundtrip() {
     let mut store = Store::open(path.clone()).unwrap();
     assert_eq!(store.data.settings, Settings::default());
     assert!(store.data.keys.is_empty());
-    assert!(store.data.forwards.is_empty());
     assert!(store.data.snippets.is_empty());
     assert!(store.data.known_hosts.is_empty());
     settings::persist(&mut store, preferences()).unwrap();
@@ -174,16 +172,6 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
         1_700_000_000,
     )
     .unwrap();
-    let mut forward = Forward {
-        label: "QA tunnel".into(),
-        host_id: "keychain-host".into(),
-        bind_port: 41234,
-        destination_host: "127.0.0.1".into(),
-        destination_port: 8080,
-        ..Default::default()
-    };
-    forward.validate(&[]).unwrap();
-    source.data.forwards.push(forward);
     source.data.hosts_view.mode = "list".into();
     source.data.hosts_view.sort = "last".into();
     let known = store::parse_known_hosts(&format!("127.0.0.1 {}", entry.public_key));
@@ -202,11 +190,10 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
                 summary.hosts,
                 summary.keys,
                 summary.snippets,
-                summary.forwards,
                 summary.known_hosts,
                 summary.key_files
             ),
-            (3, 1, 1, 1, 1, 1)
+            (3, 1, 1, 1, 1)
         );
         let restored = Store::open(target.path.clone()).unwrap();
         assert_eq!(snapshot(&restored), snapshot(&target));
@@ -216,10 +203,6 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
         assert_eq!(
             serde_json::to_value(&restored.data.snippets).unwrap(),
             serde_json::to_value(&source.data.snippets).unwrap()
-        );
-        assert_eq!(
-            serde_json::to_value(&restored.data.forwards).unwrap(),
-            serde_json::to_value(&source.data.forwards).unwrap()
         );
         let password = restored
             .data
@@ -266,7 +249,6 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
             .map(|h| &h.id)
             .chain(restored.data.keys.iter().map(|k| &k.id))
             .chain(restored.data.snippets.iter().map(|s| &s.id))
-            .chain(restored.data.forwards.iter().map(|f| &f.id))
             .collect();
         assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
         let disk = fs::read_to_string(&restored.path).unwrap();
@@ -286,11 +268,10 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
                 again.hosts,
                 again.keys,
                 again.snippets,
-                again.forwards,
                 again.key_files,
                 again.skipped
             ),
-            (0, 0, 0, 0, 0, 6)
+            (0, 0, 0, 0, 5)
         );
         assert_eq!(snapshot(&target), expected);
     }
@@ -298,7 +279,7 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
 
 #[cfg(windows)]
 #[test]
-fn host_deletion_releases_key_but_preserves_detectable_orphan_forward() {
+fn host_deletion_releases_its_key() {
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(temp.path().join("config.json")).unwrap();
     let entry = keychain::generate("in use", KeyKind::Ed25519).unwrap();
@@ -307,11 +288,6 @@ fn host_deletion_releases_key_but_preserves_detectable_orphan_forward() {
     profile.auth_type = "key".into();
     profile.key_id = entry.id.clone();
     store.save(profile, None, false).unwrap();
-    store.data.forwards.push(Forward {
-        id: "orphan-rule".into(),
-        host_id: "referenced".into(),
-        ..Default::default()
-    });
     store.persist().unwrap();
     let before = snapshot(&store);
     assert!(
@@ -326,14 +302,7 @@ fn host_deletion_releases_key_but_preserves_detectable_orphan_forward() {
     store.delete("referenced").unwrap();
     store.delete_key(&entry.id).unwrap();
     let reopened = Store::open(store.path.clone()).unwrap();
-    assert_eq!(reopened.data.forwards[0].host_id, "referenced");
-    assert!(
-        !reopened
-            .data
-            .hosts
-            .iter()
-            .any(|h| h.id == reopened.data.forwards[0].host_id)
-    );
+    assert!(!reopened.data.hosts.iter().any(|h| h.id == "referenced"));
     assert!(reopened.key_material(&entry.id).is_err());
     let code = recovery::generate(&reopened.data, None, false).unwrap();
     let mut target = Store::open(temp.path().join("restored.json")).unwrap();

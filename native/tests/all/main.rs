@@ -1,7 +1,6 @@
 //! One integration-test executable. Keep fixtures scoped to their original
 //! modules so test names remain selectable as `<module>::<test>`.
 mod design_foundation;
-mod forwarding;
 mod hosts_ux;
 mod import_windterm;
 mod import_xshell;
