@@ -3,6 +3,9 @@
 /native/releases/
 /native/installer/staging/
 /native/test-output/
+/native/web/node_modules/
+/native/web/dist/
+/native/desktop/gen/
 __pycache__/
 *.pyc
 .env

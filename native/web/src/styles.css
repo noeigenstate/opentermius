@@ -1,0 +1,86 @@
+/* OpenTermius glass theme. The window is transparent and the OS blurs the desktop behind
+   it; surfaces here are translucent tints on top, cards stay solid. */
+:root {
+  --text: #1f2430;
+  --secondary: #6b7280;
+  --muted: #a3aab5;
+  --accent: #4f46e5;
+  --accent-hover: #6366f1;
+  --nav-icon: #5b57d6;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --card: #ffffff;
+  --card-border: #e3e7ec;
+  --ring-track: #e6e9ee;
+  --hover: rgba(30, 41, 59, 0.06);
+  --selected: rgba(30, 41, 59, 0.08);
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.85);
+  --titlebar: rgba(230, 233, 238, 0.72);
+  --sidebar: rgba(244, 246, 249, 0.66);
+  --backdrop: rgba(232, 235, 240, 0.74);
+  font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+.body { flex: 1; display: flex; min-height: 0; }
+
+/* --- Title bar ------------------------------------------------------------ */
+.titlebar { height: 51px; display: flex; align-items: center; gap: 6px; padding: 0 0 0 10px; background: var(--titlebar); user-select: none; }
+.titlebar-spacer { flex: 1; height: 100%; }
+.tab { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 8px; min-width: 150px; font-weight: 500; }
+.tab-active { background: rgba(255, 255, 255, 0.9); box-shadow: inset 0 -2px 0 var(--accent); }
+.chrome { width: 46px; height: 51px; display: grid; place-items: center; color: var(--secondary); }
+.chrome:hover { background: var(--hover); }
+.chrome-close:hover { background: #e81123; color: #fff; }
+
+/* --- Sidebar --------------------------------------------------------------- */
+.sidebar { width: 184px; display: flex; flex-direction: column; gap: 2px; padding: 10px; background: linear-gradient(180deg, rgba(249, 250, 252, 0.8), var(--sidebar)); border-right: 1px solid rgba(255, 255, 255, 0.7); }
+.sidebar-spacer { flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 10px; border-radius: 8px; text-align: left; transition: background 0.12s; }
+.nav-item:hover { background: var(--hover); }
+.nav-active { background: var(--selected); font-weight: 600; }
+.nav-icon { color: var(--nav-icon); display: grid; }
+
+/* --- Page ------------------------------------------------------------------ */
+.content { flex: 1; min-width: 0; overflow: auto; background: linear-gradient(180deg, rgba(241, 243, 247, 0.7), var(--backdrop)); }
+.page { padding: 14px 20px 24px; }
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.toolbar-spacer { flex: 1; }
+.glass { background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(18px) saturate(160%); }
+.pills { display: flex; gap: 2px; padding: 3px; border-radius: 999px; overflow: hidden; }
+.pill { height: 28px; padding: 0 12px; border-radius: 999px; color: var(--secondary); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.pill:hover { background: var(--hover); }
+.pill-active { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(30, 41, 59, 0.08); }
+.add-button { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--accent); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
+.add-button:hover { background: var(--accent-hover); }
+.search { display: flex; align-items: center; gap: 8px; width: 280px; height: 34px; padding: 0 12px; border-radius: 999px; color: var(--secondary); }
+.search input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); }
+
+/* --- Host cards ------------------------------------------------------------ */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; padding: 12px 12px 10px; box-shadow: 0 2px 10px rgba(30, 41, 59, 0.06); cursor: default; transition: border-color 0.12s, box-shadow 0.12s; }
+.card:hover { border-color: #d9dee5; box-shadow: 0 6px 18px rgba(30, 41, 59, 0.09); }
+.card-selected { border: 2px solid var(--accent); padding: 11px 11px 9px; }
+.card-head { display: flex; align-items: center; gap: 8px; height: 28px; }
+.card-head h3 { flex: 1; margin: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin: 0 4px; flex: none; }
+.dot-online { background: var(--success); }
+.icon-button { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; color: var(--secondary); }
+.icon-button:hover { background: var(--hover); color: var(--text); }
+.card-rings { display: flex; justify-content: space-around; margin-top: 8px; }
+.ring { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.ring text { font-size: 10px; font-weight: 600; fill: var(--text); }
+.ring-label { font-size: 11px; font-weight: 500; color: var(--secondary); }
+
+.empty { display: grid; place-items: center; height: 60%; color: var(--secondary); }
+.error { margin: 12px 20px 0; padding: 10px 12px; border-radius: 8px; color: #b91c1c; background: rgba(239, 68, 68, 0.1); }

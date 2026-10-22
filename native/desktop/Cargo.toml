@@ -1,0 +1,24 @@
+[package]
+name = "opentermius-desktop"
+version = "0.5.0"
+edition = "2024"
+description = "OpenTermius desktop app: Tauri shell around the Rust core with a React UI"
+license = "UNLICENSED"
+publish = false
+
+[[bin]]
+name = "opentermius"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = "1"
+opentermius = { path = ".." }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+
+[target.'cfg(windows)'.dependencies]
+window-vibrancy = "0.6"

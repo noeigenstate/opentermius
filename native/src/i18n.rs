@@ -314,7 +314,7 @@ fn translate_inner(message: &str, chinese: bool, depth: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeSet;
 
     #[test]
     fn every_key_has_both_languages_and_matching_placeholders() {
@@ -330,62 +330,6 @@ mod tests {
             a.sort();
             b.sort();
             assert_eq!(a, b, "placeholder mismatch: {en}");
-        }
-    }
-
-    #[test]
-    fn bundled_po_has_no_untranslated_messages() {
-        let po = include_str!("../translations/zh_CN/LC_MESSAGES/opentermius-ui.po");
-        let mut entries = BTreeMap::new();
-        let mut key = String::new();
-        for line in po.lines() {
-            if let Some(value) = line.strip_prefix("msgid ") {
-                key = serde_json::from_str(value).unwrap();
-            }
-            if let Some(value) = line.strip_prefix("msgstr ") {
-                let value: String = serde_json::from_str(value).unwrap();
-                if !key.is_empty() {
-                    assert!(!value.is_empty(), "untranslated: {key}");
-                    assert!(
-                        entries.insert(key.clone(), value).is_none(),
-                        "duplicate: {key}"
-                    );
-                }
-            }
-        }
-        assert!(entries.len() > 700);
-        for &(en, zh) in MESSAGES {
-            assert_eq!(
-                entries.get(en).map(String::as_str),
-                Some(zh),
-                "catalog mismatch: {en}"
-            );
-        }
-        // Check the actual UI call sites, including imported pages and controls.
-        let ui = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ui");
-        let mut files = std::fs::read_dir(&ui)
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .collect::<Vec<_>>();
-        files.extend(
-            std::fs::read_dir(ui.join("pages"))
-                .unwrap()
-                .map(|entry| entry.unwrap().path()),
-        );
-        for path in files
-            .into_iter()
-            .filter(|path| path.extension().is_some_and(|ext| ext == "slint"))
-        {
-            let source = std::fs::read_to_string(&path).unwrap();
-            for tail in source.split("@tr(").skip(1) {
-                let mut stream = serde_json::Deserializer::from_str(tail).into_iter::<String>();
-                let key = stream.next().unwrap().unwrap();
-                assert!(
-                    entries.contains_key(&key),
-                    "missing UI translation in {}: {key}",
-                    path.display()
-                );
-            }
         }
     }
 

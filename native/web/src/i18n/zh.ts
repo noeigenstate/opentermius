@@ -1,0 +1,23 @@
+/** Chinese UI strings, keyed by the English source text passed to `t()`. */
+export const zh: Record<string, string> = {
+  Hosts: "主机",
+  Keychain: "密钥管理",
+  Snippets: "代码片段",
+  "Known Hosts": "已知主机",
+  Logs: "连接日志",
+  Settings: "设置",
+  All: "全部",
+  "No group": "未分组",
+  "Search, or ssh user@host": "搜索，或输入 ssh user@host",
+  "New host": "新建主机",
+  Connect: "连接",
+  More: "更多",
+  CPU: "CPU",
+  MEM: "内存",
+  DISK: "磁盘",
+  "No hosts yet": "暂无主机",
+  "No matching hosts": "没有匹配的主机",
+  Minimize: "最小化",
+  Maximize: "最大化",
+  Close: "关闭",
+};
