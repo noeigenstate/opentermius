@@ -446,7 +446,10 @@ async fn connected_sessions_report_server_usage() {
     .await
     .expect("no usage reading with CPU");
     // Each poll adds 60 busy of 100 total ticks.
-    assert_eq!((stats.cpu, stats.memory, stats.disk), (Some(60), Some(75), Some(42)));
+    assert_eq!(
+        (stats.cpu, stats.memory, stats.disk),
+        (Some(60), Some(75), Some(42))
+    );
     assert!(state.stats_calls.load(Ordering::SeqCst) >= 2);
     server.abort();
 }
@@ -462,17 +465,17 @@ async fn initial_pty_request_uses_the_window_size() {
         "test-password".into(),
         Some(key),
         tx,
-        ssh::ConnectOptions { initial_size: (132, 40), ..Default::default() },
+        ssh::ConnectOptions {
+            initial_size: (132, 40),
+            ..Default::default()
+        },
     );
     connected(&mut rx).await;
     // The banner must be laid out at the real size, not at a default fixed later by a resize.
-    assert_eq!(state.sizes.lock().unwrap().first().copied(), Some((132, 40)));
-    loop {
-        if let Event::Screen { snapshot, .. } = next(&mut rx).await {
-            assert_eq!((snapshot.cols, snapshot.rows), (132, 40));
-            break;
-        }
-    }
+    assert_eq!(
+        state.sizes.lock().unwrap().first().copied(),
+        Some((132, 40))
+    );
     server.abort();
 }
 
@@ -499,14 +502,17 @@ async fn trusted_host_terminal_resize_sftp_and_no_clobber() {
         .send(Command::Input("hello 世界\r\n".as_bytes().to_vec()))
         .await
         .unwrap();
+    let mut output = Vec::new();
     loop {
-        if let Event::Screen { snapshot, .. } = next(&mut rx).await {
-            if snapshot.lines.iter().any(|s| s.contains("hello 世界")) {
-                assert_eq!((snapshot.cols, snapshot.rows), (80, 24));
+        if let Event::Output { data, .. } = next(&mut rx).await {
+            assert!(data.len() <= 65536);
+            output.extend(data);
+            if String::from_utf8_lossy(&output).contains("hello \u{4e16}\u{754c}") {
                 break;
             }
         }
     }
+    assert!(state.sizes.lock().unwrap().contains(&(80, 24)));
     let dir = tempfile::tempdir().unwrap();
     let local = dir.path().join("sample.bin");
     let data = (0..524288).map(|i| (i % 251) as u8).collect::<Vec<_>>();
@@ -637,7 +643,7 @@ async fn unknown_key_rejection_and_changed_key_never_authenticate() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unknown_key_approval_then_keyboard_interactive() {
-    let (port, key, _state, server) = fixture(true).await;
+    let (port, key, state, server) = fixture(true).await;
     let (tx, mut rx) = mpsc::channel(16);
     let session = ssh::spawn(
         &tokio::runtime::Handle::current(),
@@ -655,6 +661,14 @@ async fn unknown_key_approval_then_keyboard_interactive() {
             } => {
                 assert_eq!(fingerprint, key);
                 trusted = true;
+                session
+                    .commands
+                    .send(Command::Resize {
+                        cols: 144,
+                        rows: 45,
+                    })
+                    .await
+                    .unwrap();
                 reply.send(true).unwrap();
             }
             Event::AuthPrompt { prompts, reply, .. } => {
@@ -675,6 +689,10 @@ async fn unknown_key_approval_then_keyboard_interactive() {
         }
     }
     assert!(prompted);
+    assert_eq!(
+        state.sizes.lock().unwrap().first().copied(),
+        Some((144, 45))
+    );
     session.commands.send(Command::Disconnect).await.unwrap();
     timeout(Duration::from_secs(5), session.task)
         .await
@@ -717,7 +735,7 @@ async fn disconnect_cancels_pending_trust_without_waiting_for_prompt_timeout() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn congested_screen_notifications_preserve_all_network_bytes() {
+async fn congested_output_notifications_preserve_all_network_bytes() {
     let (port, key, _state, server) = fixture(false).await;
     let (tx, mut rx) = mpsc::channel(2);
     let session = ssh::spawn(
@@ -736,20 +754,20 @@ async fn congested_screen_notifications_preserve_all_network_bytes() {
     payload.extend_from_slice(b"ALL_BYTES_PARSED");
     session
         .commands
-        .send(Command::Input(payload))
+        .send(Command::Input(payload.clone()))
         .await
         .unwrap();
-    // A completely full frame queue must not stall parsing or corrupt VT state.
+    // A full output queue preserves every byte in order when consumption resumes.
     tokio::time::sleep(Duration::from_millis(250)).await;
+    let mut output = Vec::new();
     loop {
         match next(&mut rx).await {
-            Event::Screen { snapshot, .. }
-                if snapshot
-                    .lines
-                    .iter()
-                    .any(|s| s.contains("ALL_BYTES_PARSED")) =>
-            {
-                break;
+            Event::Output { data, .. } => {
+                assert!(!data.is_empty() && data.len() <= 65536);
+                output.extend(data);
+                if output.ends_with(b"ALL_BYTES_PARSED") {
+                    break;
+                }
             }
             Event::Status {
                 error: true,
@@ -759,6 +777,7 @@ async fn congested_screen_notifications_preserve_all_network_bytes() {
             _ => {}
         }
     }
+    assert!(output.ends_with(&payload));
     session.commands.send(Command::Disconnect).await.unwrap();
     timeout(Duration::from_secs(5), session.task)
         .await
@@ -811,7 +830,7 @@ async fn encrypted_private_key_authenticates_with_supplied_passphrase() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn terminal_queries_during_setup_and_normal_io_reach_server() {
+async fn terminal_queries_stream_unchanged_and_frontend_responses_reach_server() {
     let (port, known, state, server) = fixture(false).await;
     state.terminal_queries.store(1, Ordering::SeqCst);
     let (tx, mut rx) = mpsc::channel(16);
@@ -827,6 +846,26 @@ async fn terminal_queries_during_setup_and_normal_io_reach_server() {
     session
         .commands
         .send(Command::Input(b"ask-query".to_vec()))
+        .await
+        .unwrap();
+    let mut output = Vec::new();
+    timeout(Duration::from_secs(5), async {
+        while !output.windows(4).any(|bytes| bytes == b"\x1b[5n") {
+            if let Event::Output { data, .. } = next(&mut rx).await {
+                output.extend(data);
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert!(output.windows(4).any(|bytes| bytes == b"\x1b[6n"));
+    assert!(state.received_responses.lock().unwrap().is_empty());
+    // The frontend answers terminal queries through ordinary input.
+    session
+        .commands
+        .send(Command::Input(
+            b"\x1b[1;1R\x1b[3;4R\x1b[10;20R\x1b[0n".to_vec(),
+        ))
         .await
         .unwrap();
     timeout(Duration::from_secs(5), async {
@@ -857,4 +896,3 @@ async fn terminal_queries_during_setup_and_normal_io_reach_server() {
         .unwrap();
     server.abort();
 }
-

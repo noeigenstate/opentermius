@@ -91,14 +91,14 @@ mod windows {
     async fn logged_in(rx: &mut mpsc::Receiver<Event>) {
         timeout(Duration::from_secs(10), async {
             let mut connected = false;
+            let mut output = Vec::new();
             loop {
                 match rx.recv().await.expect("session ended") {
                     Event::Status { connected: true, .. } => connected = true,
                     Event::Status { error: true, message, .. } => panic!("{message}"),
-                    Event::Screen { snapshot, .. }
-                        if connected && snapshot.lines.iter().any(|l| l.contains("restored-login-ok")) =>
-                    {
-                        break;
+                    Event::Output { data, .. } => {
+                        output.extend(data);
+                        if connected && String::from_utf8_lossy(&output).contains("restored-login-ok") { break; }
                     }
                     _ => {}
                 }

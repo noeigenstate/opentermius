@@ -14,6 +14,5 @@ mod settings;
 mod sftp_ops;
 mod snippets;
 mod store_core;
-mod terminal_core;
 mod transport;
 mod update;
