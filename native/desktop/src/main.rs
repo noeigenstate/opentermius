@@ -2,6 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod hosts;
+mod keychain;
+mod snippets;
+mod known_hosts;
+mod logs;
 mod sessions;
 mod state;
 
@@ -16,6 +20,7 @@ fn main() {
         }
     };
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .setup(|_app| {
             // Frosted glass: the compositor blurs the desktop behind the transparent window.
@@ -28,7 +33,12 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![hosts::list_hosts])
+        .invoke_handler(tauri::generate_handler![hosts::list_hosts,
+            keychain::list_keys, keychain::generate_key, keychain::key_requires_passphrase,
+            keychain::import_key, keychain::rename_key, keychain::delete_key, keychain::export_public_key,
+            snippets::list_snippets, snippets::save_snippet, snippets::delete_snippet,
+            known_hosts::list_known_hosts, known_hosts::delete_known_host, known_hosts::import_known_hosts,
+            logs::list_logs, logs::clear_logs])
         .run(tauri::generate_context!())
         .expect("OpenTermius failed to start");
 }
