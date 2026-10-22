@@ -30,7 +30,7 @@ export default function App() {
         <Sidebar section={section} onSelect={setSection} />
         <main className="content">
           {error && <div className="error">{error}</div>}
-          {section === "hosts" ? <HostsPage hosts={hosts} /> : <div className="empty">{t(titles[section])}</div>}
+          {section === "hosts" ? <HostsPage hosts={hosts} onHostsChange={setHosts} /> : <div className="empty">{t(titles[section])}</div>}
         </main>
       </div>
     </div>

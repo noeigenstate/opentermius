@@ -16,6 +16,7 @@ fn main() {
         }
     };
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .setup(|_app| {
             // Frosted glass: the compositor blurs the desktop behind the transparent window.
@@ -28,7 +29,11 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![hosts::list_hosts])
+        .invoke_handler(tauri::generate_handler![
+            hosts::list_hosts, hosts::get_host, hosts::save_host, hosts::delete_host,
+            hosts::duplicate_host, hosts::rename_group, hosts::list_keychain_keys,
+            hosts::parse_quick_connect
+        ])
         .run(tauri::generate_context!())
         .expect("OpenTermius failed to start");
 }
