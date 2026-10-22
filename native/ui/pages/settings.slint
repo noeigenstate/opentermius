@@ -16,6 +16,7 @@ export global SettingsBridge {
     in-out property <int> appearance: 0;
     in-out property <int> language: 2;
     in-out property <bool> gpu-rendering: false;
+    in-out property <bool> glass-effect: true;
     // SSH
     in-out property <int> keepalive-seconds: 30;
     in-out property <int> connection-timeout-seconds: 15;
@@ -112,8 +113,8 @@ export component SettingsPage inherits Rectangle {
                     }
                 }
                 SettingRow {
-                    label: @tr("Smoother rendering (GPU)"); description: @tr("Uses more memory. Takes effect after restart.");
-                    Toggle { checked <=> SettingsBridge.gpu-rendering; toggled => { SettingsBridge.apply(); } }
+                    label: @tr("Glass effect"); description: @tr("Frosted glass that blurs the desktop behind the window. Uses the GPU and more memory; takes effect after restart.");
+                    Toggle { checked <=> SettingsBridge.glass-effect; toggled => { SettingsBridge.apply(); } }
                 }
                 SettingRow {
                     label: @tr("Terminal color scheme"); description: @tr("Applied to every terminal session"); divider: false;

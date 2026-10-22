@@ -24,6 +24,9 @@ import { ScrollView } from "std-widgets.slint";
 export global Theme {
     /// Light/dark switch. This is the only theme input; every colour derives from it.
     in-out property <bool> dark: false;
+    /// Glass mode (GPU renderer): the OS blurs the desktop behind a transparent window, so the
+    /// window, title bar, sidebar and page backdrop become see-through; cards stay solid.
+    in-out property <bool> translucent: false;
     /// Horizontal page gutter (spec 1.3): header, toolbar, content and grids all use it.
     in-out property <length> gutter: 20px;
 
@@ -78,8 +81,11 @@ export global Theme {
     /// Sidebar icons (indigo, as in the reference).
     out property <color> nav-icon: dark ? #a5b4fc : #5b57d6;
     /// Top of the soft vertical gradients that stand in for frosted glass.
-    out property <color> glass-top: dark ? #20253a : #f8f9fb;
-    out property <color> base-top: dark ? #1a1e2b : #eef0f4;
+    out property <color> glass-top: translucent ? #f9fafccc : dark ? #20253a : #f8f9fb;
+    out property <color> base-top: translucent ? #f1f3f7b3 : dark ? #1a1e2b : #eef0f4;
+    out property <color> sidebar: translucent ? #f1f3f6b8 : high;
+    out property <color> backdrop: translucent ? #e8ebf0c7 : base;
+    out property <color> titlebar: translucent ? #e6e9eebf : lowest;
     out property <color> titlebar-fg: dark ? #8d93a8 : #6b7280;
 
     // --- Entities -----------------------------------------------------------

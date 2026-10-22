@@ -109,6 +109,7 @@ fn read(ui: &AppWindow) -> Settings {
         color_scheme: ColorScheme::from_index(bridge.get_color_scheme()),
         appearance: Appearance::from_index(bridge.get_appearance()),
         gpu_rendering: bridge.get_gpu_rendering(),
+        glass_effect: bridge.get_glass_effect(),
         keepalive_seconds: bridge.get_keepalive_seconds().max(0) as u32,
         connection_timeout_seconds: bridge.get_connection_timeout_seconds().max(0) as u32,
         confirm_overwrite: bridge.get_confirm_overwrite(),
@@ -135,6 +136,7 @@ fn apply_to_ui(ui: &AppWindow, settings: &Settings, config_path: &str) {
     bridge.set_appearance(settings.appearance.index());
     bridge.set_language(settings.language.index());
     bridge.set_gpu_rendering(settings.gpu_rendering);
+    bridge.set_glass_effect(settings.glass_effect);
     // One light "glass" theme; a dark preference saved by older versions is ignored.
     ui.global::<Theme>().set_dark(false);
     bridge.set_keepalive_seconds(settings.keepalive_seconds.min(i32::MAX as u32) as i32);
@@ -270,17 +272,17 @@ mod tests {
         );
 
         let bridge = ui.global::<SettingsBridge>();
-        assert!(!bridge.get_gpu_rendering());
+        assert!(bridge.get_glass_effect());
         ui.invoke_open_section("settings".into());
-        // Settings uses main's 720px column; click the GPU switch in Appearance
+        // Settings uses main's 720px column; click the glass switch in Appearance
         // (the row right below Language now that the theme choice is gone).
         click(&ui, 887., 241.);
-        assert!(current().gpu_rendering);
-        assert!(opentermius::store::Store::open(path.clone()).unwrap().data.settings.gpu_rendering);
+        assert!(!current().glass_effect);
+        assert!(!opentermius::store::Store::open(path.clone()).unwrap().data.settings.glass_effect);
         click(&ui, 887., 241.);
-        assert!(!current().gpu_rendering);
+        assert!(current().glass_effect);
         click(&ui, 887., 241.);
-        assert!(current().gpu_rendering);
+        assert!(!current().glass_effect);
         for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
             bridge.set_appearance(appearance.index());
             bridge.invoke_apply();

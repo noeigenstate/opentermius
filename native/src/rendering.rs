@@ -1,7 +1,25 @@
 //! Renderer policy and native window polish. No network access.
 use anyhow::{Context, bail};
 use slint::winit_030::{CustomApplicationHandler, EventResult, winit};
-use std::{cell::Cell, path::PathBuf, rc::Rc, time::Instant};
+use std::{
+    cell::Cell,
+    path::PathBuf,
+    rc::Rc,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Instant,
+};
+
+/// Glass mode: a transparent window that the OS blurs behind. Only the GPU renderer can
+/// draw translucent pixels; the software renderer always paints an opaque window.
+static GLASS: AtomicBool = AtomicBool::new(false);
+
+pub fn set_glass(on: bool) {
+    GLASS.store(on, Ordering::Relaxed);
+}
+
+pub fn glass() -> bool {
+    GLASS.load(Ordering::Relaxed)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Renderer {
@@ -116,7 +134,7 @@ pub fn window_attributes(
     #[cfg(windows)]
     {
         use winit::platform::windows::WindowAttributesExtWindows;
-        attributes.with_undecorated_shadow(true)
+        attributes.with_undecorated_shadow(true).with_transparent(glass())
     }
     #[cfg(not(windows))]
     {
@@ -242,6 +260,45 @@ impl CustomApplicationHandler for WindowPolish {
     }
 }
 
+/// Asks the compositor to blur the desktop behind the window (Windows 10+). The API is
+/// undocumented but stable since Windows 10 1803; any failure leaves an opaque window.
+#[cfg(windows)]
+fn enable_blur_behind(hwnd: windows_sys::Win32::Foundation::HWND) {
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+    #[repr(C)]
+    struct AccentPolicy {
+        state: u32,
+        flags: u32,
+        gradient_color: u32,
+        animation_id: u32,
+    }
+    #[repr(C)]
+    struct CompositionAttributeData {
+        attribute: u32,
+        data: *mut std::ffi::c_void,
+        size: usize,
+    }
+    const WCA_ACCENT_POLICY: u32 = 19;
+    const ACCENT_ENABLE_BLURBEHIND: u32 = 3;
+    type SetWindowCompositionAttribute = unsafe extern "system" fn(windows_sys::Win32::Foundation::HWND, *mut CompositionAttributeData) -> i32;
+    let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
+    unsafe {
+        let module = GetModuleHandleW(user32.as_ptr());
+        if module.is_null() {
+            return;
+        }
+        let Some(proc) = GetProcAddress(module, c"SetWindowCompositionAttribute".as_ptr().cast()) else { return };
+        let set: SetWindowCompositionAttribute = std::mem::transmute(proc);
+        let mut accent = AccentPolicy { state: ACCENT_ENABLE_BLURBEHIND, flags: 0, gradient_color: 0, animation_id: 0 };
+        let mut data = CompositionAttributeData {
+            attribute: WCA_ACCENT_POLICY,
+            data: (&mut accent as *mut AccentPolicy).cast(),
+            size: std::mem::size_of::<AccentPolicy>(),
+        };
+        set(hwnd, &mut data);
+    }
+}
+
 fn polish_window(_window: &winit::window::Window) {
     #[cfg(windows)]
     {
@@ -250,6 +307,9 @@ fn polish_window(_window: &winit::window::Window) {
         if let Ok(handle) = _window.window_handle() {
             if let RawWindowHandle::Win32(handle) = handle.as_raw() {
                 let hwnd = handle.hwnd.get() as _;
+                if glass() {
+                    enable_blur_behind(hwnd);
+                }
                 let corner = DWMWCP_ROUND;
                 let policy = DWMNCRP_ENABLED;
                 // Windows 10 returns E_INVALIDARG for the Win11 corner attribute.

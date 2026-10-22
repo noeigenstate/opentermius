@@ -2290,6 +2290,7 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
             .unwrap_or_else(|| PathBuf::from("test-output"))
     });
     let actual_renderer = Rc::new(std::cell::Cell::new(renderer));
+    rendering::set_glass(renderer != rendering::Renderer::Software);
     slint::BackendSelector::new()
         .backend_name("winit".into())
         .renderer_name(renderer.slint_name().into())
@@ -2304,6 +2305,9 @@ fn run(store: Store, renderer: rendering::Renderer, started: std::time::Instant,
         Err(slint::SetRenderingNotifierError::Unsupported)
     ) { rendering::Renderer::Software } else { renderer };
     actual_renderer.set(renderer);
+    // Slint may have fallen back to software rendering, which cannot draw translucency.
+    rendering::set_glass(renderer != rendering::Renderer::Software);
+    ui.global::<Theme>().set_translucent(rendering::glass());
     ui.global::<Theme>().set_ui_font(fonts.0.into());
     ui.global::<Theme>().set_mono_font(fonts.1.into());
     ui.set_terminal_font(fonts.1.into());
@@ -3092,7 +3096,7 @@ fn main() {
     }
     let result = (|| -> anyhow::Result<i32> {
         let store = startup_store(&args)?;
-        let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref(), store.data.settings.gpu_rendering)?;
+        let requested = rendering::requested(&args, std::env::var("OPENTERMIUS_RENDERER").ok().as_deref(), store.data.settings.gpu_rendering || store.data.settings.glass_effect)?;
         let renderer = if requested.available() { requested } else {
             eprintln!("{}", opentermius::tf!("This build does not include the {} renderer; falling back to software rendering", "0" => format!("{}", requested.name())));
             rendering::Renderer::Software

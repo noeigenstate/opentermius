@@ -266,6 +266,8 @@ pub struct Settings {
     pub color_scheme: ColorScheme,
     pub appearance: Appearance,
     pub gpu_rendering: bool,
+    /// Frosted-glass window (GPU renderer + OS blur-behind); off draws an opaque window.
+    pub glass_effect: bool,
     pub keepalive_seconds: u32,
     pub connection_timeout_seconds: u32,
     pub confirm_overwrite: bool,
@@ -287,6 +289,7 @@ impl Default for Settings {
             color_scheme: ColorScheme::Default,
             appearance: Appearance::default(),
             gpu_rendering: false,
+            glass_effect: true,
             keepalive_seconds: KEEPALIVE_DEFAULT,
             connection_timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
             confirm_overwrite: true,

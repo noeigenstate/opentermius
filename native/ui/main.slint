@@ -82,7 +82,7 @@ export component AppWindow inherits Window {
     no-frame: true;
     title: @tr("OpenTermius"); preferred-width: 1240px; preferred-height: 800px; min-width: 900px; min-height: 600px;
     icon: @image-url("../../assets/icon.png");
-    background: Theme.base; default-font-family: Theme.ui-font; default-font-size: Theme.font-body;
+    background: Theme.translucent ? transparent : Theme.base; default-font-family: Theme.ui-font; default-font-size: Theme.font-body;
     in property <[HostRow]> hosts;
     in property <[GroupRow]> groups;
     in property <[TabRow]> tabs;
@@ -311,7 +311,7 @@ export component AppWindow inherits Window {
     Timer { interval: 500ms; running: root.terminal-cursor-blink && root.cursor-visible && !root.hosts-page; triggered => { root.cursor-phase = !root.cursor-phase; } }
     Timer { interval: 150ms; running: root.bell-flash; triggered => { root.bell-flash = false; } }
     VerticalLayout { spacing: 0px;
-        Rectangle { height: Theme.titlebar-height; background: Theme.lowest;
+        Rectangle { height: Theme.titlebar-height; background: Theme.titlebar;
             WindowDragArea { drag => { root.window-drag(); } double-clicked => { root.window-maximize(); } }
             HorizontalLayout { x: 9px; y: 9px; width: parent.width - 19px; height: 32px; spacing: 6px; cross-axis-alignment: center;
                 Rectangle { width: 150px; height: 32px; border-radius: Theme.r-field;
@@ -364,7 +364,7 @@ export component AppWindow inherits Window {
             }
         }
         HorizontalLayout { spacing: 0px;
-            Rectangle { width: Theme.sidebar-width; background: @linear-gradient(180deg, Theme.glass-top 0%, Theme.high 100%);
+            Rectangle { width: Theme.sidebar-width; background: @linear-gradient(180deg, Theme.glass-top 0%, Theme.sidebar 100%);
                 VerticalLayout { padding: 10px; spacing: 2px;
                     NavItem { text: @tr("Hosts"); icon: @image-url("icons/hosts.svg"); active: root.host-section; clicked => { root.section = "hosts"; root.hosts-page = true; root.search = ""; root.search-hosts(""); } }
                     NavItem { text: @tr("Keychain"); icon: @image-url("icons/keychain.svg"); active: root.hosts-page && root.section == "keychain"; clicked => { root.open-section("keychain"); } }
@@ -375,8 +375,9 @@ export component AppWindow inherits Window {
                     NavItem { text: @tr("Settings"); icon: @image-url("icons/settings.svg"); active: root.hosts-page && root.section == "settings"; clicked => { root.open-section("settings"); } }
                 }
             }
-            Rectangle { width: 1px; background: Theme.divider; }
-            Rectangle { horizontal-stretch: 1; background: @linear-gradient(180deg, Theme.base-top 0%, Theme.base 100%);
+            // A light edge reads as glass; a dark seam would show over the blurred desktop.
+            Rectangle { width: 1px; background: Theme.translucent ? #ffffffb3 : Theme.divider; }
+            Rectangle { horizontal-stretch: 1; background: @linear-gradient(180deg, Theme.base-top 0%, Theme.backdrop 100%);
                 VerticalLayout { spacing: 0px;
                     if root.host-section: Rectangle { height: 62px; background: transparent;
                         Timer { interval: 16ms; running: root.search-focus-requested; triggered => { search-input.focus(); root.search-focus-requested = false; } }

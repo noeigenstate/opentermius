@@ -2608,3 +2608,9 @@ msgstr "导出为 JSON，不含已保存的凭据"
 
 msgid "Server output is too large"
 msgstr "服务器输出过大"
+
+msgid "Glass effect"
+msgstr "玻璃效果"
+
+msgid "Frosted glass that blurs the desktop behind the window. Uses the GPU and more memory; takes effect after restart."
+msgstr "毛玻璃效果，透出并模糊窗口后方的桌面。使用 GPU，占用更多内存；重启后生效。"
