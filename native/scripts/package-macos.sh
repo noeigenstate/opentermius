@@ -7,8 +7,9 @@ if [[ $(uname -s) != Darwin ]]; then
     printf '%s\n' 'This packager requires macOS.' >&2
     exit 1
 fi
-version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)
-cargo build --release --locked
+version=$(node scripts/check-versions.mjs)
+(cd web && npm ci && npm run build)
+cargo build --release --locked -p opentermius-desktop --features tauri/custom-protocol
 target_root=${CARGO_TARGET_DIR:-target}
 binary=${OPENTERMIUS_TEST_EXECUTABLE:-$target_root/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release/opentermius}
 [[ -f $binary ]] || { printf 'Missing executable: %s\n' "$binary" >&2; exit 1; }
@@ -39,7 +40,7 @@ cat > "$bundle/Contents/Info.plist" <<PLIST
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>OpenTermius</string>
 <key>CFBundleDisplayName</key><string>OpenTermius</string>
-<key>CFBundleIdentifier</key><string>com.opentermius.desktop</string>
+<key>CFBundleIdentifier</key><string>app.opentermius.desktop</string>
 <key>CFBundleExecutable</key><string>opentermius</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$version</string>

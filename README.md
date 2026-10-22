@@ -2,120 +2,123 @@
 
 <h1 align="center">OpenTermius</h1>
 
-<p align="center">A lightweight, local-first SSH &amp; SFTP client.<br>Built with Rust and Slint. No account required.</p>
+<p align="center">A lightweight, local-first SSH &amp; SFTP desktop client.<br>Tauri 2 · React 19 · TypeScript · Rust. No account required.</p>
 
 ## English
 
-OpenTermius brings host management, SSH terminals and SFTP file transfers into one native workspace. It stores configuration locally and requires no product account, subscription, cloud sync or telemetry. Windows x64 is a validated preview with an installer. macOS and Linux build and pass the full test suite in GitHub Actions CI, but have not yet been hand-tested on real desktops.
+OpenTermius keeps connections and configuration on your device, without a product account, subscription, cloud sync or telemetry. The desktop app is being migrated from Slint to Tauri: React renders the interface in the system webview, while Rust owns SSH/SFTP, local processes, persistence and credentials. The built frontend is embedded in the shipping executable; Node.js and a development server are development tools only.
 
-The interface uses English, with Simplified Chinese available in **Settings → Appearance → Language**. Choose **English**, **简体中文**, or **System**. System is the persisted default: it uses Chinese when the Windows UI language is Chinese (or `LANG` starts with `zh` on other platforms), otherwise English. Changes apply immediately to labels, messages and page models. Server responses, terminal output, file names and user-created labels retain their original text. All translations are bundled; no translation service is contacted.
+### Features and status
 
-Features include saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local terminals, multiple terminal tabs, SFTP transfers, key management, snippets, connection history, encrypted backup/restore, and one-click import from Xshell and WindTerm (host, port, name, group and key file; passwords are never imported). A password typed in Host Details, or at the prompt on a successful connection, is saved encrypted so you are not asked again. Credentials are encrypted locally with Windows DPAPI, or AES-256-GCM with a platform-specific master key on macOS/Linux. Host JSON exports omit credentials and trust records.
+The Rust core provides saved hosts and groups, SSH password/private-key/interactive authentication, host fingerprint verification, local PTY terminals, SFTP transfers, key management, snippets, connection logs, encrypted recovery backups, Xshell/WindTerm import, server statistics and update checking. xterm.js is the terminal renderer for the new frontend. Desktop pages and commands are being ported incrementally; the initial Tauri shell exposes host listing. A successful build does not certify every migrated feature or desktop platform.
 
-The Hosts page shows each server as a card with group filters. While a server is connected, its card shows live CPU, memory and disk usage, read every few seconds over the same SSH connection from `/proc` and `df` (Linux servers; nothing is installed on the server). The interface uses one light, frosted-glass theme.
+Credentials stay in Rust and are encrypted locally: Windows DPAPI, macOS Keychain-backed encryption, and a private master-key file on Linux. Exported hosts omit credentials and trust records. Linux's master-key file is not encrypted by an OS keyring; protect it and retain it with configuration backups. English and Simplified Chinese translations are bundled locally.
 
-Apart from your own SSH connections, the only network request is the update check: shortly after startup the installed app asks GitHub Releases for the latest version, and if one is newer it offers to download it, verifies its size and SHA-256 against the release `checksums.json`, and installs it silently before restarting. Nothing about you or your hosts is sent. Turn it off in **Settings → About → Check for updates automatically**.
+Application network access is limited to SSH/SFTP connections and the existing update service. The Windows installer additionally contacts Microsoft if WebView2 needs to be installed. The system webview/runtime has its own servicing policy.
 
-For development, run `cargo build --locked` and `cargo test --locked` **inside `native/`**. Rust/Slint sources live in `native/src/` and `native/ui/`; the Rust message catalog is `native/src/i18n_catalog.rs`, and bundled Slint translations are in `native/translations/zh_CN/LC_MESSAGES/opentermius-ui.po` (named for the UI crate). Add English source keys and Chinese translations together. Localization tests check catalog coverage and placeholder parity. Installer languages are configured separately.
+### Install
 
-Windows localization screenshots: [English main window](docs/screenshots/i18n-en-main.png), [English Settings](docs/screenshots/i18n-en-settings.png), [Chinese main window](docs/screenshots/i18n-zh-main.png), [Chinese Settings](docs/screenshots/i18n-zh-settings.png).
+Download `OpenTermius-<version>-windows-x64-setup.exe` and `checksums.json` from [Releases](https://github.com/noeigenstate/opentermius/releases). The Windows x64 installer is unsigned; SmartScreen may warn. Compare its SHA-256 with `checksums.json` before running it.
 
-## 中文
+The existing NSIS installer installs per user, creates shortcuts and upgrades the existing directory in place. Microsoft Edge **WebView2 Runtime** is required: setup detects per-machine and per-user installations, and runs the bundled Microsoft-signed Evergreen bootstrapper if missing. That step needs internet access; for offline installation, preinstall the runtime using Microsoft's [Evergreen Standalone Installer](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#offline-deployment). Runtime installation failure stops setup before application files are replaced.
 
-OpenTermius 面向 **Windows、macOS 和 Linux** 打造轻量原生终端体验，将主机管理、远程会话和文件传输放在同一个工作区。连接信息保存在本机，无需注册产品账号，没有云同步、订阅或遥测服务。
+Uninstall keeps local configuration by default. The optional data-removal checkbox (or `/REMOVEDATA` for silent uninstall) removes it. macOS and Linux build coverage is configured in CI; signed releases and real desktop verification remain separate work.
 
-在 **设置 → 外观 → 语言** 中选择 English、简体中文或跟随系统，即时切换界面语言。默认跟随系统：Windows 界面语言为中文时使用简体中文，其他情况使用英文；非 Windows 读取 `LANG`。服务器响应、终端输出、文件名与用户输入保留原文，翻译完全离线。
+### Development and tests
 
-| 平台 | 当前状态 |
-| --- | --- |
-| Windows x64 | 可运行的预览版本，已验证 |
-| macOS | GitHub Actions CI（macos-latest）构建与全部测试通过；尚未经真机手工验证 |
-| Linux | GitHub Actions CI（ubuntu-latest）构建与全部测试通过；尚未经真机手工验证 |
+Prerequisites: Node.js 22, npm, stable Rust, and [platform Tauri dependencies](https://v2.tauri.app/start/prerequisites/). Windows needs Visual Studio C++ Build Tools and WebView2; macOS needs Xcode Command Line Tools. Linux packages (including WebKitGTK 4.1 and Ayatana AppIndicator) are listed in [CI](.github/workflows/ci.yml).
 
-![OpenTermius](docs/screenshots/home.png)
-
-## 当前功能
-
-- 主机创建与编辑、搜索、分组筛选和 JSON 导入/导出。
-- SSH 密码、私钥及交互式认证；首次连接确认 SHA-256 指纹，指纹变化时拒绝连接。
-- 多标签终端、Unicode/ANSI 输出、窗口尺寸同步、历史滚动和复制粘贴。
-- 本地终端：Windows 使用 ConPTY/PowerShell；macOS/Linux 使用 PTY 和用户的 `$SHELL` 登录 shell。
-- SFTP 双栏文件浏览、流式上传与下载；上传覆盖需确认，下载不覆盖已有文件。
-- 主机页以卡片展示服务器并支持分组筛选；已连接的服务器实时显示 CPU、内存和磁盘占用（每隔几秒通过同一 SSH 连接读取 `/proc` 与 `df`，适用于 Linux，不在服务器上安装任何东西）。界面采用单一浅色毛玻璃主题。
-- 一键从 Xshell、WindTerm 导入主机（地址、端口、名称、分组和密钥文件；不导入密码）。
-- 自动更新：启动后向 GitHub Releases 查询新版本，确认后下载，按发布的 `checksums.json` 校验大小与 SHA-256，静默安装并重启；不发送任何个人或主机信息，可在 **设置 → 关于 → 自动检查更新** 关闭。
-- 加密保存密码和密钥口令：Windows DPAPI；macOS Keychain 主密钥 + AES-256-GCM；Linux 本地主密钥 + AES-256-GCM。主机导出不含凭据或信任记录。
-
-## 安装
-
-Windows 安装程序：`native/releases/OpenTermius-<version>-windows-x64-setup.exe`。双击安装，默认按当前用户安装到 `%LOCALAPPDATA%\Programs\OpenTermius`，无需管理员权限。安装程序提供开始菜单快捷方式，并可选择创建桌面快捷方式；安装或覆盖升级前会检查 OpenTermius 是否正在运行。
-
-卸载会删除程序文件和快捷方式，但默认保留 `%APPDATA%\OpenTermius` 中的配置。如需一并删除主机、凭据和偏好设置，请在卸载界面勾选“同时删除我的数据”。
-
-配置保存在系统配置目录的 `OpenTermius/opentermius-native.json`。升级时可自动读取旧版本的本地配置，不覆盖已有的新配置。程序目前未配置发布者签名，构建产物不提交到源码仓库。
-
-## 开发
-
-本机验证环境为 Windows x64、Rust 1.97.1 MSVC、Slint 1.18.1，需要 Visual Studio C++ Build Tools。macOS 需要 Xcode Command Line Tools；Linux 的系统开发依赖见 `.github/workflows/ci.yml`。首次获取依赖需要网络，应用运行时不依赖网络服务（SSH/SFTP 连接除外）。
-
-```powershell
-cd native
-cargo run --locked
-cargo test --locked
-cargo build --release --locked
+```sh
+cd native/web
+npm install
+npm run dev
 ```
 
-请在 `native/` 内执行 Cargo，以加载该目录配置。默认使用宿主目标；Windows x64 MSVC 继续使用静态 CRT。默认产物位于 `target/debug` / `target/release`（Windows 带 `.exe`）；显式 `--target` 构建则位于 `target/<triple>/...`，`CARGO_TARGET_DIR` 可覆盖根目录。
+In a second terminal:
 
-工作区将 Slint 生成代码单独放在 `opentermius-ui` 中，`.slint` 源文件仍在 `native/ui/`。集成测试统一从 `native/tests/all/main.rs` 加载；新增测试文件后须在该入口声明模块。筛选测试使用 `cargo test --locked --test all transport::` 等模块前缀。测速方法及开发编译选项见 [编译速度记录](docs/build-speed.md)。
+```sh
+cd native
+cargo run --locked -p opentermius-desktop
+```
 
-Linux 需安装 X11/Wayland、fontconfig、xkbcommon 和等宽字体；文件对话框需要 XDG desktop portal 及桌面环境对应的 portal backend。终端字体为 Windows Cascadia Mono（未安装时 Consolas）、macOS Menlo、Linux DejaVu Sans Mono，度量与渲染共享同一字体。
+Alternatively, from `native/desktop/`, run `../web/node_modules/.bin/tauri dev` (PowerShell: `../web/node_modules/.bin/tauri.cmd dev`). This uses the web package's installed CLI and configured frontend development hook.
 
-macOS 将随机 256 位主密钥保存为默认 Keychain 的 generic password，钥匙串锁定或拒绝访问时保存凭据会失败。Linux 为避免引入额外 Secret Service 依赖，使用配置目录下当前用户拥有、权限为 `0600` 的 `master-key-v1` 文件；配置目录不可由其他用户写入。**Linux 主密钥文件未由系统钥匙串加密**，无法防御已能读取当前用户文件的攻击者。备份配置时应安全备份该文件；丢失主密钥后无法恢复已保存的密码。非 Windows 凭据带 `v1:` 前缀，不支持直接解密其他机器/平台的已有凭据；Windows 原始 DPAPI 格式保持兼容。`--data-dir` 同时隔离便携加密主密钥。
+Run Cargo inside `native/` so its platform configuration is loaded. Keep one local Cargo build running at a time; do not change target directories to bypass file locks. In this Windows workspace, build output, caches and temporary files must remain on E:.
 
-在仓库根目录打包 Windows 安装程序及 SHA-256 清单：
+```sh
+cd native
+node scripts/check-versions.mjs
+node --test scripts/check-versions.test.mjs
+cargo build --locked --workspace
+cargo test --locked --workspace
+cd web
+npm run build
+```
+
+See [Tauri architecture](docs/tauri-architecture.md) for layout and the command/event contract. Rust messages use `native/src/i18n_catalog.rs`; frontend Chinese translations live in `native/web/src/i18n/zh/`. Read `AGENTS.md` and matching repository skills before changes. Historical Slint screenshots and validation documents describe the previous UI and do not validate the new app.
+
+### Build and release
+
+From the repository root on Windows, with NSIS 3 installed:
 
 ```powershell
 ./native/scripts/package.ps1
 ```
 
-产物为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 和 `native/releases/checksums.json`，不再生成便携 exe。打包需要 NSIS 3；脚本会从 `-MakensisPath`、`PATH`、标准安装目录或 `%LOCALAPPDATA%\electron-builder\Cache\nsis` 查找 `makensis.exe`。未安装时可执行：
+The script runs `npm ci` and `npm run build` in `native/web/`, then this command in `native/`:
 
-```powershell
-winget install -e --id NSIS.NSIS --accept-source-agreements --accept-package-agreements
+```sh
+cargo build --release --locked -p opentermius-desktop --features tauri/custom-protocol
 ```
 
-安装程序验证会将安装目录设为独立临时目录，静默安装、检查快捷方式和 HKCU 卸载项，再静默卸载并确认用户配置保留：
+`tauri/custom-protocol` embeds `web/dist` into the Tauri executable. A plain Cargo release build does not enable the shipping asset protocol. Our existing `installer/installer.nsi` packages `target/release/opentermius.exe` (honoring Cargo's configured target directory), producing `native/releases/OpenTermius-<version>-windows-x64-setup.exe` and `checksums.json`. Tauri's own bundler stays disabled. See [packaging details](native/installer/README.md) for NSIS discovery, cached bootstrapper input and `-SkipBuild`.
 
-```powershell
-./native/installer/verify-install.ps1
-```
+The canonical version is `native/desktop/tauri.conf.json`; it must match both Cargo manifests and the web manifest/lockfile (currently `0.5.0`). Packaging and both CI workflows enforce this. A matching `vX.Y.Z` tag triggers the release workflow, publishing the same installer asset name and checksum format consumed by the existing updater. Silent upgrades retain `installer /S /D=<install-dir>` with `/D` last and unquoted. The Tauri shell must also wire the core updater's `--apply-update` helper entry point before end-to-end in-app updates can be certified.
 
-在对应宿主系统运行 `bash native/scripts/package-macos.sh` 或 `bash native/scripts/package-linux.sh`，输出到 `native/releases/`。macOS 脚本使用 `sips` + `iconutil` 将已提交的 PNG 转换为 ICNS，生成 `.app` 和 `hdiutil` DMG；缺少图标工具时使用系统默认图标，未签名/公证。Linux 脚本生成含二进制、`.desktop`、PNG 图标及安装说明的 tar.gz，不捆绑系统动态库。两个脚本支持 `CARGO_BUILD_TARGET`、`CARGO_TARGET_DIR` 和 `OPENTERMIUS_TEST_EXECUTABLE`。尚未在对应系统执行打包脚本。
+`native/installer/verify-install.ps1` tests silent install, overwrite upgrade, shortcuts, registration, uninstall and configuration retention on a clean Windows account. It refuses to run over a real installation. Host-side archive scripts for macOS/Linux also build with embedded assets; those packages are unsigned and require platform-specific validation.
 
-实际 GUI 集成测试需交互式 Windows 桌面，使用临时 SSH/SFTP 服务及隔离配置：
+## 中文
 
-```powershell
+OpenTermius 是轻量、本地优先的 SSH/SFTP 桌面客户端，无需产品账号、订阅或云同步，也不收集遥测。项目正在从 Slint 迁移到 **Tauri 2 + React 19 + TypeScript + Rust**：React 在系统 WebView 中显示界面，Rust 负责连接、进程、配置和凭据。发布程序内嵌编译后的前端，运行时无需 Node.js 或开发服务器。
+
+### 功能与状态
+
+Rust 核心已包含主机与分组、SSH 密码/私钥/交互式认证、指纹校验、本地 PTY、SFTP、密钥管理、代码片段、连接日志、加密备份恢复、Xshell/WindTerm 导入、服务器状态和更新检查。新终端使用 xterm.js；各页面和命令正在逐步移植，初始 Tauri 外壳提供主机列表。构建成功不代表所有迁移功能或桌面平台已完成验收。
+
+凭据由 Rust 管理并在本地加密：Windows 使用 DPAPI，macOS 使用 Keychain 主密钥，Linux 使用私有主密钥文件。主机导出不包含凭据或信任记录。Linux 主密钥文件未由系统钥匙串加密，应妥善保护并随配置备份。英文和简体中文翻译随程序离线提供。
+
+应用联网范围为 SSH/SFTP 与已有更新服务；Windows 安装程序仅在缺少 WebView2 时联系 Microsoft 安装运行时。系统 WebView/运行时有独立的维护更新策略。
+
+### 安装
+
+从 [Releases](https://github.com/noeigenstate/opentermius/releases) 下载 `OpenTermius-<version>-windows-x64-setup.exe` 与 `checksums.json`，核对 SHA-256 后安装。当前安装包未签名，SmartScreen 可能提示警告。
+
+沿用 NSIS 按当前用户安装，创建快捷方式并覆盖升级原目录。程序需要 **WebView2 Runtime**：安装程序检查机器级和用户级注册信息，缺失时运行随包携带、经 Microsoft 签名的 Evergreen 引导安装程序，此步骤需要联网。离线环境应预先安装 Microsoft 的 [Evergreen 完整离线安装包](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#offline-deployment)。运行时安装失败会在替换程序文件前终止安装。
+
+卸载默认保留本地配置；可勾选删除数据，或静默卸载时传入 `/REMOVEDATA`。macOS/Linux 已配置 CI 构建与测试；签名发行和真实桌面验收需分别完成。
+
+### 开发与测试
+
+需要 Node.js 22、npm、稳定版 Rust 及 Tauri 平台构建依赖。Windows 需要 Visual Studio C++ Build Tools 和 WebView2，macOS 需要 Xcode Command Line Tools，Linux 依赖见 [CI](.github/workflows/ci.yml)。
+
+在 `native/web/` 执行 `npm install`，然后启动 `npm run dev`；另开终端，在 `native/` 执行 `cargo run --locked -p opentermius-desktop`。也可在 `native/desktop/` 使用 `../web/node_modules/.bin/tauri dev`（PowerShell 使用 `tauri.cmd`）。
+
+```sh
 cd native
-$env:OPENTERMIUS_TEST_EXECUTABLE = (Resolve-Path target/release/opentermius.exe).Path
-$env:OPENTERMIUS_SMOKE_OUTPUT = Join-Path (Get-Location) 'test-output/release-live'
-cargo test --locked --test all transport::native_gui_live_selftest -- --ignored --nocapture
+node scripts/check-versions.mjs
+node --test scripts/check-versions.test.mjs
+cargo build --locked --workspace
+cargo test --locked --workspace
+cd web
+npm run build
 ```
 
-## 自动构建
+Cargo 应从 `native/` 内运行，每次仅启动一个本地 Cargo 构建，不通过切换目标目录绕过文件锁。本 Windows 工作区的构建产物、缓存与临时文件保留在 E:。接口约定见 [Tauri 架构文档](docs/tauri-architecture.md)，修改前阅读 `AGENTS.md` 及相关技能。历史 Slint 截图与验证记录不代表新界面已验收。
 
-[Windows installer 工作流](.github/workflows/windows-release.yml) 在推送到 `main`、向 `main` 提交 PR、推送 `v*` 标签时运行，也可在 GitHub Actions 中通过 **Run workflow** 手动触发。工作流使用 Windows runner 和 Rust stable，依次运行锁定依赖的测试、release 构建及 NSIS 打包；需要交互式桌面的 GUI 测试保持忽略。
+### 构建与发布
 
-构建成功后，在该次运行的 **Artifacts** 中下载 `OpenTermius-windows-x64-setup`，内含 `OpenTermius-<version>-windows-x64-setup.exe` 和 `checksums.json`。推送与 `native/Cargo.toml` 版本一致的 `vX.Y.Z` 标签还会自动创建 GitHub Release，附上这两个文件并在发布说明中列出 SHA-256；版本不一致会直接失败。安装程序尚未签名，Windows SmartScreen 可能提示警告，可使用 `Get-FileHash <安装程序路径> -Algorithm SHA256` 核对清单中的哈希值。
+安装 NSIS 3 后，在仓库根目录执行 `./native/scripts/package.ps1`。脚本先执行前端 `npm ci` 和 `npm run build`，再构建 `opentermius-desktop`，显式启用 `tauri/custom-protocol` 内嵌静态资源。沿用现有 NSIS 安装脚本，输出 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 与 `checksums.json`，不使用 Tauri 自带安装器。详细参数见 [安装程序说明](native/installer/README.md)。
 
-## 设计与实现
+版本以 `native/desktop/tauri.conf.json` 为准，必须与两个 Cargo 清单及前端清单/锁文件一致，当前为 `0.5.0`。脚本和 CI 会检查一致性。匹配的 `vX.Y.Z` 标签触发发布，保持已有更新器使用的文件名、校验格式及 `/S /D=<安装目录>` 升级协议（`/D` 必须最后且不加引号）。Tauri 外壳还需接入核心更新器的 `--apply-update` 入口，才能完成应用内更新端到端验收。
 
-界面由 Slint 直接渲染，使用系统字体和项目绘制的 SVG 图标。应用标识源文件为 [assets/logo.svg](assets/logo.svg)，Windows 程序内嵌多尺寸图标及 OpenTermius 版本信息。修改标识后，可使用 ImageMagick 执行 `./scripts/generate-icons.ps1` 重新生成 PNG/ICO；正常构建无需 ImageMagick。
-
-SSH/SFTP 使用 russh 与 russh-sftp，终端屏幕使用 vt100，异步任务由 Tokio 调度。应用不需要 Electron、Chromium、WebView 或 Node.js 运行时。
-
-实现细节见 [架构文档](docs/architecture.md)，本次适配验证见 [跨平台验证记录](docs/cross-platform-validation.md)，历史 Windows 发布产物验证见 [validation.json](docs/validation.json)。
-
-## 开发状态
-
-当前是预览版本，已包含密钥管理、代码片段、已知主机、连接日志、偏好设置及恢复码备份。尚未提供 Mosh、串口、Telnet、FIDO2 或证书认证。终端支持输入法，但尚未覆盖全部 xterm 行为及长期压力场景；macOS/Linux 真机验证仍待完成。
+在干净 Windows 账号运行 `native/installer/verify-install.ps1` 可验证静默安装、覆盖升级、快捷方式、注册项、卸载和配置保留；脚本发现真实安装时会拒绝运行。macOS/Linux 归档脚本也会内嵌前端，但产物未签名，仍需对应平台验证。

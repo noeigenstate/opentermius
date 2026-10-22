@@ -7,8 +7,9 @@ if [[ $(uname -s) != Linux ]]; then
     printf '%s\n' 'This packager requires Linux.' >&2
     exit 1
 fi
-version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)
-cargo build --release --locked
+version=$(node scripts/check-versions.mjs)
+(cd web && npm ci && npm run build)
+cargo build --release --locked -p opentermius-desktop --features tauri/custom-protocol
 target_root=${CARGO_TARGET_DIR:-target}
 binary=${OPENTERMIUS_TEST_EXECUTABLE:-$target_root/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release/opentermius}
 [[ -f $binary ]] || { printf 'Missing executable: %s\n' "$binary" >&2; exit 1; }
@@ -38,8 +39,8 @@ Run bin/opentermius from this extracted directory.
 To install per-user, copy bin/opentermius to ~/.local/bin, and copy the
 share/applications and share/icons contents into the matching ~/.local/share
 directories. Ensure ~/.local/bin is on PATH for the desktop launcher.
-Requires system X11/Wayland, fontconfig, xkbcommon, fonts, and an XDG desktop
-portal (with a desktop-specific implementation) for file dialogs.
+Requires GTK 3, WebKitGTK 4.1, an AppIndicator implementation, fonts, and an XDG
+desktop portal (with a desktop-specific implementation) for file dialogs.
 Saved secrets use AES-256-GCM and a 0600 master-key-v1 file in the OpenTermius
 config directory. This file is not protected by an OS keyring. Keep it private
 and back it up with the config; losing it makes saved secrets unrecoverable.

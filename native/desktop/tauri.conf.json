@@ -27,6 +27,8 @@
   },
   "bundle": {
     "active": false,
+    "publisher": "OpenTermius",
+    "shortDescription": "OpenTermius SSH and SFTP client",
     "icon": ["icons/icon.ico", "icons/icon.png"]
   }
 }
