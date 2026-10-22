@@ -15,6 +15,8 @@ native/
     src/components/        shared UI (TitleBar, Sidebar, UsageRing, Dialog, …)
     src/i18n.ts            `t("English text")`; Chinese strings in src/i18n/zh/<feature>.ts
     src/styles.css         glass theme tokens (CSS variables) and shared classes
+    src/hosts.css          host workspace, metrics and interaction states
+    src/workspaces.css     auxiliary pages, grouped settings and SFTP surfaces
 ```
 
 ## Conventions
@@ -44,12 +46,24 @@ native/
   in your feature's own `src/i18n/zh/<feature>.ts` (default-exported map); Rust messages go through `opentermius::i18n` (catalog tests).
 - **Style**: reuse the CSS variables in `styles.css`; cards solid white, chrome
   translucent (`.glass`); no new UI libraries without need.
+- **Motion**: use finite CSS feedback, leave resting controls untransformed and
+  respect reduced motion. `SurfaceEffects` delegates tooltips and suppresses
+  decorative animation while the window is inactive. Logs pause polling when
+  their page or document is hidden. See `skills/desktop-ui-design/SKILL.md`.
 
 ## Verification (every change)
 
 In `native/`: `cargo build --locked` (zero warnings) and `cargo test --locked`.
 In `native/web/`: `npm run build` (TypeScript strict + Vite). Follow
 `skills/code-quality-refactor/SKILL.md`.
+
+For isolated desktop verification, pass `--data-dir=<fixture-directory>` to
+the executable. This selects its configuration, sessions and logs without
+opening the default profile. Windows known-folder resolution does not follow
+an `APPDATA` environment override. `scripts/verify-ui.mjs --port=<port>
+--output=<ignored-output-directory>` exercises a fixture-only Tauri WebView
+and saves screenshots and a JSON report. Its loopback debugging port belongs
+in a temporary QA configuration, never the shipping configuration.
 
 ## Packaging and versions
 
@@ -72,6 +86,6 @@ install identity and `/S /D=<dir>` upgrade contract. Setup supplies WebView2
 through Microsoft's Evergreen bootstrapper only when the runtime is missing.
 See `native/installer/README.md` (relative to the repository root) for details.
 
-Core tests do not certify desktop feature wiring. In particular the initial
-shell does not dispatch `--apply-update`; the updater integration must handle
-that before initializing the WebView to preserve the helper/restart flow.
+Core tests do not certify desktop feature wiring. The shell dispatches
+`--apply-update` before initializing the WebView; end-to-end installer upgrade
+verification is still a separate check under the Windows validation skill.
