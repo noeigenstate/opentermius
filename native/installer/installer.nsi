@@ -1,7 +1,7 @@
 ﻿; OpenTermius Windows installer (NSIS 3, Modern UI 2).
 ;
 ; Build through scripts/package.ps1, which stages opentermius.exe and passes
-; /DVERSION=<version from Cargo.toml>. The installer is per-user by default and
+; /DVERSION=<version from desktop/tauri.conf.json>. The installer is per-user and
 ; never requires administrator rights.
 
 Unicode true
@@ -82,6 +82,11 @@ LangString SecDesktopDesc ${LANG_SIMPCHINESE} "在桌面放置 OpenTermius 快�
 LangString AppRunning     ${LANG_ENGLISH}   "OpenTermius is currently running. Close it, then click Retry to continue."
 LangString AppRunning     ${LANG_SIMPCHINESE} "OpenTermius 正在运行。请关闭它，然后点击“重试”继续。"
 
+LangString WebView2Installing ${LANG_ENGLISH} "Installing Microsoft Edge WebView2 Runtime (internet access required)..."
+LangString WebView2Installing ${LANG_SIMPCHINESE} "正在安装 Microsoft Edge WebView2 运行时（需要联网）……"
+LangString WebView2Failed ${LANG_ENGLISH} "WebView2 Runtime installation failed. Install it from https://developer.microsoft.com/microsoft-edge/webview2 and run setup again."
+LangString WebView2Failed ${LANG_SIMPCHINESE} "WebView2 运行时安装失败。请从 https://developer.microsoft.com/microsoft-edge/webview2 安装后重试。"
+
 LangString DataPageTitle    ${LANG_ENGLISH}   "Remove application data"
 LangString DataPageTitle    ${LANG_SIMPCHINESE} "删除应用数据"
 LangString DataPageSubtitle ${LANG_ENGLISH}   "Choose whether to keep your local configuration."
@@ -129,6 +134,47 @@ Function CheckAppClosed
     Abort
 FunctionEnd
 
+; Microsoft's documented HKLM (32-bit view) and HKCU runtime registration.
+; The browser's own registration is not sufficient for production WebView2.
+Function DetectWebView2
+  SetRegView 32
+  ReadRegStr $0 HKLM "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${If} $0 == ""
+  ${OrIf} $0 == "0.0.0.0"
+    ReadRegStr $0 HKCU "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" "pv"
+  ${EndIf}
+  SetRegView 64
+FunctionEnd
+
+Function EnsureWebView2
+  Call DetectWebView2
+  ${If} $0 != ""
+  ${AndIf} $0 != "0.0.0.0"
+    Return
+  ${EndIf}
+  DetailPrint "$(WebView2Installing)"
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File "staging\MicrosoftEdgeWebview2Setup.exe"
+  ClearErrors
+  ExecWait '"$PLUGINSDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install' $1
+  ${IfNot} ${Errors}
+    ${If} $1 == 0
+    ${OrIf} $1 == 3010
+      Call DetectWebView2
+      ${If} $0 != ""
+      ${AndIf} $0 != "0.0.0.0"
+        Return
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  DetailPrint "$(WebView2Failed)"
+  IfSilent +2
+    MessageBox MB_OK|MB_ICONSTOP "$(WebView2Failed)"
+  SetErrorLevel 4
+  Quit
+FunctionEnd
+
 Function un.CheckAppClosed
   ${Do}
     nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq ${APP_EXE}" /NH 2>nul | findstr /I /C:"${APP_EXE}" >nul'
@@ -164,6 +210,8 @@ FunctionEnd
 Section "$(SecCore)" SecCore
   SectionIn RO
   SetShellVarContext current
+  ; Verify the runtime before changing an existing installation.
+  Call EnsureWebView2
   SetOutPath "$INSTDIR"
   File "${STAGED_EXE}"
   WriteUninstaller "$INSTDIR\uninstall.exe"

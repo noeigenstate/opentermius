@@ -16,15 +16,13 @@ if (-not $SetupPath -or -not (Test-Path -LiteralPath $SetupPath -PathType Leaf))
 }
 $setup = (Resolve-Path -LiteralPath $SetupPath).Path
 
-$cargoToml = [IO.File]::ReadAllText((Join-Path $nativeRoot 'Cargo.toml'))
-$versionMatch = [regex]::Match($cargoToml, '(?ms)^\[package\].*?^version\s*=\s*"([^"]+)"')
-if (-not $versionMatch.Success) { throw 'Could not read the package version from Cargo.toml.' }
-$version = $versionMatch.Groups[1].Value
+$version = & node (Join-Path $nativeRoot 'scripts/check-versions.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Release versions do not match.' }
 
 $appDataDir = Join-Path $env:APPDATA 'OpenTermius'
 $configExisted = Test-Path -LiteralPath $appDataDir -PathType Container
 $sentinel = Join-Path $appDataDir ('installer-test-' + [Guid]::NewGuid().ToString('N') + '.txt')
-$installDir = Join-Path ([IO.Path]::GetTempPath()) ('OpenTermius-installer-test-' + [Guid]::NewGuid().ToString('N'))
+$installDir = Join-Path ([IO.Path]::GetTempPath()) ('OpenTermius installer test-' + [Guid]::NewGuid().ToString('N'))
 $programs = [Environment]::GetFolderPath('Programs')
 $desktop = [Environment]::GetFolderPath('Desktop')
 $startMenuShortcut = Join-Path $programs 'OpenTermius.lnk'
@@ -48,7 +46,7 @@ function Wait-Condition([scriptblock]$Condition, [string]$Description, [int]$Tim
 }
 
 function Invoke-Setup([string[]]$Arguments, [string]$Description) {
-    $process = Start-Process -FilePath $setup -ArgumentList $Arguments -Wait -PassThru
+    $process = Start-Process -FilePath $setup -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
     if ($process.ExitCode -ne 0) {
         $hint = ''
         if ($process.ExitCode -eq 2) {
@@ -59,7 +57,7 @@ function Invoke-Setup([string[]]$Arguments, [string]$Description) {
 }
 
 function Invoke-Uninstaller([string]$Uninstaller, [string[]]$Arguments) {
-    $process = Start-Process -FilePath $Uninstaller -ArgumentList $Arguments -Wait -PassThru
+    $process = Start-Process -FilePath $Uninstaller -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
     return $process.ExitCode
 }
 
@@ -95,7 +93,10 @@ try {
 
     $installedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($installedExe)
     Assert-True ($installedVersion.ProductName -eq 'OpenTermius') 'installed executable has the wrong ProductName'
-    Assert-True ($installedVersion.InternalName -eq 'opentermius') 'installed executable has the wrong InternalName'
+    Assert-True ($installedVersion.FileDescription -eq 'OpenTermius') 'installed executable has the wrong FileDescription'
+    Assert-True ($installedVersion.CompanyName -eq 'OpenTermius') 'installed executable has the wrong CompanyName'
+    Assert-True ($installedVersion.ProductVersion -eq $version) 'installed executable has the wrong ProductVersion'
+    $installedHash = (Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash
 
     $shortcutShell = New-Object -ComObject WScript.Shell
     Assert-True (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf) 'Start Menu shortcut is missing'
@@ -127,6 +128,9 @@ try {
     Invoke-Setup @('/S', "/D=$installDir") 'Reinstall over existing version'
     Assert-True (Test-Path -LiteralPath $installedExe -PathType Leaf) 'opentermius.exe disappeared after reinstall'
     Assert-True (Test-Path -LiteralPath $installedUninstaller -PathType Leaf) 'uninstall.exe disappeared after reinstall'
+    Assert-True ((Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash -eq $installedHash) 'reinstall changed the application payload'
+    Assert-True ((Get-ItemProperty -LiteralPath $uninstallKey).InstallLocation -eq $installDir) 'reinstall changed the install directory'
+    Assert-True (Test-Path -LiteralPath $sentinel -PathType Leaf) 'reinstall removed user configuration'
     $results.reinstall = 'ok'
 
     if ($KeepInstalled) {

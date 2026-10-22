@@ -1,4 +1,4 @@
-name: Native CI
+name: Desktop CI
 on:
   push:
   pull_request:
@@ -21,21 +21,37 @@ jobs:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: native/web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Linux desktop build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev libfontconfig1-dev libfreetype6-dev libwayland-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev fonts-dejavu-core shellcheck
+          # Ayatana is the AppIndicator implementation in current Tauri prerequisites.
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libxdo-dev fonts-dejavu-core shellcheck
+      - name: Check release versions and version-check tests
+        run: |
+          node scripts/check-versions.mjs
+          node --test scripts/check-versions.test.mjs
+      - name: Install frontend dependencies
+        working-directory: native/web
+        run: npm ci
+      - name: Build frontend
+        working-directory: native/web
+        run: npm run build
       - name: Check packaging scripts
         if: runner.os == 'Linux'
         run: shellcheck scripts/package-macos.sh scripts/package-linux.sh
       - name: Build
-        run: cargo build --workspace --locked
+        run: cargo build --locked --workspace
       - name: Test workspace (consolidated integration suite; desktop tests stay ignored)
-        run: cargo test --workspace --locked
-      - name: Build release
-        run: cargo build --release --locked
+        run: cargo test --locked --workspace
+      - name: Build release with embedded frontend
+        run: cargo build --release --locked -p opentermius-desktop --features tauri/custom-protocol
       - name: Upload release executable
         uses: actions/upload-artifact@v4
         with:

@@ -22,19 +22,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: native/web/package-lock.json
+
+      - name: Check release versions and version-check tests
+        run: |
+          node scripts/check-versions.mjs
+          node --test scripts/check-versions.test.mjs
+
       - name: Check tag version
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $cargoToml = Get-Content -LiteralPath Cargo.toml -Raw
-          $versionMatch = [regex]::Match($cargoToml, '(?ms)^\[package\].*?^version\s*=\s*"([^"]+)"')
-          if (-not $versionMatch.Success) {
-            throw '无法读取 native/Cargo.toml 中的包版本。'
-          }
-          $version = $versionMatch.Groups[1].Value
+          $version = node scripts/check-versions.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Release versions do not match.' }
           if ($env:RELEASE_TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or $env:RELEASE_TAG -cne "v$version") {
-            throw "发布标签 '$env:RELEASE_TAG' 必须为 vX.Y.Z，且与 native/Cargo.toml 版本 'v$version' 一致。"
+            throw "Release tag '$env:RELEASE_TAG' must match Tauri version 'v$version'."
           }
 
       - name: Install stable Rust (MSVC)
@@ -46,11 +53,22 @@ jobs:
         with:
           workspaces: "native -> target"
 
-      - name: Test workspace (consolidated integration suite)
-        run: cargo test --workspace --locked
+      - name: Install frontend dependencies
+        working-directory: native/web
+        run: npm ci
 
-      - name: Build release
-        run: cargo build --release --locked
+      - name: Build frontend
+        working-directory: native/web
+        run: npm run build
+
+      - name: Build workspace
+        run: cargo build --locked --workspace
+
+      - name: Test workspace (consolidated integration suite)
+        run: cargo test --locked --workspace
+
+      - name: Build release with embedded frontend
+        run: cargo build --release --locked -p opentermius-desktop --features tauri/custom-protocol
 
       - name: Locate or install NSIS
         id: nsis
@@ -80,6 +98,9 @@ jobs:
           MAKENSIS_PATH: ${{ steps.nsis.outputs.path }}
           OPENTERMIUS_TEST_EXECUTABLE: ${{ github.workspace }}/native/target/release/opentermius.exe
         run: ./native/scripts/package.ps1 -SkipBuild -MakensisPath $env:MAKENSIS_PATH
+
+      - name: Verify silent install, upgrade and uninstall
+        run: ./installer/verify-install.ps1
 
       - name: Upload installer and SHA-256 manifest
         uses: actions/upload-artifact@v4
@@ -120,6 +141,8 @@ jobs:
             'Windows x64 NSIS installer.'
             ''
             'This installer is unsigned. Windows SmartScreen may display a warning.'
+            ''
+            'Requires Microsoft Edge WebView2 Runtime. Setup installs it when missing (internet required).'
             ''
             "SHA-256 ($($installer.Name)):"
             '```text'
