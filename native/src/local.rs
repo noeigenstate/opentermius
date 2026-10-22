@@ -1,9 +1,6 @@
 //! Native local shell backed by portable-pty (ConPTY on Windows). Blocking I/O never runs on
-//! the UI thread; the reader parses all bytes independently of screen delivery.
-use crate::{
-    ssh::{Command, Event, Session},
-    terminal::Terminal,
-};
+//! the UI thread; a bounded byte queue applies backpressure without dropping output.
+use crate::ssh::{Command, Event, Session};
 use anyhow::{Context, Result, bail, ensure};
 use portable_pty::{CommandBuilder, PtySize};
 use std::{
@@ -21,10 +18,19 @@ use tokio::{
 };
 
 pub fn spawn(rt: &Handle, id: String, events: mpsc::Sender<Event>) -> Session {
+    spawn_with_size(rt, id, events, (100, 30))
+}
+
+pub fn spawn_with_size(
+    rt: &Handle,
+    id: String,
+    events: mpsc::Sender<Event>,
+    initial_size: (u16, u16),
+) -> Session {
     let (commands, rx) = mpsc::channel(64);
     let session_id = id.clone();
     let task = rt.spawn(async move {
-        if let Err(error) = run(&id, &events, rx).await {
+        if let Err(error) = run(&id, &events, rx, initial_size).await {
             let _ = events
                 .send(Event::Status {
                     id: id.clone(),
@@ -42,12 +48,10 @@ pub fn spawn(rt: &Handle, id: String, events: mpsc::Sender<Event>) -> Session {
         task,
     }
 }
-struct Screen {
-    terminal: Terminal,
-    dirty: bool,
+struct IoState {
     error: Option<String>,
 }
-impl Screen {
+impl IoState {
     fn fail(&mut self, error: impl ToString) {
         if self.error.is_none() {
             self.error = Some(error.to_string());
@@ -131,23 +135,26 @@ mod shell_tests {
 }
 
 fn supervise(
-    screen: Arc<Mutex<Screen>>,
+    io_state: Arc<Mutex<IoState>>,
     eof: Arc<AtomicBool>,
     mut controls: mpsc::Receiver<Control>,
-    writes: mpsc::Sender<Vec<u8>>,
+    output: mpsc::Sender<Vec<u8>>,
+    initial_size: (u16, u16),
     mut write_rx: mpsc::Receiver<Vec<u8>>,
     ready: oneshot::Sender<Result<()>>,
 ) -> Result<()> {
     let system = portable_pty::native_pty_system();
     let pair = system
         .openpty(PtySize {
-            rows: 30,
-            cols: 100,
+            rows: initial_size.1.clamp(2, 300),
+            cols: initial_size.0.clamp(2, 500),
             pixel_width: 0,
             pixel_height: 0,
         })
         .context(if cfg!(windows) {
-            crate::i18n::t("Cannot create a local pseudo-terminal; check that Windows supports ConPTY")
+            crate::i18n::t(
+                "Cannot create a local pseudo-terminal; check that Windows supports ConPTY",
+            )
         } else {
             crate::i18n::t("Cannot create a local pseudo-terminal")
         })?;
@@ -183,7 +190,7 @@ fn supervise(
     let mut writer = pair.master.take_writer()?;
     drop(pair.slave);
     let master = pair.master;
-    let reader_screen = screen.clone();
+    let reader_state = io_state.clone();
     let reader_eof = eof.clone();
     let reading = std::thread::Builder::new()
         .name("opentermius-pty-read".into())
@@ -193,14 +200,10 @@ fn supervise(
                 match reader.read(&mut bytes) {
                     Ok(0) => break,
                     Ok(count) => {
-                        let Ok(mut state) = reader_screen.lock() else {
-                            break;
-                        };
-                        state.terminal.feed(&bytes[..count]);
-                        state.dirty = true;
-                        let replies = state.terminal.take_responses();
-                        if !replies.is_empty() && writes.try_send(replies).is_err() {
-                            state.fail(crate::i18n::t("Local terminal input queue is full; cannot answer terminal query"));
+                        // Abort closes the receiver and unblocks this send. Continue
+                        // draining until EOF: closing ConPTY can wait on its output pipe.
+                        if !output.is_closed() {
+                            let _ = output.blocking_send(bytes[..count].to_vec());
                         }
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -214,7 +217,7 @@ fn supervise(
                         break;
                     }
                     Err(error) => {
-                        if let Ok(mut state) = reader_screen.lock() {
+                        if let Ok(mut state) = reader_state.lock() {
                             state.fail(error);
                         }
                         break;
@@ -224,13 +227,13 @@ fn supervise(
             reader_eof.store(true, Ordering::Release);
         })
         .context(crate::i18n::t("Cannot start terminal reader thread"))?;
-    let writer_screen = screen.clone();
+    let writer_state = io_state.clone();
     let writing = std::thread::Builder::new()
         .name("opentermius-pty-write".into())
         .spawn(move || {
             while let Some(data) = write_rx.blocking_recv() {
                 if let Err(error) = writer.write_all(&data).and_then(|_| writer.flush()) {
-                    if let Ok(mut state) = writer_screen.lock() {
+                    if let Ok(mut state) = writer_state.lock() {
                         state.fail(error);
                     }
                     break;
@@ -251,15 +254,9 @@ fn supervise(
                             pixel_width: 0,
                             pixel_height: 0,
                         }) {
-                            Ok(()) => {
-                                let mut state = screen
-                                    .lock()
-                                    .map_err(|_| anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;
-                                state.terminal.resize(rows, cols);
-                                state.dirty = true;
-                            }
+                            Ok(()) => {}
                             Err(error) => {
-                                if let Ok(mut state) = screen.lock() {
+                                if let Ok(mut state) = io_state.lock() {
                                     state.fail(error);
                                 }
                             }
@@ -290,28 +287,26 @@ async fn run(
     id: &str,
     events: &mpsc::Sender<Event>,
     mut commands: mpsc::Receiver<Command>,
+    initial_size: (u16, u16),
 ) -> Result<()> {
-    let screen = Arc::new(Mutex::new(Screen {
-        terminal: Terminal::new(30, 100),
-        dirty: true,
-        error: None,
-    }));
+    let io_state = Arc::new(Mutex::new(IoState { error: None }));
     let eof = Arc::new(AtomicBool::new(false));
     let (control, controls) = mpsc::channel(8);
     let owner = Owner { control };
     let (writes, write_rx) = mpsc::channel(64);
     let (ready_tx, ready_rx) = oneshot::channel();
-    let (worker_screen, worker_eof) = (screen.clone(), eof.clone());
-    let worker_writes = writes.clone();
+    let (worker_state, worker_eof) = (io_state.clone(), eof.clone());
+    let (output_tx, mut output_rx) = mpsc::channel(8);
     let (done_tx, worker) = oneshot::channel();
     std::thread::Builder::new()
         .name("opentermius-pty-owner".into())
         .spawn(move || {
             let result = supervise(
-                worker_screen,
+                worker_state,
                 worker_eof,
                 controls,
-                worker_writes,
+                output_tx,
+                initial_size,
                 write_rx,
                 ready_tx,
             );
@@ -325,7 +320,7 @@ async fn run(
                 Ok(result)=>{result?;break},
                 Err(_)=>{drop(writes);drop(owner);worker.await.context(crate::i18n::t("Local terminal manager thread has exited"))??;bail!("{}", crate::i18n::t("Local terminal failed to start"))}
             },
-            command=commands.recv()=>if matches!(command,None|Some(Command::Disconnect)){drop(writes);drop(owner);let _=worker.await;return Ok(())},
+            command=commands.recv()=>if matches!(command,None|Some(Command::Disconnect)){drop(output_rx);drop(writes);drop(owner);let _=worker.await;return Ok(())},
         }
     }
     events
@@ -342,37 +337,50 @@ async fn run(
         })
         .await
         .context(crate::i18n::t("Window closed"))?;
-    let mut frames = interval(Duration::from_millis(34));
+    let mut frames = interval(Duration::from_millis(10));
     frames.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut pending = None;
+    let mut output = Vec::new();
+    let mut flush_output = false;
     loop {
         tokio::select! {
             permit=writes.reserve(),if pending.is_some()=>{permit.context(crate::i18n::t("Local terminal input closed"))?.send(pending.take().context(crate::i18n::t("Terminal input is missing"))?);},
             command=commands.recv(),if pending.is_none()=>match command{
-                None|Some(Command::Disconnect)=>break,
+                None|Some(Command::Disconnect)=>{output.clear();break},
                 Some(Command::Input(data))=>{pending=Some(data)},
                 Some(Command::Resize{cols,rows})=>{
                     let(cols,rows)=(cols.clamp(2,500),rows.clamp(2,300));
                     owner.control.send(Control::Resize{cols,rows}).await.context(crate::i18n::t("Local terminal closed"))?;
                 }
-                Some(Command::Scroll(delta))=>{let mut state=screen.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;state.terminal.scroll(delta);state.dirty=true;},
                 Some(_)=>{events.send(Event::Transfer{id:id.into(),message:crate::i18n::t("Local terminals do not support SFTP. Connect to an SSH host to manage files").into(),error:true}).await.context(crate::i18n::t("Window closed"))?;}
             },
+            data=output_rx.recv(),if output.len()<65536=>match data {
+                Some(data)=>output.extend(data),
+                None=>break,
+            },
+            permit=events.reserve(),if !output.is_empty()&&(flush_output||output.len()>=65536)=>{
+                let data=output.drain(..output.len().min(65536)).collect();
+                permit.context(crate::i18n::t("Window closed"))?.send(Event::Output{id:id.into(),data});
+                flush_output=false;
+            },
             _=frames.tick()=>{
-                let mut state=screen.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;
+                let state=io_state.lock().map_err(|_|anyhow::anyhow!("{}", crate::i18n::t("Terminal state is unavailable")))?;
                 ensure!(state.error.is_none(),"{}",state.error.as_deref().unwrap_or_default());
-                if state.dirty{
-                    let snapshot=state.terminal.snapshot();
-                    match events.try_send(Event::Screen{id:id.into(),snapshot}){
-                        Ok(())=>state.dirty=false,
-                        Err(mpsc::error::TrySendError::Closed(_))=>break,
-                        Err(mpsc::error::TrySendError::Full(_))=>{}
-                    }
-                }
-                if eof.load(Ordering::Acquire){break}
+                flush_output=true;
+                if eof.load(Ordering::Acquire)&&output_rx.is_empty(){break}
             }
         }
     }
+    for data in output.chunks(65536) {
+        events
+            .send(Event::Output {
+                id: id.into(),
+                data: data.to_vec(),
+            })
+            .await
+            .context(crate::i18n::t("Window closed"))?;
+    }
+    drop(output_rx);
     drop(writes);
     drop(owner);
     tokio::time::timeout(Duration::from_secs(5), worker)

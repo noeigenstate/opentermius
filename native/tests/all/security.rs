@@ -4,7 +4,6 @@ use opentermius::{
     recovery::{self, RestoreMode},
     snippets, ssh,
     store::{self, Data, Profile, Store},
-    terminal::Terminal,
 };
 use std::{fs, path::Path};
 
@@ -53,17 +52,16 @@ fn windows_download_names_reject_device_aliases_and_path_escapes() {
 }
 
 #[test]
-fn terminal_input_and_screen_debug_do_not_disclose_secrets() {
+fn terminal_input_and_output_debug_do_not_disclose_secrets() {
     let secret = "security-regression-secret";
     let input = ssh::Command::Input(secret.as_bytes().to_vec());
     assert!(!format!("{input:?}").contains(&format!("{:?}", secret.as_bytes())));
-    let mut terminal = Terminal::new(24, 80);
-    terminal.feed(secret.as_bytes());
-    let event = ssh::Event::Screen {
+    let event = ssh::Event::Output {
         id: "test".into(),
-        snapshot: terminal.snapshot(),
+        data: secret.as_bytes().to_vec(),
     };
     assert!(!format!("{event:?}").contains(secret));
+    assert!(!format!("{event:?}").contains(&format!("{:?}", secret.as_bytes())));
     let material = keychain::KeyMaterial {
         pem: zeroize::Zeroizing::new(secret.to_owned()),
         passphrase: Some(zeroize::Zeroizing::new(secret.to_owned())),
@@ -315,17 +313,11 @@ fn malformed_recovery_errors_do_not_echo_payload_secrets() {
 }
 
 #[test]
-fn bracketed_paste_cannot_break_out_and_query_replies_are_bounded() {
+fn bracketed_paste_cannot_break_out() {
     let bytes = snippets::to_terminal_input("a\x1b[201~\necho injected\x1b[200~", true);
     assert!(bytes.starts_with(b"\x1b[200~"));
     assert!(bytes.ends_with(b"\x1b[201~\r"));
     assert_eq!(bytes.iter().filter(|b| **b == 27).count(), 2);
-    let mut terminal = Terminal::new(u16::MAX, u16::MAX);
-    for _ in 0..100_000 {
-        terminal.feed(b"\x1b[6n\x1b[5n\x1b]10;?\x07");
-    }
-    assert!(terminal.take_responses().len() <= 65_536);
-    assert!(terminal.take_responses().is_empty());
 }
 
 #[test]

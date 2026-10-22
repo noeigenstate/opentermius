@@ -5,6 +5,22 @@
 //! touching the SSH/SFTP transport.
 use serde::{Deserialize, Deserializer, Serialize};
 
+pub const DEFAULT_FG: u32 = 0xffffff;
+pub const DEFAULT_BG: u32 = 0x141729;
+pub const DEFAULT_SCROLLBACK: usize = 3000;
+pub const ANSI_COLORS: [u32; 16] = [
+    0x1a202a, 0xe2939c, 0x92ccac, 0xe5c58b, 0x8baedb, 0xb7a0d7, 0x84c9cf, 0xd3deec, 0x687c93,
+    0xf3a9b1, 0xb2e3bf, 0xf0d6ab, 0xaccaf0, 0xd3baed, 0xa5e0df, 0xf2f6fc,
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub enum ColorSource {
+    DefaultForeground,
+    DefaultBackground,
+    Ansi(u8),
+    Explicit,
+}
+
 /// Product version shown on the About card.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -178,7 +194,7 @@ impl ColorScheme {
 
     pub const fn palette(self) -> [u32; 16] {
         match self {
-            Self::Default => crate::terminal::ANSI_COLORS,
+            Self::Default => crate::settings::ANSI_COLORS,
             Self::SolarizedDark => [
                 0x073642, 0xdc322f, 0x859900, 0xb58900, 0x268bd2, 0xd33682, 0x2aa198, 0xeee8d5,
                 0x002b36, 0xcb4b16, 0x586e75, 0x657b83, 0x839496, 0x6c71c4, 0x93a1a1, 0xfdf6e3,
@@ -196,8 +212,7 @@ impl ColorScheme {
 
     /// Preserve default and ANSI color identity (including inverse video),
     /// leaving explicit RGB and extended indexed colors intact.
-    pub fn map_color(self, value: u32, source: crate::terminal::ColorSource) -> u32 {
-        use crate::terminal::ColorSource;
+    pub fn map_color(self, value: u32, source: crate::settings::ColorSource) -> u32 {
         match source {
             ColorSource::DefaultForeground => self.foreground(),
             ColorSource::DefaultBackground => self.background(),
@@ -281,7 +296,7 @@ impl Default for Settings {
         Self {
             language: crate::i18n::Language::default(),
             font_size: DEFAULT_FONT_SIZE,
-            scrollback_lines: crate::terminal::DEFAULT_SCROLLBACK,
+            scrollback_lines: crate::settings::DEFAULT_SCROLLBACK,
             cursor_blink: true,
             copy_on_select: false,
             confirm_multiline_paste: true,
@@ -353,7 +368,7 @@ mod tests {
         assert_eq!(settings.font_size, 14);
         assert_eq!(
             settings.scrollback_lines,
-            crate::terminal::DEFAULT_SCROLLBACK
+            crate::settings::DEFAULT_SCROLLBACK
         );
         assert_eq!(settings.scrollback_lines, 3000);
         assert!(settings.cursor_blink);
@@ -452,40 +467,40 @@ mod tests {
 
     #[test]
     fn schemes_have_distinct_colors_and_map_defaults() {
-        assert_eq!(ColorScheme::Default.palette(), crate::terminal::ANSI_COLORS);
+        assert_eq!(ColorScheme::Default.palette(), crate::settings::ANSI_COLORS);
         for scheme in ColorScheme::ALL {
             assert_eq!(scheme.palette().len(), 16);
             assert_eq!(
                 scheme.map_color(
-                    crate::terminal::DEFAULT_FG,
-                    crate::terminal::ColorSource::DefaultForeground
+                    crate::settings::DEFAULT_FG,
+                    crate::settings::ColorSource::DefaultForeground
                 ),
                 scheme.foreground()
             );
             assert_eq!(
                 scheme.map_color(
-                    crate::terminal::DEFAULT_BG,
-                    crate::terminal::ColorSource::DefaultBackground
+                    crate::settings::DEFAULT_BG,
+                    crate::settings::ColorSource::DefaultBackground
                 ),
                 scheme.background()
             );
             assert_eq!(
                 scheme.map_color(
-                    crate::terminal::ANSI_COLORS[1],
-                    crate::terminal::ColorSource::Ansi(1)
+                    crate::settings::ANSI_COLORS[1],
+                    crate::settings::ColorSource::Ansi(1)
                 ),
                 scheme.palette()[1]
             );
             assert_eq!(
-                scheme.map_color(0x123456, crate::terminal::ColorSource::Explicit),
+                scheme.map_color(0x123456, crate::settings::ColorSource::Explicit),
                 0x123456
             );
             assert_eq!(
                 scheme.map_color(
-                    crate::terminal::DEFAULT_FG,
-                    crate::terminal::ColorSource::Explicit
+                    crate::settings::DEFAULT_FG,
+                    crate::settings::ColorSource::Explicit
                 ),
-                crate::terminal::DEFAULT_FG
+                crate::settings::DEFAULT_FG
             );
         }
         assert_ne!(

@@ -1,9 +1,6 @@
-//! Bounded, asynchronous SSH transport. Network bytes are parsed before a lossy
-//! screen notification; UI congestion can skip a frame, never terminal data.
-use crate::{
-    store::Profile,
-    terminal::{Snapshot, Terminal},
-};
+//! Bounded, asynchronous SSH transport. Terminal bytes are delivered losslessly;
+//! emulation and terminal-query responses belong to the frontend.
+use crate::store::Profile;
 use anyhow::{Context, Result, bail, ensure};
 use russh::{ChannelMsg, Disconnect, client};
 use russh_sftp::{client::SftpSession, protocol::OpenFlags};
@@ -28,7 +25,6 @@ pub enum Command {
         cols: u16,
         rows: u16,
     },
-    Scroll(i32),
     List(String),
     Upload {
         /// Explicitly selected folder; children must stay below its canonical path.
@@ -95,7 +91,8 @@ impl std::fmt::Debug for Command {
             .finish_non_exhaustive()
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RemoteFile {
     pub name: String,
     pub path: String,
@@ -147,9 +144,9 @@ pub enum Event {
         message: String,
         error: bool,
     },
-    Screen {
+    Output {
         id: String,
-        snapshot: Snapshot,
+        data: Vec<u8>,
     },
     HostKey {
         id: String,
@@ -208,13 +205,10 @@ pub enum Event {
     Closed {
         id: String,
     },
-    Bell {
-        id: String,
-    },
 }
 impl std::fmt::Debug for Event {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Screens and authentication prompts may echo credentials.
+        // Output and authentication prompts may echo credentials.
         f.debug_struct("Event")
             .field("kind", &std::mem::discriminant(self))
             .finish_non_exhaustive()
@@ -232,7 +226,6 @@ pub struct Session {
 pub struct ConnectOptions {
     pub keepalive_seconds: u32,
     pub timeout_seconds: u32,
-    pub scrollback_lines: usize,
     /// Columns and rows for the initial pty-req, so the login banner is laid out at the
     /// real window size instead of being redrawn after a resize.
     pub initial_size: (u16, u16),
@@ -243,7 +236,6 @@ impl Default for ConnectOptions {
         Self {
             keepalive_seconds: KEEPALIVE_DEFAULT,
             timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
-            scrollback_lines: crate::terminal::DEFAULT_SCROLLBACK,
             initial_size: (100, 30),
         }
     }
@@ -580,19 +572,30 @@ async fn run(
     known: Option<String>,
     events: mpsc::Sender<Event>,
     mut commands: mpsc::Receiver<Command>,
-    options: ConnectOptions,
+    mut options: ConnectOptions,
 ) -> Result<()> {
     let (cancel_tx, cancel_rx) = watch::channel(false);
     let _cancellation = CancelOnDrop(cancel_tx);
     let ssh = {
         let connecting = connect(
-            id, &p, &secret, key_material, known, &events, cancel_rx, options,
+            id,
+            &p,
+            &secret,
+            key_material,
+            known,
+            &events,
+            cancel_rx,
+            options,
         );
         tokio::pin!(connecting);
         loop {
             tokio::select! {
                 result=&mut connecting=>break Arc::new(result?),
-                command=commands.recv()=>if matches!(command,None|Some(Command::Disconnect)){return Ok(())}
+                command=commands.recv()=>match command {
+                    None|Some(Command::Disconnect)=>return Ok(()),
+                    Some(Command::Resize{cols,rows})=>options.initial_size=(cols.clamp(2,500),rows.clamp(2,300)),
+                    _=>{},
+                }
             }
         }
     };
@@ -602,7 +605,11 @@ async fn run(
     let channel = loop {
         tokio::select! {
             result=&mut opening=>break result.context(crate::i18n::t("Terminal channel timed out"))??,
-            command=commands.recv()=>if matches!(command,None|Some(Command::Disconnect)){return Ok(())}
+            command=commands.recv()=>match command {
+                    None|Some(Command::Disconnect)=>return Ok(()),
+                    Some(Command::Resize{cols,rows})=>options.initial_size=(cols.clamp(2,500),rows.clamp(2,300)),
+                    _=>{},
+                }
         }
     };
     let (mut reader, writer) = channel.split();
@@ -629,15 +636,14 @@ async fn run(
     let cols = options.initial_size.0.clamp(2, 500);
     let rows = options.initial_size.1.clamp(2, 300);
     let mut pending_control = Some(Write::Pty { cols, rows });
-    let mut protocol = Vec::new();
-    let mut terminal = Terminal::with_scrollback(rows, cols, options.scrollback_lines);
+    let mut output = Vec::new();
+    let mut flush_output = false;
     let mut stage = 0;
     let mut connected = false;
     // Stops with the session: dropping it aborts the poller.
     let mut _stats_poller: Option<AbortOnDrop> = None;
     let mut setup_timeout = Box::pin(tokio::time::sleep(Duration::from_secs(30)));
-    let mut dirty = true;
-    let mut frame = interval(Duration::from_millis(34));
+    let mut frame = interval(Duration::from_millis(10));
     frame.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let (job_tx, job_rx) = mpsc::channel(8);
     let cancelled: CancelledSet = Arc::new(StdMutex::new(HashSet::new()));
@@ -652,18 +658,16 @@ async fn run(
         tokio::select! {
             result=&mut writing=>return result,
             _=&mut setup_timeout,if !connected=>bail!("{}", crate::i18n::t("Terminal request timed out")),
-            permit=write_tx.reserve(),if pending_write.is_some()||pending_control.is_some()||!protocol.is_empty()=>{
+            permit=write_tx.reserve(),if pending_write.is_some()||pending_control.is_some()=>{
                 let next=if let Some(control)=pending_control.take(){control}
-                    else if !protocol.is_empty(){Write::Input(std::mem::take(&mut protocol))}
                     else{pending_write.take().context(crate::i18n::t("Terminal input is missing"))?};
                 permit.context(crate::i18n::t("Terminal input channel closed"))?.send(next);
             },
             command=commands.recv(),if pending_write.is_none()=>match command {
-                None|Some(Command::Disconnect)=>break,
-                Some(_) if !connected=>{},
+                None|Some(Command::Disconnect)=>{output.clear();break},
                 Some(Command::Input(data))=>{pending_write=Some(Write::Input(data));},
-                Some(Command::Resize{cols,rows})=>{let cols=cols.clamp(2,500);let rows=rows.clamp(2,300);pending_write=Some(Write::Resize{cols,rows});terminal.resize(rows,cols);dirty=true;},
-                Some(Command::Scroll(delta))=>{terminal.scroll(delta);dirty=true;},
+                Some(Command::Resize{cols,rows})=>{let cols=cols.clamp(2,500);let rows=rows.clamp(2,300);pending_write=Some(Write::Resize{cols,rows});},
+                Some(_) if !connected=>{},
                 Some(Command::CancelTransfer{transfer})=>{
                     if let Ok(mut pending)=cancelled.lock() {
                         if pending.len()<1024 {pending.insert(transfer);}
@@ -678,15 +682,9 @@ async fn run(
                     }
                 }
             },
-            message=reader.wait()=>match message {
+            message=reader.wait(),if output.len()<65536=>match message {
                 Some(ChannelMsg::Data{data})|Some(ChannelMsg::ExtendedData{data,..})=>{
-                    terminal.feed(&data);
-                    if terminal.take_bells() > 0 {
-                        let _ = events.try_send(Event::Bell{id:id.into()});
-                    }
-                    let responses=terminal.take_responses();
-                    ensure!(protocol.len()+responses.len()<=65536, "{}", crate::i18n::t("Server terminal queries are too frequent"));
-                    protocol.extend(responses);dirty=true;
+                    output.extend_from_slice(&data);
                 },
                 Some(ChannelMsg::Success) if !connected=>{
                     if stage==0 {stage=1;pending_control=Some(Write::Shell);setup_timeout.as_mut().reset(tokio::time::Instant::now()+Duration::from_secs(30));}
@@ -697,24 +695,30 @@ async fn run(
                 Some(ChannelMsg::Failure)=>bail!("{}", crate::i18n::t("Server rejected terminal request")),
                 _=>{}
             },
-            _=frame.tick(),if dirty&&connected=>{
-                match events.try_send(Event::Screen{id:id.into(),snapshot:terminal.snapshot()}) {
-                    Ok(())=>dirty=false,
-                    Err(mpsc::error::TrySendError::Full(_))=>{},
-                    Err(mpsc::error::TrySendError::Closed(_))=>break,
-                }
+            _=frame.tick()=>{flush_output=true;},
+            permit=events.reserve(),if !output.is_empty()&&(flush_output||output.len()>=65536)=>{
+                let data=output.drain(..output.len().min(65536)).collect();
+                permit.context(crate::i18n::t("Window closed"))?.send(Event::Output{id:id.into(),data});
+                flush_output=false;
             }
         }
     }
-    if dirty {
-        let _ = events.try_send(Event::Screen {
-            id: id.into(),
-            snapshot: terminal.snapshot(),
-        });
+    for data in output.chunks(65536) {
+        events
+            .send(Event::Output {
+                id: id.into(),
+                data: data.to_vec(),
+            })
+            .await
+            .context(crate::i18n::t("Window closed"))?;
     }
     let _ = timeout(
         Duration::from_secs(2),
-        ssh.disconnect(Disconnect::ByApplication, crate::i18n::t("Disconnected"), "en"),
+        ssh.disconnect(
+            Disconnect::ByApplication,
+            crate::i18n::t("Disconnected"),
+            "en",
+        ),
     )
     .await;
     Ok(())

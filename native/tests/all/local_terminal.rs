@@ -2,7 +2,6 @@
 use opentermius::{
     local,
     ssh::{Command, Event, Session},
-    terminal::Snapshot,
 };
 use std::time::Duration;
 use tokio::{sync::mpsc, time::timeout};
@@ -47,11 +46,56 @@ async fn next(rx: &mut mpsc::Receiver<Event>) -> Event {
         .expect("local terminal response timed out")
         .expect("local event queue closed")
 }
-async fn screen(rx: &mut mpsc::Receiver<Event>, predicate: impl Fn(&Snapshot) -> bool) -> Snapshot {
+// Test-only removal of CSI controls; production always preserves raw bytes.
+fn plain_text(text: &str) -> String {
+    let mut chars = text.chars().peekable();
+    let mut result = String::new();
+    while let Some(ch) = chars.next() {
+        if ch == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for ch in chars.by_ref() {
+                if ('@'..='~').contains(&ch) {
+                    break;
+                }
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+async fn output_until(
+    session: &Session,
+    rx: &mut mpsc::Receiver<Event>,
+    predicate: impl Fn(&str) -> bool,
+) -> String {
     timeout(Duration::from_secs(20), async {
+        let mut output = Vec::new();
+        let mut answered_cursor_queries = 0;
         loop {
             match next(rx).await {
-                Event::Screen { snapshot, .. } if predicate(&snapshot) => return snapshot,
+                Event::Output { data, .. } => {
+                    assert!(data.len() <= 65536);
+                    output.extend(data);
+                    // Like xterm.js, the test frontend answers ConPTY cursor queries.
+                    // Escape sequences can span Output events.
+                    let queries = output
+                        .windows(4)
+                        .filter(|bytes| *bytes == b"\x1b[6n")
+                        .count();
+                    while answered_cursor_queries < queries {
+                        session
+                            .commands
+                            .send(Command::Input(b"\x1b[1;1R".to_vec()))
+                            .await
+                            .unwrap();
+                        answered_cursor_queries += 1;
+                    }
+                    let text = plain_text(&String::from_utf8_lossy(&output));
+                    if predicate(&text) {
+                        return text;
+                    }
+                }
                 Event::Status {
                     error: true,
                     message,
@@ -93,8 +137,8 @@ async fn start() -> (Session, mpsc::Receiver<Event>, u32) {
         .send(Command::Input(pid_command))
         .await
         .unwrap();
-    let snapshot = screen(&mut rx, |s| {
-        s.lines.iter().any(|line| {
+    let output = output_until(&session, &mut rx, |s| {
+        s.lines().any(|line| {
             line.trim()
                 .strip_prefix("LOCAL_PID:")
                 .and_then(|pid| pid.parse::<u32>().ok())
@@ -102,9 +146,8 @@ async fn start() -> (Session, mpsc::Receiver<Event>, u32) {
         })
     })
     .await;
-    let pid = snapshot
-        .lines
-        .iter()
+    let pid = output
+        .lines()
         .find_map(|line| {
             line.trim()
                 .strip_prefix("LOCAL_PID:")
@@ -129,11 +172,10 @@ async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
         .send(Command::Input(unicode_command))
         .await
         .unwrap();
-    screen(&mut rx, |s| {
-        s.lines.iter().any(|line| line.trim() == "UNICODE:你好")
+    output_until(&session, &mut rx, |s| {
+        s.lines().any(|line| line.trim() == "UNICODE:你好")
             && (cfg!(windows)
-                || s.lines
-                    .iter()
+                || s.lines()
                     .any(|line| line.trim() == "LOCAL_TERM:xterm-256color"))
     })
     .await;
@@ -142,7 +184,6 @@ async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
         .send(Command::Resize { cols: 80, rows: 24 })
         .await
         .unwrap();
-    screen(&mut rx, |s| s.cols == 80 && s.rows == 24).await;
     #[cfg(windows)]
     let size_command = b"Write-Output ('LOCAL_SIZE:'+$Host.UI.RawUI.WindowSize.Width+','+$Host.UI.RawUI.WindowSize.Height)\r".to_vec();
     #[cfg(unix)]
@@ -154,8 +195,8 @@ async fn local_shell_unicode_resize_sftp_rejection_and_disconnect() {
         .send(Command::Input(size_command))
         .await
         .unwrap();
-    screen(&mut rx, |s| {
-        s.lines.iter().any(|line| {
+    output_until(&session, &mut rx, |s| {
+        s.lines().any(|line| {
             if cfg!(windows) {
                 line.trim() == "LOCAL_SIZE:80,24"
             } else {
@@ -194,6 +235,25 @@ async fn aborting_session_terminates_owned_local_shell() {
     stopped(pid).await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn aborting_with_congested_output_releases_reader_and_child() {
+    let (session, _rx, pid) = start().await;
+    #[cfg(windows)]
+    let command = b"[Console]::Write(('x' * 2097152))\r".to_vec();
+    #[cfg(unix)]
+    let command = b"printf '%2097152s' x\r".to_vec();
+    session
+        .commands
+        .send(Command::Input(command))
+        .await
+        .unwrap();
+    // Leave the consumer paused until both bounded output queues fill.
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    session.task.abort();
+    let _ = session.task.await;
+    stopped(pid).await;
+}
+
 #[cfg(unix)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn aborting_session_reaps_a_shell_that_ignores_hangup() {
@@ -205,8 +265,8 @@ async fn aborting_session_reaps_a_shell_that_ignores_hangup() {
         ))
         .await
         .unwrap();
-    screen(&mut rx, |s| {
-        s.lines.iter().any(|line| line.trim() == "IGNORE_HUP_READY")
+    output_until(&session, &mut rx, |s| {
+        s.lines().any(|line| line.trim() == "IGNORE_HUP_READY")
     })
     .await;
     session.task.abort();

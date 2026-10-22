@@ -3,7 +3,6 @@
 use opentermius::{
     settings::{self, Appearance, ColorScheme, Settings},
     store::Store,
-    terminal::Terminal,
 };
 
 #[test]
@@ -128,41 +127,6 @@ fn paste_confirmation_counts_crlf_and_trailing_line_breaks() {
     assert_eq!(settings::paste_line_count("one\r\ntwo\r\n"), 3);
 }
 
-#[test]
-fn themes_preserve_inverse_video_and_explicit_rgb_colors() {
-    let mut terminal = Terminal::new(4, 30);
-    terminal.feed(b"\x1b[7mI\x1b[0m\x1b[38;2;226;147;156mR\x1b[0m\x1b[31mA");
-    let snapshot = terminal.snapshot();
-    for scheme in ColorScheme::ALL {
-        let inverse = snapshot.runs.iter().find(|run| run.text == "I").unwrap();
-        assert_eq!(
-            scheme.map_color(inverse.fg, inverse.fg_source),
-            scheme.background()
-        );
-        assert_eq!(
-            scheme.map_color(inverse.bg, inverse.bg_source),
-            scheme.foreground()
-        );
-        let rgb = snapshot.runs.iter().find(|run| run.text == "R").unwrap();
-        assert_eq!(scheme.map_color(rgb.fg, rgb.fg_source), 0xe2939c);
-        let ansi = snapshot.runs.iter().find(|run| run.text == "A").unwrap();
-        assert_eq!(
-            scheme.map_color(ansi.fg, ansi.fg_source),
-            scheme.palette()[1]
-        );
-    }
-}
-
-#[test]
-fn local_terminal_snapshots_expose_bells_without_losing_them_on_repaint() {
-    let mut terminal = Terminal::new(4, 20);
-    terminal.feed(b"hello\x07");
-    assert_eq!(terminal.snapshot().bell_count, 1);
-    assert_eq!(terminal.snapshot().bell_count, 1);
-    terminal.feed(b"\x1bg");
-    assert_eq!(terminal.snapshot().bell_count, 2);
-}
-
 #[tokio::test]
 async fn ssh_connection_uses_the_configured_handshake_timeout() {
     use opentermius::{ssh, store::Profile};
@@ -227,16 +191,4 @@ async fn ssh_connection_uses_the_configured_handshake_timeout() {
         .await
         .unwrap()
         .unwrap();
-}
-
-#[test]
-fn configured_history_limit_applies_to_new_local_parsers() {
-    opentermius::terminal::set_default_scrollback(1000);
-    let mut terminal = Terminal::new(4, 20);
-    opentermius::terminal::set_default_scrollback(opentermius::terminal::DEFAULT_SCROLLBACK);
-    for line in 0..1500 {
-        terminal.feed(format!("row-{line}\r\n").as_bytes());
-    }
-    terminal.scroll(10_000);
-    assert_eq!(terminal.snapshot().lines[0], "row-497");
 }
