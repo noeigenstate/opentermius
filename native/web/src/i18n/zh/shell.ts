@@ -1,5 +1,7 @@
 /** Chinese strings for the app shell and Hosts page (one file per feature in this folder). */
 export default {
+  OpenTermius: "OpenTermius",
+  Favorites: "收藏",
   Navigation: "导航",
   Workspace: "工作区",
   Activity: "活动记录",

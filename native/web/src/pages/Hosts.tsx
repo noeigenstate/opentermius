@@ -9,6 +9,10 @@ import "../hosts.css";
 
 /** Group filter value for hosts without a group (matches the Rust core's NO_GROUP). */
 const NO_GROUP = "\u0001";
+export function filterFavorites(hosts: Host[], favoritesOnly: boolean): Host[] {
+  return favoritesOnly ? hosts.filter((host) => host.favorite) : hosts;
+}
+
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
 function HostCard({ host, usage, online, selected, onSelect, onConnect, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; onSelect: () => void; onConnect?: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
@@ -46,6 +50,7 @@ function HostCard({ host, usage, online, selected, onSelect, onConnect, onEdit, 
 
 interface Props {
   hosts: Host[];
+  favoritesOnly?: boolean;
   onHostsChange?: (hosts: Host[]) => void;
   onConnect?: (hostId: string) => void;
   onQuickConnect?: (draft: HostDraft) => void;
@@ -54,7 +59,8 @@ interface Props {
   onlineHostIds?: ReadonlySet<string>;
 }
 
-export function HostsPage({ hosts, onHostsChange, onConnect, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
+export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
+  const hosts = useMemo(() => filterFavorites(allHosts, favoritesOnly), [allHosts, favoritesOnly]);
   const [group, setGroup] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState("");
@@ -146,8 +152,8 @@ export function HostsPage({ hosts, onHostsChange, onConnect, onQuickConnect, usa
     <section className="page hosts-page" aria-busy={busy}>
       <header className="hosts-header">
         <div>
-          <h1>{t("Hosts")}</h1>
-          <p>{t("Manage saved connections and open SSH sessions.")}</p>
+          <h1>{t(favoritesOnly ? "Favorites" : "Hosts")}</h1>
+          <p>{t(favoritesOnly ? "Hosts you starred" : "Manage saved connections and open SSH sessions.")}</p>
         </div>
         <button className="host-create" data-depth disabled={busy} onClick={addHost}><Icon name="plus" size={17} />{t("New host")}</button>
       </header>
@@ -178,8 +184,8 @@ export function HostsPage({ hosts, onHostsChange, onConnect, onQuickConnect, usa
       {visible.length === 0 ? (
         <div className="hosts-empty">
           <span className="hosts-empty-glyph"><Icon name={hosts.length === 0 ? "hosts" : "search"} size={34} /></span>
-          <h2>{hosts.length === 0 ? t("No hosts yet") : t("No matching hosts")}</h2>
-          <p>{hosts.length === 0 ? t("Add a host to keep its connection details in one place.") : t("Try another search or choose a different group.")}</p>
+          <h2>{hosts.length === 0 ? t(favoritesOnly ? "No favorites yet" : "No hosts yet") : t("No matching hosts")}</h2>
+          <p>{hosts.length === 0 ? t(favoritesOnly ? "Star a host to find it here." : "Add a host to keep its connection details in one place.") : t("Try another search or choose a different group.")}</p>
           <button className={hosts.length === 0 ? "host-create" : "host-empty-reset"} data-depth disabled={busy} onClick={hosts.length === 0 ? addHost : () => { setSearch(""); setGroup(""); }}><Icon name={hosts.length === 0 ? "plus" : "close"} size={16} />{hosts.length === 0 ? t("New host") : t("Clear filters")}</button>
         </div>
       ) : (

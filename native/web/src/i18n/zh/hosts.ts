@@ -1,5 +1,8 @@
 /** Host management and editor strings. */
 export default {
+  "Hosts you starred": "你收藏的主机",
+  "No favorites yet": "暂无收藏",
+  "Star a host to find it here.": "收藏主机后即可在这里找到。",
   "Manage saved connections and open SSH sessions.": "管理已保存的主机和 SSH 会话。",
   "Connection overview": "连接概览",
   "Saved hosts": "已保存主机",

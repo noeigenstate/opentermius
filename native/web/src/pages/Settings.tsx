@@ -5,6 +5,7 @@ import { detectXshellFolder, exportHosts, importHostsJson, importWindterm, impor
 import type { Updates } from "../api/updates";
 import { t } from "../i18n";
 import { Icon, type IconName } from "../icons";
+import { KnownHostsPage } from "./KnownHosts";
 import { Recovery } from "./Recovery";
 
 function Group({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
@@ -139,6 +140,7 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
         {updates.error && <p className="settings-error" role="alert">{updates.error}</p>}
       </Group>
     </fieldset>
+    <section className="settings-known-hosts" aria-label={t("Known Hosts")}><KnownHostsPage /></section>
     {busy && <p role="status">{t("Working…")}</p>}
     {recovery && <Recovery onClose={() => setRecovery(false)} onRestored={onDataChanged} />}
   </div>;

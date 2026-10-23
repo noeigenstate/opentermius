@@ -14,14 +14,13 @@ import { SurfaceEffects } from "./components/SurfaceEffects";
 const SessionPage = lazy(() => import("./pages/Session").then((module) => ({ default: module.SessionPage })));
 import { KeychainPage } from "./pages/Keychain";
 import { SnippetsPage } from "./pages/Snippets";
-import { KnownHostsPage } from "./pages/KnownHosts";
 import { LogsPage } from "./pages/Logs";
 
 const titles: Record<Section, string> = {
   hosts: "Hosts",
   keychain: "Keychain",
   snippets: "Snippets",
-  "known-hosts": "Known Hosts",
+  favorites: "Favorites",
   logs: "Logs",
   settings: "Settings",
 };
@@ -164,10 +163,9 @@ export default function App() {
         <main className={`content${activeSessionId ? " session-content" : ""}`}>
           {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
           <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
-            {section === "hosts" ? <HostsPage hosts={hosts} onHostsChange={setHosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
+            {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
               : section === "keychain" ? <KeychainPage />
               : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
-              : section === "known-hosts" ? <KnownHostsPage />
               : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
               : section === "settings" ? <SettingsPage settings={settings} saving={saving} onChange={changeSettings} onDataChanged={reloadData} updates={updates} />
               : <div className="empty">{t(titles[section])}</div>}
