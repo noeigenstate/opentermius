@@ -42,7 +42,7 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
 
   return (
     <>
-      <div ref={tabsRef} className="session-tabs" role="tablist" aria-label={t("Sessions")} onKeyDown={(event) => {
+      {sessions.length > 0 && <div ref={tabsRef} className="session-tabs" role="tablist" aria-label={t("Sessions")} onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || (event.target as HTMLElement).getAttribute("role") !== "tab") return;
         event.preventDefault();
         const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
@@ -70,7 +70,7 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
             <button className="tab-action tab-close" data-tooltip={t("Close session")} aria-label={t("Close session")} onClick={() => onClose(session.sessionId)}>×</button>
           </div>
         ))}
-      </div>
+      </div>}
       <button className="new-terminal" data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}><Icon name="plus" size={18} /></button>
       {menu && selected && createPortal(
         <div ref={menuRef} className="session-menu" style={{ left: menu.left, top: menu.top }} aria-label={t("Session menu")}>

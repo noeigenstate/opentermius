@@ -75,7 +75,8 @@ async function connect(port) {
 
 /** Smoke-test an isolated real Tauri WebView. All interaction uses CDP input.
  * Read only native window bounds; never invoke connection or persistence commands,
- * manufacture app state, or connect fixture hosts. */
+ * manufacture app state, or connect fixture hosts. A temporary local terminal
+ * exercises the tabs and is closed before capturing the workspace. */
 export async function verifyUi({ port = 9337, output }) {
   assert(Number.isInteger(port) && port > 0 && port <= 65535, 'Invalid debugging port.');
   assert(output, '--output is required. Use an ignored test-output directory on E:.');
@@ -236,14 +237,38 @@ export async function verifyUi({ port = 9337, output }) {
     report.runtime.motionPreferenceEmulatedForInteraction = 'no-preference';
     report.runtime.focusEmulatedForInteraction = true;
 
+    await check('full-height-sidebar-and-empty-session-strip', async () => {
+      const shell = await cdp.evaluate(`(() => {
+        const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
+        const titlebar = document.querySelector('.titlebar').getBoundingClientRect();
+        const content = document.querySelector('main.content').getBoundingClientRect();
+        return { sidebarTop: sidebar.top, sidebarBottom: sidebar.bottom, sidebarRight: sidebar.right,
+          titlebarTop: titlebar.top, titlebarLeft: titlebar.left, titlebarBottom: titlebar.bottom,
+          contentTop: content.top, viewportHeight: innerHeight,
+          sessionTabs: document.querySelectorAll('.session-tabs').length,
+          dragRegion: !!document.querySelector('.workspace-shell .titlebar [data-tauri-drag-region]'),
+          newTerminal: !!document.querySelector('.titlebar-tabs > .new-terminal') };
+      })()`);
+      assert(Math.abs(shell.sidebarTop) < 1 && Math.abs(shell.sidebarBottom - shell.viewportHeight) < 1, 'Sidebar does not span the window height.');
+      assert(Math.abs(shell.titlebarTop) < 1 && Math.abs(shell.titlebarLeft - shell.sidebarRight) < 1, 'Title strip does not start to the right of the sidebar.');
+      assert(Math.abs(shell.contentTop - shell.titlebarBottom) < 1, 'Content does not follow the title strip.');
+      assert.equal(shell.sessionTabs, 0, 'Session tabs must be absent before a session is opened.');
+      assert(shell.dragRegion && shell.newTerminal, 'Empty strip lost dragging or the new-terminal action.');
+      return shell;
+    });
     await check('single-native-frame-and-aligned-tab-action', async () => {
+      await click('.new-terminal');
+      await waitFor(`document.querySelectorAll('.session-tab').length === 1`, 'New terminal did not create a session tab.');
+      await click('.session-tabs > .tab[role="tab"]');
+      await waitFor(`!document.querySelector('#hosts-panel').hidden`, 'Workspace tab did not restore the hosts page.');
+      await delay(220);
       const frame = await cdp.evaluate(`(async () => {
         const inner = await window.__TAURI_INTERNALS__.invoke('plugin:window|inner_size', { label: 'main' });
         const outer = await window.__TAURI_INTERNALS__.invoke('plugin:window|outer_size', { label: 'main' });
         const app = document.querySelector('.app');
         const style = getComputedStyle(app);
         const bounds = app.getBoundingClientRect();
-        const tab = document.querySelector('.session-tabs > .tab').getBoundingClientRect();
+        const tab = document.querySelector('.session-tabs > .tab:last-child').getBoundingClientRect();
         const plus = document.querySelector('.new-terminal');
         const action = plus.getBoundingClientRect();
         return { inner, outer, border: style.borderTopWidth, radius: style.borderRadius,
@@ -259,6 +284,8 @@ export async function verifyUi({ port = 9337, output }) {
       assert.equal(frame.inner.height, frame.outer.height, 'Native shadow leaves a vertical frame.');
       assert(frame.centerOffset < 1 && frame.gap >= 0 && frame.gap <= 10, 'New terminal action is not aligned with the tabs.');
       assert(frame.sameContainer && frame.svgIcon, 'New terminal action is outside the tab layout or uses a text glyph.');
+      await click('.session-tab .tab-close');
+      await waitFor(`document.querySelectorAll('.session-tabs').length === 0`, 'Closing the final session did not restore the empty strip.');
       await capture('window-frame.png');
       return frame;
     });
@@ -333,7 +360,7 @@ export async function verifyUi({ port = 9337, output }) {
     await check('floating-tooltip-and-escape', async () => {
       await move({ x: 4, y: 4 });
       await move(await point('.host-card .host-more'));
-      await waitFor(`!!document.querySelector('#surface-hint[role="tooltip"]')`, 'Hover tooltip did not appear after its delay.');
+      await waitFor(`!!document.querySelector('#surface-hint[role="tooltip"]') && document.querySelector('.host-card .host-more').getAttribute('aria-describedby')?.split(' ').includes('surface-hint')`, 'Hover tooltip did not describe the host menu after its delay.');
       await delay(180);
       const tooltip = await cdp.evaluate(`(() => {
         const element = document.querySelector('#surface-hint');

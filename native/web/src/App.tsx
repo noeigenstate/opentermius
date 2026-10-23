@@ -153,31 +153,33 @@ export default function App() {
   return (
     <div className="app" data-glass={settings?.glassEffect ?? true}>
       <SurfaceEffects />
-      <TitleBar tabs={{ sessions, activeSessionId, onSelect: (id) => { setActiveSessionId(id); if (id === null) setSection("hosts"); },
-        onNew: () => { void run("local", async () => {
-          await addSession(await openLocalTerminal());
-        }); },
-        onReconnect: reconnect,
-        onDuplicate: (id) => { void run(id, async () => { await addSession(await duplicateSession(id)); }); },
-        onClose: (id) => { void run(id, async () => { await closeSession(id); removeSession(id); }); },
-      }} />
-      <div className="body">
+      <div className="body app-shell">
         <Sidebar section={section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
-        <main className={`content${activeSessionId ? " session-content" : ""}`}>
-          {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
-          <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
-            {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
-              : section === "keychain" ? <KeychainPage />
-              : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
-              : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
-              : section === "settings" ? <SettingsPage settings={settings} saving={saving} onChange={changeSettings} onDataChanged={reloadData} updates={updates} />
-              : <div className="empty">{t(titles[section])}</div>}
-          </div>
-          <Suspense fallback={<div className="empty">{t("Loading terminal…")}</div>}>
-            {sessions.map((session) => <SessionPage key={session.sessionId} session={session} visible={activeSessionId === session.sessionId}
-              initialView={initialSessionViews[session.sessionId]} blocked={prompts.length > 0} onReconnect={() => reconnect(session.sessionId)} />)}
-          </Suspense>
-        </main>
+        <div className="app content workspace-shell">
+          <TitleBar tabs={{ sessions, activeSessionId, onSelect: (id) => { setActiveSessionId(id); if (id === null) setSection("hosts"); },
+            onNew: () => { void run("local", async () => {
+              await addSession(await openLocalTerminal());
+            }); },
+            onReconnect: reconnect,
+            onDuplicate: (id) => { void run(id, async () => { await addSession(await duplicateSession(id)); }); },
+            onClose: (id) => { void run(id, async () => { await closeSession(id); removeSession(id); }); },
+          }} />
+          <main className={`content${activeSessionId ? " session-content" : ""}`}>
+            {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
+            <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
+              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
+                : section === "keychain" ? <KeychainPage />
+                : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
+                : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
+                : section === "settings" ? <SettingsPage settings={settings} saving={saving} onChange={changeSettings} onDataChanged={reloadData} updates={updates} />
+                : <div className="empty">{t(titles[section])}</div>}
+            </div>
+            <Suspense fallback={<div className="empty">{t("Loading terminal…")}</div>}>
+              {sessions.map((session) => <SessionPage key={session.sessionId} session={session} visible={activeSessionId === session.sessionId}
+                initialView={initialSessionViews[session.sessionId]} blocked={prompts.length > 0} onReconnect={() => reconnect(session.sessionId)} />)}
+            </Suspense>
+          </main>
+        </div>
       </div>
       {prompts[0] && <PromptDialog key={prompts[0].promptId} prompt={prompts[0]} onAnswered={(id) => setPrompts((current) => current.filter((prompt) => prompt.promptId !== id))} />}
     </div>
