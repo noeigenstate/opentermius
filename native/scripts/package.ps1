@@ -95,6 +95,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
     }
     $source = if ($env:OPENTERMIUS_TEST_EXECUTABLE) { [IO.Path]::GetFullPath($env:OPENTERMIUS_TEST_EXECUTABLE) } else {
+        # Cargo prints UTF-8; Windows PowerShell 5.1 would decode non-ASCII paths with the ANSI code page.
+        [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
         $metadataJson = & cargo metadata --no-deps --format-version 1 --locked
         if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the Cargo target directory.' }
         $targetRoot = ($metadataJson | ConvertFrom-Json).target_directory

@@ -29,7 +29,8 @@ keep outputs, caches and temporary files on E:.
    Expect `native/releases/OpenTermius-<version>-windows-x64-setup.exe` and
    `checksums.json`; check filename, version, bytes and SHA-256 agree.
    `-SkipBuild` is only for a release built with that exact feature and current
-   frontend. `-MakensisPath` selects NSIS; `-DumpbinPath` records actual DLL
+   frontend. Stop any Vite dev server first: it locks `esbuild.exe` and makes
+   the script's `npm ci` fail. `-MakensisPath` selects NSIS; `-DumpbinPath` records actual DLL
    imports. Do not infer CRT independence from flags. A cached bootstrapper
    passed via `-WebView2BootstrapperPath` must have a valid Microsoft signature.
 4. Launch the final release with no Vite server and confirm its embedded UI
