@@ -5,10 +5,9 @@
 .hosts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); align-items: start; gap: 19px 16px; margin-top: 25px; }
 .hosts-list { display: flex; flex-direction: column; gap: 10px; margin-top: 25px; }
 
-/* The ::before ring and ::after shadow are pre-rendered layers: selection and hover only fade opacity. */
+/* The ::after shadow is a pre-rendered layer: selection and hover only fade its opacity. */
 .host-card { position: relative; min-width: 0; padding: 15px 15px 11px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-sm); cursor: default; transition: transform 200ms var(--ease-out), border-color var(--duration-fast); animation: card-in 280ms var(--ease-out) backwards; }
-.host-card::before, .host-card::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease-out; }
-.host-card::before { box-shadow: 0 0 0 1px var(--selected-edge); }
+.host-card::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease-out; }
 .host-card::after { box-shadow: var(--shadow-hover); transition-duration: 200ms; }
 .host-card:nth-child(2) { animation-delay: 30ms; }
 .host-card:nth-child(3) { animation-delay: 60ms; }
@@ -21,13 +20,10 @@
 .host-card:focus-within { z-index: 1; }
 .host-card:focus-within::after { opacity: 1; }
 .host-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-.host-card-selected { border-color: var(--selected-edge); }
-.host-card-selected::before { opacity: 1; }
 .host-card-selected::after { box-shadow: var(--shadow-selected); opacity: 1; }
 @media (hover: hover) and (pointer: fine) {
   .host-card:hover { z-index: 1; transform: translateY(-3px); border-color: var(--border-strong); }
   .host-card:hover::after { opacity: 1; }
-  .host-card-selected:hover { border-color: var(--selected-edge); }
 }
 
 .host-card-header { display: flex; align-items: flex-start; gap: 14px; }
