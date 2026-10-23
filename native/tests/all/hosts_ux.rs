@@ -17,6 +17,7 @@ fn profile(id: &str, name: &str) -> Profile {
         encrypted_secret: None,
         tags: Vec::new(),
         last_connected: None,
+        favorite: false,
         created_at: None,
     }
 }
@@ -31,9 +32,47 @@ fn legacy_config_gets_defaults_for_host_metadata() {
     assert!(data.hosts[0].tags.is_empty());
     assert!(data.hosts[0].last_connected.is_none());
     assert!(data.hosts[0].created_at.is_none());
+    assert!(!data.hosts[0].favorite);
     assert_eq!(data.hosts_view, HostsView::default());
     assert_eq!(data.hosts_view.view_mode(), ViewMode::Grid);
     assert_eq!(data.hosts_view.sort_mode(), SortMode::Name);
+}
+
+#[test]
+fn favorites_persist_export_import_and_clear_on_duplicate() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(temp.path().join("data.json")).unwrap();
+    store.save(profile("a", "Alpha"), None, false).unwrap();
+    hosts::set_favorite(&mut store, "a", true).unwrap();
+    hosts::set_favorite(&mut store, "a", true).unwrap();
+    assert!(Store::open(store.path.clone()).unwrap().data.hosts[0].favorite);
+    assert!(hosts::set_favorite(&mut store, "missing", true).is_err());
+
+    let duplicate = hosts::duplicate_profile(&mut store, "a").unwrap();
+    assert!(!store.data.hosts.iter().find(|host| host.id == duplicate).unwrap().favorite);
+    assert!(store.data.hosts[0].favorite);
+    let exported = temp.path().join("export.json");
+    store.export(&exported).unwrap();
+    let mut imported = Store::open(temp.path().join("import.json")).unwrap();
+    assert_eq!(imported.import(&exported).unwrap(), 2);
+    let reopened = Store::open(imported.path.clone()).unwrap();
+    assert!(reopened.data.hosts[0].favorite);
+    assert!(!reopened.data.hosts[1].favorite);
+
+    hosts::set_favorite(&mut store, "a", false).unwrap();
+    assert!(!Store::open(store.path.clone()).unwrap().data.hosts[0].favorite);
+}
+
+#[test]
+fn favorite_is_rolled_back_on_persist_failure() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(temp.path().join("data.json")).unwrap();
+    store.save(profile("a", "Alpha"), None, false).unwrap();
+    let blocker = temp.path().join("blocker");
+    std::fs::write(&blocker, "blocked").unwrap();
+    store.path = blocker.join("data.json");
+    assert!(hosts::set_favorite(&mut store, "a", true).is_err());
+    assert!(!store.data.hosts[0].favorite);
 }
 
 #[test]

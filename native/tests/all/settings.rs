@@ -158,6 +158,7 @@ async fn ssh_connection_uses_the_configured_handshake_timeout() {
             encrypted_secret: None,
             tags: Vec::new(),
             last_connected: None,
+            favorite: false,
             created_at: None,
         },
         String::new(),

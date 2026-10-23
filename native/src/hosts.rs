@@ -309,6 +309,19 @@ pub fn mark_connected(store: &mut Store, id: &str, now: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// Sets the saved favorite flag, restoring it if persistence fails.
+pub fn set_favorite(store: &mut Store, id: &str, favorite: bool) -> Result<()> {
+    let index = store.data.hosts.iter().position(|profile| profile.id == id)
+        .context(crate::i18n::t("Host not found"))?;
+    let previous = store.data.hosts[index].favorite;
+    store.data.hosts[index].favorite = favorite;
+    if let Err(error) = store.persist() {
+        store.data.hosts[index].favorite = previous;
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Duplicates a host with a unique "(copy)" name. Saved credentials stay in
 /// their encrypted form and are copied as-is.
 pub fn duplicate_profile(store: &mut Store, id: &str) -> Result<String> {
@@ -329,6 +342,7 @@ pub fn duplicate_profile(store: &mut Store, id: &str) -> Result<String> {
     copy.name = name;
     copy.created_at = Some(now_rfc3339());
     copy.last_connected = None;
+    copy.favorite = false;
     copy.validate()?;
     store.data.hosts.push(copy);
     if let Err(error) = store.persist() {
@@ -383,6 +397,7 @@ mod tests {
             group: String::new(),
             tags: Vec::new(),
             last_connected: None,
+            favorite: false,
             created_at: None,
             encrypted_secret: None,
         }

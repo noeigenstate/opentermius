@@ -651,6 +651,7 @@ mod tests {
             group: String::new(),
             tags: Vec::new(),
             last_connected: None,
+            favorite: false,
             created_at: None,
             encrypted_secret: None,
         }

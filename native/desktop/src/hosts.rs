@@ -18,6 +18,7 @@ pub struct HostCard {
     username: String,
     group: String,
     tags: Vec<String>,
+    favorite: bool,
     last_connected: Option<String>,
 }
 
@@ -84,6 +85,7 @@ impl HostDraft {
             encrypted_secret: None,
             created_at: None,
             last_connected: None,
+            favorite: false,
         };
         profile.validate().map_err(|error| error.to_string())?;
         Ok(profile)
@@ -101,7 +103,8 @@ fn save_draft(store: &mut Store, mut draft: HostDraft) -> Result<String, String>
     {
         return Err(t("Host not found").to_string());
     }
-    let profile = draft.into_profile()?;
+    let mut profile = draft.into_profile()?;
+    profile.favorite = store.data.hosts.iter().any(|saved| saved.id == profile.id && saved.favorite);
     let id = profile.id.clone();
     // Store preserves an existing secret on blank input and protects newly typed credentials.
     store
@@ -125,6 +128,7 @@ pub fn list_hosts(state: tauri::State<'_, AppState>) -> Result<Vec<HostCard>, St
             username: profile.username.clone(),
             group: profile.group.clone(),
             tags: profile.tags.clone(),
+            favorite: profile.favorite,
             last_connected: profile.last_connected.clone(),
         })
         .collect())
@@ -153,6 +157,11 @@ pub fn delete_host(state: tauri::State<'_, AppState>, id: String) -> Result<(), 
         .store()?
         .delete(&id)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_host_favorite(state: tauri::State<'_, AppState>, id: String, favorite: bool) -> Result<(), String> {
+    hosts::set_favorite(&mut *state.store()?, &id, favorite).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -304,6 +313,7 @@ mod tests {
             opentermius::store::unprotect(&encrypted).unwrap(),
             "first-test-only-input"
         );
+        hosts::set_favorite(&mut store, &id, true).unwrap();
         let created = store.data.hosts[0].created_at.clone();
         hosts::mark_connected(&mut store, &id, "2024-01-01T00:00:00Z").unwrap();
         let mut edit = HostDraft::from(&store.data.hosts[0]);
@@ -322,6 +332,7 @@ mod tests {
         edit.password = "second-test-only-input".into();
         save_draft(&mut store, edit).unwrap();
         let reopened = Store::open(store.path.clone()).unwrap();
+        assert!(reopened.data.hosts[0].favorite);
         assert_eq!(
             opentermius::store::unprotect(
                 reopened.data.hosts[0].encrypted_secret.as_ref().unwrap()

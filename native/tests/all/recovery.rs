@@ -28,6 +28,7 @@ fn data() -> Data {
             encrypted_secret: None,
             tags: vec!["work".into()],
             last_connected: Some("2026-01-02T03:04:05Z".into()),
+            favorite: true,
             created_at: Some("2026-01-01T00:00:00Z".into()),
         }],
         keys: vec![KeyEntry {

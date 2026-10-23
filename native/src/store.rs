@@ -39,6 +39,8 @@ pub struct Profile {
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
+    pub favorite: bool,
+    #[serde(default)]
     pub last_connected: Option<String>,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -532,6 +534,7 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
         encrypted_secret: None,
         tags: Vec::new(),
         last_connected: None,
+        favorite: false,
         created_at: None,
     };
     profile.validate()?;
@@ -698,6 +701,7 @@ mod tests {
             encrypted_secret: None,
             tags: Vec::new(),
             last_connected: None,
+            favorite: false,
             created_at: None,
         }
     }
@@ -921,6 +925,7 @@ mod core_regression_tests {
             encrypted_secret: None,
             tags: Vec::new(),
             last_connected: None,
+            favorite: false,
             created_at: None,
         }
     }

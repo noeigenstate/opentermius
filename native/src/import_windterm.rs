@@ -67,6 +67,7 @@ fn draft(session: &Value, home: &Path) -> Result<HostDraft> {
         encrypted_secret: None,
         tags: Vec::new(),
         last_connected: None,
+        favorite: false,
         created_at: None,
     };
     profile.validate()?;

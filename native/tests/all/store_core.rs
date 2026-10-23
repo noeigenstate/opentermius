@@ -18,6 +18,7 @@ fn profile() -> Profile {
         encrypted_secret: None,
         tags: Vec::new(),
         last_connected: None,
+        favorite: false,
         created_at: None,
     }
 }
