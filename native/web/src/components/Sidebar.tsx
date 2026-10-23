@@ -15,23 +15,27 @@ const items: { id: Section; label: string; icon: IconName }[] = [
 function NavItem({ id, label, icon, active, onSelect }: { id: Section; label: string; icon: IconName; active: boolean; onSelect: (s: Section) => void }) {
   return (
     <button className={`nav-item${active ? " nav-active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => onSelect(id)}>
-      <span className="nav-icon"><Icon name={icon} /></span>
+      <span className="nav-icon"><Icon name={icon} size={20} /></span>
       {t(label)}
     </button>
   );
 }
 
-export function Sidebar({ section, onSelect }: { section: Section; onSelect: (s: Section) => void }) {
+/** `section` is null while a session is in front: the content is then no section's page. */
+export function Sidebar({ section, onSelect }: { section: Section | null; onSelect: (s: Section) => void }) {
   return (
     <nav className="sidebar" aria-label={t("Navigation")}>
-      <div className="sidebar-brand"><img src="/logo.svg" alt="" /><span>{t("OpenTermius")}</span></div>
-      {items.slice(0, 3).map((item) => (
-        <NavItem key={item.id} {...item} active={section === item.id} onSelect={onSelect} />
-      ))}
-      <hr className="sidebar-divider" />
-      {items.slice(3).map((item) => (
-        <NavItem key={item.id} {...item} active={section === item.id} onSelect={onSelect} />
-      ))}
+      <div className="sidebar-brand"><span className="brand-mark"><Icon name="logo" size={27} /></span><span>{t("OpenTermius")}</span></div>
+      <div className="nav-list" data-index={items.findIndex((item) => item.id === section)}>
+        <span className="nav-indicator" aria-hidden="true" />
+        {items.slice(0, 3).map((item) => (
+          <NavItem key={item.id} {...item} active={section === item.id} onSelect={onSelect} />
+        ))}
+        <hr className="sidebar-divider" />
+        {items.slice(3).map((item) => (
+          <NavItem key={item.id} {...item} active={section === item.id} onSelect={onSelect} />
+        ))}
+      </div>
     </nav>
   );
 }

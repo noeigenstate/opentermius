@@ -153,9 +153,9 @@ export default function App() {
   return (
     <div className="app" data-glass={settings?.glassEffect ?? true}>
       <SurfaceEffects />
-      <div className="body app-shell">
-        <Sidebar section={section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
-        <div className="app content workspace-shell">
+      <div className="app-body">
+        <Sidebar section={activeSessionId ? null : section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
+        <div className="workspace-shell">
           <TitleBar tabs={{ sessions, activeSessionId, onSelect: (id) => { setActiveSessionId(id); if (id === null) setSection("hosts"); },
             onNew: () => { void run("local", async () => {
               await addSession(await openLocalTerminal());
