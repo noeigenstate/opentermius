@@ -12,6 +12,8 @@ mod state;
 mod settings;
 mod data;
 mod updates;
+#[cfg(windows)]
+mod window_frame;
 
 use state::AppState;
 
@@ -54,11 +56,16 @@ fn main() {
                     } else {
                         window.set_background_color(Some(tauri::window::Color(238, 241, 246, 255)))?;
                     }
+                    window_frame::configure(&window.as_ref().window())?;
                 }
             }
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(windows)]
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
+                let _ = window_frame::update_shape(window);
+            }
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 use tauri::Manager;
                 window.state::<AppState>().sessions.shutdown();

@@ -74,7 +74,8 @@ async function connect(port) {
 }
 
 /** Smoke-test an isolated real Tauri WebView. All interaction uses CDP input.
- * Never invoke native commands, manufacture app state, or connect fixture hosts. */
+ * Read only native window bounds; never invoke connection or persistence commands,
+ * manufacture app state, or connect fixture hosts. */
 export async function verifyUi({ port = 9337, output }) {
   assert(Number.isInteger(port) && port > 0 && port <= 65535, 'Invalid debugging port.');
   assert(output, '--output is required. Use an ignored test-output directory on E:.');
@@ -235,6 +236,50 @@ export async function verifyUi({ port = 9337, output }) {
     report.runtime.motionPreferenceEmulatedForInteraction = 'no-preference';
     report.runtime.focusEmulatedForInteraction = true;
 
+    await check('single-native-frame-and-aligned-tab-action', async () => {
+      const frame = await cdp.evaluate(`(async () => {
+        const inner = await window.__TAURI_INTERNALS__.invoke('plugin:window|inner_size', { label: 'main' });
+        const outer = await window.__TAURI_INTERNALS__.invoke('plugin:window|outer_size', { label: 'main' });
+        const app = document.querySelector('.app');
+        const style = getComputedStyle(app);
+        const bounds = app.getBoundingClientRect();
+        const tab = document.querySelector('.session-tabs > .tab').getBoundingClientRect();
+        const plus = document.querySelector('.new-terminal');
+        const action = plus.getBoundingClientRect();
+        return { inner, outer, border: style.borderTopWidth, radius: style.borderRadius,
+          fillsViewport: Math.abs(bounds.width - innerWidth) < 1 && Math.abs(bounds.height - innerHeight) < 1,
+          centerOffset: Math.abs(tab.y + tab.height / 2 - action.y - action.height / 2),
+          gap: action.x - tab.right, sameContainer: plus.parentElement.matches('.titlebar-tabs'),
+          svgIcon: !!plus.querySelector('svg'), viewportWidth: innerWidth };
+      })()`);
+      assert.equal(frame.border, '0px');
+      assert.equal(frame.radius, '0px');
+      assert(frame.fillsViewport, 'The app leaves an inset around the native client area.');
+      assert.equal(frame.inner.width, frame.outer.width, 'Native shadow leaves a horizontal frame.');
+      assert.equal(frame.inner.height, frame.outer.height, 'Native shadow leaves a vertical frame.');
+      assert(frame.centerOffset < 1 && frame.gap >= 0 && frame.gap <= 10, 'New terminal action is not aligned with the tabs.');
+      assert(frame.sameContainer && frame.svgIcon, 'New terminal action is outside the tab layout or uses a text glyph.');
+      await capture('window-frame.png');
+      return frame;
+    });
+    await check('native-maximize-and-restore', async () => {
+      const maximized = () => cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' })`);
+      assert.equal(await maximized(), false, 'Window must start restored.');
+      try {
+        await click('.titlebar .chrome', { index: 1 });
+        await waitFor(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' })`, 'Window did not maximize.');
+        assert.equal(await maximized(), true);
+      } finally {
+        if (await maximized()) await click('.titlebar .chrome', { index: 1 });
+        await waitFor(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' }).then(value => !value)`, 'Window did not restore.');
+      }
+      const bounds = await cdp.evaluate(`(async () => ({
+        inner: await window.__TAURI_INTERNALS__.invoke('plugin:window|inner_size', { label: 'main' }),
+        outer: await window.__TAURI_INTERNALS__.invoke('plugin:window|outer_size', { label: 'main' })
+      }))()`);
+      assert.deepEqual(bounds.inner, bounds.outer, 'Restore reintroduced a native inset frame.');
+      return { maximized: true, restored: true, ...bounds };
+    });
     await check('apple-surface-and-accent', async () => {
       const styles = await cdp.evaluate(`({ background: getComputedStyle(document.querySelector('main.content')).backgroundColor,
         accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),

@@ -44,7 +44,8 @@ button:focus-visible, summary:focus-visible { outline: 3px solid rgba(0, 122, 25
 ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: #c8c8cf; background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-.app { display: flex; flex-direction: column; height: 100%; border: 1px solid rgba(255, 255, 255, .75); border-radius: 14px; overflow: hidden; isolation: isolate; }
+/* The native window owns the outer contour; do not draw a second inset frame. */
+.app { display: flex; flex-direction: column; height: 100%; }
 .body { flex: 1; display: flex; min-height: 0; }
 
 /* --- Title bar ------------------------------------------------------------ */
@@ -111,7 +112,8 @@ button:focus-visible, summary:focus-visible { outline: 3px solid rgba(0, 122, 25
 .session-content { display: flex; flex-direction: column; overflow: hidden; }
 .session-app-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
 .session-app-error button { font-size: 20px; }
-.session-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: calc(100% - 220px); overflow-x: auto; scrollbar-width: none; height: 100%; }
+.titlebar-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: calc(100% - 180px); height: 100%; }
+.session-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; height: 100%; }
 .session-tabs::-webkit-scrollbar { display: none; }
 .session-tabs > .tab { flex: none; }
 .session-tab { padding: 0 5px 0 0; gap: 0; min-width: 140px; max-width: 240px; }
@@ -122,8 +124,9 @@ button:focus-visible, summary:focus-visible { outline: 3px solid rgba(0, 122, 25
 .tab-close { opacity: 0; transition: opacity 120ms; }
 .session-tab:hover .tab-close, .session-tab:focus-within .tab-close, .tab-active .tab-close { opacity: 1; }
 .dot-disconnected { background: var(--warning); }
-.new-terminal { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border: 1px solid rgba(60, 60, 67, .08); background: rgba(255, 255, 255, .7); border-radius: 9px; font-size: 23px; color: var(--secondary); transition: transform var(--duration-fast), background var(--duration-fast); }
+.new-terminal { display: grid; place-items: center; flex: none; width: 34px; height: 34px; padding: 0; border-radius: 9px; color: var(--secondary); transition: transform var(--duration-fast), background var(--duration-fast); }
 .new-terminal:hover { background: var(--hover); }
+.new-terminal:active { transform: scale(.94); }
 .titlebar-spacer { min-width: 24px; }
 .session-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; padding: 5px; min-width: 200px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card); box-shadow: 0 8px 28px rgba(30, 41, 59, 0.18); }
 .session-menu button { text-align: left; padding: 8px 12px; border-radius: 6px; }

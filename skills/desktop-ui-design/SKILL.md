@@ -20,6 +20,14 @@ configuration formats independent of visual changes.
 - Keep shared control styles in `styles.css`, host workspace styles in
   `hosts.css`, and auxiliary workspace styles in `workspaces.css`. Replace
   obsolete rules when moving them instead of stacking conflicting overrides.
+- The native shell owns the outer window contour. Do not add a CSS border or
+  radius to `.app`: it creates a second outline inside the native frame. On
+  Windows, blur plus Tao's undecorated shadow exposes non-client insets; the
+  shell disables that shadow and requests DWM corners on Windows 11, or uses
+  one native window region on Windows 10. Update that region on size/DPI
+  changes and clear it when maximized; Windows owns a successfully set region.
+  Inspect native inner/outer bounds as well as WebView screenshots: a browser
+  screenshot alone cannot show a faulty non-client edge.
 
 ## Interactive motion without idle work
 

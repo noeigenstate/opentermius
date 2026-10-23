@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "../api/sessions";
 import { t } from "../i18n";
+import { Icon } from "../icons";
 
 export interface TabsProps {
   sessions: SessionInfo[];
@@ -70,7 +71,7 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
           </div>
         ))}
       </div>
-      <button className="new-terminal" data-depth data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}>+</button>
+      <button className="new-terminal" data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}><Icon name="plus" size={18} /></button>
       {menu && selected && createPortal(
         <div ref={menuRef} className="session-menu" style={{ left: menu.left, top: menu.top }} aria-label={t("Session menu")}>
           <button onClick={() => { setMenu(null); onReconnect(selected.sessionId); }}>{t("Reconnect")}</button>
