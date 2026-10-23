@@ -418,10 +418,6 @@ mod tests {
             translate_to("Cannot save view settings: Host not found", true),
             "无法保存视图设置：主机不存在"
         );
-        let imported = "Imported 1 host fingerprints, 2 already existed, 3 skipped";
-        let chinese = "已导入 1 条主机指纹，2 条已存在，跳过 3 条";
-        assert_eq!(translate_to(imported, true), chinese);
-        assert_eq!(translate_to(chinese, false), imported);
         let xshell = "Imported 1 hosts, 2 duplicates, 3 skipped; passwords were excluded. Enter credentials on first connect; 4 hosts used public keys and now use password authentication. Select a private key in Host Details";
         assert_eq!(translate_to(xshell, true), "已导入 1 台主机，重复 2 台，跳过 3 项；密码未导入，首次连接时需输入凭据；其中 4 台原使用公钥，已暂设为密码认证，请在主机详情中选择私钥");
         assert_eq!(translate_to(&translate_to(xshell, true), false), xshell);

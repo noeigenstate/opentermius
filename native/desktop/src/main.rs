@@ -4,7 +4,6 @@
 mod hosts;
 mod keychain;
 mod snippets;
-mod known_hosts;
 mod logs;
 mod sessions;
 mod sftp;
@@ -85,7 +84,6 @@ fn main() {
             keychain::list_keys, keychain::generate_key, keychain::key_requires_passphrase,
             keychain::import_key, keychain::rename_key, keychain::delete_key, keychain::export_public_key,
             snippets::list_snippets, snippets::save_snippet, snippets::delete_snippet,
-            known_hosts::list_known_hosts, known_hosts::delete_known_host, known_hosts::import_known_hosts,
             logs::list_logs, logs::clear_logs,
             settings::get_settings, settings::save_settings, settings::get_app_info, settings::open_config_folder,
             data::import_hosts_json, data::detect_xshell_folder, data::import_xshell, data::import_windterm,

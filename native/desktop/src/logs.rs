@@ -143,9 +143,6 @@ mod tests {
                 crate::snippets::list_snippets,
                 crate::snippets::save_snippet,
                 crate::snippets::delete_snippet,
-                crate::known_hosts::list_known_hosts,
-                crate::known_hosts::delete_known_host,
-                crate::known_hosts::import_known_hosts,
                 list_logs,
                 clear_logs,
             ])

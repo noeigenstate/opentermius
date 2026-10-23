@@ -25,12 +25,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("{days}d", "{days}天"),
     (" (copy {number})", "（副本 {number}）"),
     (" (copy)", "（副本）"),
-    (", {} already existed", "，{} 条已存在"),
-    (
-        ", {} fingerprint conflicts kept unchanged",
-        "，{} 条与已有指纹冲突未覆盖",
-    ),
-    (", {} skipped", "，跳过 {} 条"),
     ("--renderer requires an argument", "--renderer 缺少参数"),
     (
         "; {} hosts used public keys and now use password authentication. Select a private key in Host Details",
@@ -125,7 +119,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("Cannot open macOS Keychain", "无法打开 macOS 钥匙串"),
     ("Cannot read Keychain master key", "无法读取钥匙串主密钥"),
     ("Cannot read directory entry", "无法读取目录项"),
-    ("Cannot read import file", "无法读取导入文件"),
     ("Cannot read local folder", "读取本地文件夹失败"),
     ("Cannot read local master key", "无法读取本地主密钥"),
     (
@@ -309,10 +302,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Failed to write private key file", "写入私钥文件失败"),
     ("File", "文件"),
-    (
-        "File does not contain known_hosts records",
-        "文件不包含 known_hosts 记录",
-    ),
     ("File operation completed", "文件操作已完成"),
     ("File task queue is busy", "文件任务队列繁忙"),
     (
@@ -356,11 +345,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Host deleted", "主机已删除"),
     ("Host duplicated", "主机已复制"),
-    (
-        "Host fingerprint for {host}:{port} no longer exists",
-        "{host}:{port} 的主机指纹已不存在",
-    ),
-    ("Host fingerprint was not displayed", "未显示主机指纹"),
     ("Host is missing from UI", "界面主机丢失"),
     ("Host key confirmation timed out", "主机密钥确认超时"),
     ("Host list is missing", "缺少主机列表"),
@@ -368,14 +352,12 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("Host not found", "主机不存在"),
     ("Host saved", "主机已保存"),
     ("Host search failed", "主机搜索失败"),
-    ("Import OpenSSH known_hosts", "导入 OpenSSH known_hosts"),
     ("Import SSH private key", "导入 SSH 私钥"),
     ("Import failed: {error:#}", "导入失败：{error:#}"),
     (
         "Import file must not exceed 16 MB",
         "导入文件不能超过 16 MB",
     ),
-    ("Import file must not exceed 5 MB", "导入文件不能超过 5 MB"),
     ("Import from Xshell", "从 Xshell 导入"),
     ("Import from WindTerm", "从 WindTerm 导入"),
     ("Server output is too large", "服务器输出过大"),
@@ -425,7 +407,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ),
     ("Imported key", "导入的密钥"),
     ("Imported {n} hosts", "已导入 {n} 台主机"),
-    ("Imported {} host fingerprints", "已导入 {} 条主机指纹"),
     (
         "Imported {} hosts, {} duplicates, {} skipped; passwords were excluded. Enter credentials on first connect",
         "已导入 {} 台主机，重复 {} 台，跳过 {} 项；密码未导入，首次连接时需输入凭据",
@@ -465,10 +446,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     (
         "Invalid or missing private key passphrase",
         "私钥口令无效或缺失",
-    ),
-    (
-        "Invalid port; cannot remove this fingerprint",
-        "端口无效，无法移除该指纹",
     ),
     ("Invalid private key file encoding", "私钥文件编码无效"),
     ("Invalid private key or passphrase", "私钥或口令无效"),
@@ -591,10 +568,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
         "Native UI connection self-test timed out: {}",
         "原生界面连接自检超时：{}",
     ),
-    (
-        "No host fingerprints imported; skipped {} invalid or unsupported records",
-        "未导入主机指纹，跳过 {} 条无效或不支持的记录",
-    ),
     ("No local shell is available", "没有可用的本地 Shell"),
     ("None", "无"),
     ("Not in saved hosts", "不在已保存的主机中"),
@@ -710,10 +683,6 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
         "远程文件夹名包含不安全字符",
     ),
     ("Remote forwarding request timed out", "远程转发请求超时"),
-    (
-        "Removed host fingerprint for {host}:{port}; it will be confirmed on next connection",
-        "已移除 {host}:{port} 的主机指纹，下次连接将重新确认",
-    ),
     ("Renamed {from} to {to}", "已将 {from} 重命名为 {to}"),
     (
         "Restored {} hosts, {} keys, {} snippets, {} key files, {} trust records; skipped {} existing items and {} fingerprint conflicts (kept local fingerprints)",

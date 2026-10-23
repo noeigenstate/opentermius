@@ -174,9 +174,7 @@ fn populated_recovery_restores_secrets_files_and_preferences_in_both_modes() {
     .unwrap();
     source.data.hosts_view.mode = "list".into();
     source.data.hosts_view.sort = "last".into();
-    let known = store::parse_known_hosts(&format!("127.0.0.1 {}", entry.public_key));
-    assert_eq!(known.skipped, 0);
-    assert_eq!(source.import_known_hosts(&known.entries).unwrap().added, 1);
+    source.trust("127.0.0.1", 22, &entry.fingerprint).unwrap();
     settings::persist(&mut source, preferences()).unwrap();
     let code = recovery::generate(&source.data, Some("portable phrase"), true).unwrap();
     fs::remove_file(&key_file).unwrap();
@@ -332,7 +330,6 @@ fn garbage_imports_and_recovery_are_bounded_and_do_not_mutate_config() {
         let text = String::from_utf8_lossy(&bytes);
         let code = format!("OTR1-{text}");
         assert!(recovery::restore(&mut store, &code, None, RestoreMode::Merge).is_err());
-        assert!(store::parse_known_hosts(&text).entries.is_empty());
     }
     fs::write(sessions.join("huge.xsh"), vec![b'x'; 5 * 1024 * 1024 + 1]).unwrap();
     let scanned = import_xshell::scan(&sessions);
@@ -348,11 +345,6 @@ fn garbage_imports_and_recovery_are_bounded_and_do_not_mutate_config() {
             .unwrap_err()
             .to_string()
             .contains("too long")
-    );
-    assert!(
-        store::parse_known_hosts(&"x".repeat(1024 * 1024))
-            .entries
-            .is_empty()
     );
     assert_eq!(snapshot(&store), before);
     assert_eq!(fs::read(&store.path).unwrap(), disk);

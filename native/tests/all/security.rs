@@ -226,14 +226,6 @@ fn known_hosts_conflicts_never_replace_existing_pins() {
     store
         .trust("example.invalid", 22, "SHA256:original")
         .unwrap();
-    let result = store
-        .import_known_hosts(&[store::KnownHostEntry {
-            host: "example.invalid".into(),
-            port: 22,
-            fingerprint: "SHA256:changed".into(),
-        }])
-        .unwrap();
-    assert_eq!(result.conflicts, 1);
     assert!(
         store
             .trust("example.invalid", 22, "SHA256:changed")

@@ -9,7 +9,6 @@ export default {
   Hosts: "主机",
   Keychain: "密钥管理",
   Snippets: "代码片段",
-  "Known Hosts": "已知主机",
   Logs: "连接日志",
   Settings: "设置",
   All: "全部",
