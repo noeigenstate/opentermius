@@ -242,15 +242,16 @@ export async function verifyUi({ port = 9337, output }) {
         const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
         const titlebar = document.querySelector('.titlebar').getBoundingClientRect();
         const content = document.querySelector('main.content').getBoundingClientRect();
+        const inset = parseFloat(getComputedStyle(document.querySelector('.app')).borderTopWidth);
         return { sidebarTop: sidebar.top, sidebarBottom: sidebar.bottom, sidebarRight: sidebar.right,
           titlebarTop: titlebar.top, titlebarLeft: titlebar.left, titlebarBottom: titlebar.bottom,
-          contentTop: content.top, viewportHeight: innerHeight,
+          contentTop: content.top, viewportHeight: innerHeight, inset,
           sessionTabs: document.querySelectorAll('.session-tabs').length,
           dragRegion: !!document.querySelector('.workspace-shell .titlebar [data-tauri-drag-region]'),
           newTerminal: !!document.querySelector('.titlebar-tabs > .new-terminal') };
       })()`);
-      assert(Math.abs(shell.sidebarTop) < 1 && Math.abs(shell.sidebarBottom - shell.viewportHeight) < 1, 'Sidebar does not span the window height.');
-      assert(Math.abs(shell.titlebarTop) < 1 && Math.abs(shell.titlebarLeft - shell.sidebarRight) < 1, 'Title strip does not start to the right of the sidebar.');
+      assert(Math.abs(shell.sidebarTop - shell.inset) < 1 && Math.abs(shell.sidebarBottom - shell.viewportHeight + shell.inset) < 1, 'Sidebar does not span the window height inside its outline.');
+      assert(Math.abs(shell.titlebarTop - shell.inset) < 1 && Math.abs(shell.titlebarLeft - shell.sidebarRight) < 1, 'Title strip does not start to the right of the sidebar.');
       assert(Math.abs(shell.contentTop - shell.titlebarBottom) < 1, 'Content does not follow the title strip.');
       assert.equal(shell.sessionTabs, 0, 'Session tabs must be absent before a session is opened.');
       assert(shell.dragRegion && shell.newTerminal, 'Empty strip lost dragging or the new-terminal action.');
@@ -265,20 +266,37 @@ export async function verifyUi({ port = 9337, output }) {
       const frame = await cdp.evaluate(`(async () => {
         const inner = await window.__TAURI_INTERNALS__.invoke('plugin:window|inner_size', { label: 'main' });
         const outer = await window.__TAURI_INTERNALS__.invoke('plugin:window|outer_size', { label: 'main' });
+        const scale = await window.__TAURI_INTERNALS__.invoke('plugin:window|scale_factor', { label: 'main' });
         const app = document.querySelector('.app');
         const style = getComputedStyle(app);
+        const workspace = getComputedStyle(document.querySelector('.workspace-shell'));
         const bounds = app.getBoundingClientRect();
         const tab = document.querySelector('.session-tabs > .tab:last-child').getBoundingClientRect();
         const plus = document.querySelector('.new-terminal');
         const action = plus.getBoundingClientRect();
         return { inner, outer, border: style.borderTopWidth, radius: style.borderRadius,
+          shape: document.documentElement.dataset.windowShape, scale,
+          workspaceBorder: workspace.borderTopWidth, workspaceRadius: workspace.borderRadius,
+          background: style.backgroundColor, overflow: style.overflow, borderColor: style.borderTopColor,
           fillsViewport: Math.abs(bounds.width - innerWidth) < 1 && Math.abs(bounds.height - innerHeight) < 1,
           centerOffset: Math.abs(tab.y + tab.height / 2 - action.y - action.height / 2),
           gap: action.x - tab.right, sameContainer: plus.parentElement.matches('.titlebar-tabs'),
           svgIcon: !!plus.querySelector('svg'), viewportWidth: innerWidth };
       })()`);
-      assert.equal(frame.border, '0px');
-      assert.equal(frame.radius, '0px');
+      assert(['round', 'square'].includes(frame.shape), 'Native window shape was not published.');
+      if (frame.shape === 'round') {
+        // Chromium snaps the hairline at native DPI, including under CDP metrics emulation.
+        assert(Math.abs(parseFloat(frame.border) * frame.scale - Math.floor(frame.scale)) < .01, 'Expected one hairline window outline.');
+        assert.equal(frame.radius, '10px');
+        assert.equal(frame.background, 'rgb(238, 241, 246)');
+        assert.equal(frame.overflow, 'hidden');
+        assert.equal(frame.borderColor, 'rgba(60, 60, 67, 0.14)');
+      } else {
+        assert.equal(frame.border, '0px');
+        assert.equal(frame.radius, '0px');
+      }
+      assert.equal(frame.workspaceBorder, '0px', 'The inner workspace adds a second window outline.');
+      assert.equal(frame.workspaceRadius, '0px', 'The inner workspace adds a second rounded contour.');
       assert(frame.fillsViewport, 'The app leaves an inset around the native client area.');
       assert.equal(frame.inner.width, frame.outer.width, 'Native shadow leaves a horizontal frame.');
       assert.equal(frame.inner.height, frame.outer.height, 'Native shadow leaves a vertical frame.');
@@ -291,21 +309,33 @@ export async function verifyUi({ port = 9337, output }) {
     });
     await check('native-maximize-and-restore', async () => {
       const maximized = () => cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' })`);
+      const restoredShape = await cdp.evaluate(`document.documentElement.dataset.windowShape`);
       assert.equal(await maximized(), false, 'Window must start restored.');
       try {
         await click('.titlebar .chrome', { index: 1 });
         await waitFor(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' })`, 'Window did not maximize.');
         assert.equal(await maximized(), true);
+        await waitFor(`document.documentElement.dataset.windowShape === 'square'`, 'Maximize did not publish a square contour.');
+        const style = await cdp.evaluate(`(() => { const style = getComputedStyle(document.querySelector('.app')); return { border: style.borderTopWidth, radius: style.borderRadius }; })()`);
+        assert.deepEqual(style, { border: '0px', radius: '0px' });
       } finally {
         if (await maximized()) await click('.titlebar .chrome', { index: 1 });
         await waitFor(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' }).then(value => !value)`, 'Window did not restore.');
+        await waitFor(`document.documentElement.dataset.windowShape === ${JSON.stringify(restoredShape)}`, 'Restore did not republish the restored contour.');
       }
       const bounds = await cdp.evaluate(`(async () => ({
         inner: await window.__TAURI_INTERNALS__.invoke('plugin:window|inner_size', { label: 'main' }),
         outer: await window.__TAURI_INTERNALS__.invoke('plugin:window|outer_size', { label: 'main' })
       }))()`);
       assert.deepEqual(bounds.inner, bounds.outer, 'Restore reintroduced a native inset frame.');
-      return { maximized: true, restored: true, ...bounds };
+      return { maximized: true, restored: true, restoredShape, ...bounds };
+    });
+    await check('window-shape-survives-reload', async () => {
+      const shape = await cdp.evaluate(`document.documentElement.dataset.windowShape`);
+      const timeOrigin = await cdp.evaluate(`performance.timeOrigin`);
+      await cdp.send('Page.reload');
+      await waitFor(`performance.timeOrigin !== ${timeOrigin} && document.readyState === 'complete' && document.documentElement.dataset.windowShape === ${JSON.stringify(shape)} && document.querySelectorAll('.host-card').length === 4`, 'Page load did not republish the window contour.');
+      return { shape };
     });
     await check('apple-surface-and-accent', async () => {
       const styles = await cdp.evaluate(`({ background: getComputedStyle(document.querySelector('main.content')).backgroundColor,

@@ -44,21 +44,21 @@ fn main() {
         .manage(updates::UpdateState::default())
         .manage(state)
         .setup(|_app| {
-            // Frosted glass: the compositor blurs the desktop behind the transparent window.
             #[cfg(windows)]
             {
                 use tauri::Manager;
                 let glass = _app.state::<AppState>().store()?.data.settings.glass_effect;
                 if let Some(window) = _app.get_webview_window("main") {
-                    if glass {
-                        let _ = window_vibrancy::apply_blur(&window, Some((238, 241, 246, 90)));
-                    } else {
-                        window.set_background_color(Some(tauri::window::Color(238, 241, 246, 255)))?;
-                    }
-                    window_frame::configure(&window.as_ref().window())?;
+                    window_frame::configure(&window, glass)?;
                 }
             }
             Ok(())
+        })
+        .on_page_load(|_webview, _payload| {
+            #[cfg(windows)]
+            if _webview.label() == "main" && matches!(_payload.event(), tauri::webview::PageLoadEvent::Finished) {
+                let _ = window_frame::update_shape(&_webview.window());
+            }
         })
         .on_window_event(|window, event| {
             #[cfg(windows)]

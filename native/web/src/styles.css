@@ -44,8 +44,9 @@ button:focus-visible, summary:focus-visible { outline: 3px solid rgba(0, 122, 25
 ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: #c8c8cf; background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* The native window owns the outer contour; do not draw a second inset frame. */
+/* DWM owns the contour on Windows 11; Windows 10 uses this single CSS edge. */
 .app { display: flex; flex-direction: column; height: 100%; }
+:root[data-window-shape="round"] #root > .app { background: rgb(238, 241, 246); border-radius: 10px; overflow: hidden; border: 1px solid rgba(60, 60, 67, .14); }
 .body { flex: 1; display: flex; min-height: 0; }
 
 /* --- Title bar ------------------------------------------------------------ */
