@@ -37,23 +37,28 @@ export function SnippetsPage({ onRun }: { onRun?: (script: string) => void | Pro
   const query = search.trim().toLowerCase();
   const visible = snippets.filter(snippet => [snippet.name, snippet.script, ...snippet.tags].some(value => value.toLowerCase().includes(query)));
   return <section className="page feature-page">
-    <header className="feature-header"><div className="feature-heading"><h1>{t("Snippets")}</h1><p>{t("Keep your frequently used commands within reach.")}</p></div><label className="search"><Icon name="search" /><input aria-label={t("Search snippets")} placeholder={t("Search snippets")} value={search} onChange={e => setSearch(e.target.value)} /></label><button className="feature-button primary" data-depth="true" disabled={busy} onClick={create}><Icon name="plus" />{t("New snippet")}</button></header>
-    {error && <div className="feature-error" role="alert">{error}</div>}
+    <header className="page-header">
+      <div><h1>{t("Snippets")}</h1><p>{t("Keep your frequently used commands within reach.")}</p></div>
+      <div className="page-actions"><button className="btn btn-l btn-primary" disabled={busy} onClick={create}><Icon name="plus" size={16} />{t("New snippet")}</button></div>
+    </header>
+    <div className="page-controls"><label className="search"><Icon name="search" size={18} /><input aria-label={t("Search snippets")} placeholder={t("Search snippets")} value={search} onChange={e => setSearch(e.target.value)} /></label></div>
+    {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span></div>}
     {draft && <form className="feature-editor" aria-label={t(draft.id ? "Edit snippet" : "New snippet")} onSubmit={event => void submit(event)}>
       <h2>{t(draft.id ? "Edit snippet" : "New snippet")}</h2>
-      <label>{t("Name")}<input autoFocus required maxLength={128} value={draft.name} disabled={busy} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
-      <label>{t("Script")}<textarea required rows={8} className="feature-mono" value={draft.script} disabled={busy} spellCheck={false} onChange={e => setDraft({ ...draft, script: e.target.value })} /></label>
-      <label>{t("Tags")}<input value={draft.tags} disabled={busy} placeholder={t("Separate tags with commas")} onChange={e => setDraft({ ...draft, tags: e.target.value })} /></label>
-      <div className="feature-actions"><button className="feature-button" type="button" disabled={busy} onClick={() => setDraft(null)}>{t("Cancel")}</button><button className="feature-button primary" data-depth="true" disabled={busy}>{t("Save")}</button></div>
+      <label className="field">{t("Name")}<input autoFocus required maxLength={128} value={draft.name} disabled={busy} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
+      <label className="field">{t("Script")}<textarea required rows={8} className="feature-mono" value={draft.script} disabled={busy} spellCheck={false} onChange={e => setDraft({ ...draft, script: e.target.value })} /></label>
+      <label className="field">{t("Tags")}<input value={draft.tags} disabled={busy} placeholder={t("Separate tags with commas")} onChange={e => setDraft({ ...draft, tags: e.target.value })} /></label>
+      <div className="feature-actions"><button className="btn" type="button" disabled={busy} onClick={() => setDraft(null)}>{t("Cancel")}</button><button className="btn btn-primary" disabled={busy}>{t("Save")}</button></div>
     </form>}
-    {loading ? <p role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="feature-empty"><span className="feature-empty-symbol"><Icon name="snippets" size={34} /></span><h2>{t(snippets.length ? "No matching snippets" : "No snippets yet")}</h2><p>{t("Save commands you run often and paste them into any session.")}</p><button className="feature-button primary" data-depth="true" disabled={busy} onClick={create}><Icon name="plus" />{t("New snippet")}</button></div> : <div className="feature-list">
-      {visible.map(snippet => <article className="feature-row" key={snippet.id}><div className="feature-row-title"><Icon name="snippets" size={22} /><h2>{snippet.name}</h2>{snippet.tags.map(tag => <span className="feature-tag" key={tag}>{tag}</span>)}</div>
+    {loading ? <p className="feature-loading" role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="empty-state"><span className="empty-glyph"><Icon name="snippets" size={32} /></span><h2>{t(snippets.length ? "No matching snippets" : "No snippets yet")}</h2><p>{t("Save commands you run often and paste them into any session.")}</p><button className="btn btn-l btn-primary" disabled={busy} onClick={create}><Icon name="plus" size={16} />{t("New snippet")}</button></div> : <div className="card-grid">
+      {visible.map(snippet => <article className="feature-card" key={snippet.id}>
+        <div className="feature-card-head"><span className="feature-tile"><Icon name="snippets" size={20} /></span><h2>{snippet.name}</h2>{snippet.tags.map(tag => <span className="chip" key={tag}>{tag}</span>)}</div>
         <pre className="feature-script">{snippet.script}</pre>
-        <div className="feature-actions">
-          <button className="feature-button primary" data-depth="true" disabled={busy || !onRun} title={!onRun ? t("Open a terminal to paste a snippet") : undefined} onClick={() => void act(async () => { await onRun?.(snippet.script); })}><Icon name="terminal" />{t("Paste into terminal")}</button>
-          <button className="feature-button" disabled={busy} onClick={() => setDraft({ ...snippet, tags: snippet.tags.join(", ") })}>{t("Edit")}</button>
-          <button className="feature-button danger" disabled={busy} onClick={() => void removeSnippet(snippet)}>{t("Delete")}</button>
-        </div>
+        <footer className="feature-card-foot">
+          <button className="btn btn-s btn-primary" disabled={busy || !onRun} title={!onRun ? t("Open a terminal to paste a snippet") : undefined} onClick={() => void act(async () => { await onRun?.(snippet.script); })}><Icon name="prompt" size={14} />{t("Paste into terminal")}</button>
+          <button className="btn btn-s" disabled={busy} onClick={() => setDraft({ ...snippet, tags: snippet.tags.join(", ") })}><Icon name="edit" size={14} />{t("Edit")}</button>
+          <button className="btn btn-s btn-danger feature-push" disabled={busy} onClick={() => void removeSnippet(snippet)}><Icon name="trash" size={14} />{t("Delete")}</button>
+        </footer>
       </article>)}
     </div>}
   </section>;

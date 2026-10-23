@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Icon, type IconName } from "../icons";
 
 export interface MenuItem {
   label: string;
+  icon: IconName;
   danger?: boolean;
   disabled?: boolean;
   onSelect: () => void;
@@ -46,7 +48,7 @@ export function Menu({ x, y, items, onClose }: { x: number; y: number; items: Me
       const next = event.key === "ArrowDown" ? (index + 1) % buttons.length : event.key === "ArrowUp" ? (index - 1 + buttons.length) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : -1;
       if (next >= 0) { event.preventDefault(); buttons[next]?.focus(); }
     }}>
-      {items.map((item) => <button key={item.label} type="button" role="menuitem" disabled={item.disabled} className={item.danger ? "menu-danger" : ""} onClick={() => { onClose(); item.onSelect(); }}>{item.label}</button>)}
+      {items.map((item) => <button key={item.label} type="button" role="menuitem" disabled={item.disabled} className={item.danger ? "menu-danger" : ""} onClick={() => { onClose(); item.onSelect(); }}><Icon name={item.icon} size={16} />{item.label}</button>)}
     </div>, document.body,
   );
 }
@@ -66,7 +68,7 @@ export function HostModal({ titleId, panel = false, onClose, children }: { title
     };
   }, []);
   return createPortal(
-    <dialog ref={dialog} aria-labelledby={titleId} className={panel ? "host-editor glass" : "host-dialog glass"}
+    <dialog ref={dialog} aria-labelledby={titleId} className={panel ? "inspector" : "dialog"}
       onCancel={(event) => { event.preventDefault(); close.current(); }}
       onClick={(event) => {
         if (event.target !== event.currentTarget) return;

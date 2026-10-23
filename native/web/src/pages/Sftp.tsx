@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as api from "../api/sftp";
 import { t } from "../i18n";
+import { Icon } from "../icons";
 
 type Side = "local" | "remote";
 type Column = "name" | "modified" | "size" | "kind";
@@ -135,28 +136,28 @@ function FilePane(props: PaneProps) {
   }), [entries, props.showHidden, sort]);
   const title = side === "local" ? t("Local") : t("Remote");
   return <section className="sftp-pane" aria-label={title}>
-    <header className="sftp-pane-head glass"><strong>{title}</strong>
+    <header className="sftp-pane-head"><strong>{title}</strong>
       <span className={`dot${side === "local" || !props.offline ? " dot-online" : ""}`} />
-      <details className="sftp-actions" ref={menu}><summary>{t("Actions")}</summary><div className="sftp-menu glass">
+      <details className="sftp-actions" ref={menu}><summary className="btn btn-ghost btn-s">{t("Actions")}<Icon name="chevronDown" size={14} /></summary><div className="menu sftp-menu">
         <button disabled={props.offline || !path} onClick={() => chooseAction("mkdir")}>{t("New folder")}</button>
         <button disabled={!selected || props.offline} onClick={() => chooseAction("rename")}>{t("Rename")}</button>
         <button disabled={!selected || props.offline || props.transferDisabled} onClick={() => chooseAction("transfer")}>{side === "local" ? t("Upload") : t("Download")}</button>
-        <button className="sftp-danger" disabled={!selected || props.offline} onClick={() => chooseAction("delete")}>{t("Delete")}</button>
+        <button className="menu-danger" disabled={!selected || props.offline} onClick={() => chooseAction("delete")}>{t("Delete")}</button>
       </div></details>
     </header>
     <form className="sftp-path" onSubmit={(event) => { event.preventDefault(); props.onNavigate(draft); }}>
-      <button type="button" title={t("Back")} aria-label={`${title}: ${t("Back")}`} disabled={props.backDisabled || props.offline || props.loading} onClick={props.onBack}>↑</button>
+      <button type="button" className="icon-button icon-button-boxed" title={t("Back")} aria-label={`${title}: ${t("Back")}`} disabled={props.backDisabled || props.offline || props.loading} onClick={props.onBack}><Icon name="arrowUp" size={16} /></button>
       <input aria-label={side === "local" ? t("Local path") : t("Remote path")} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={props.offline} spellCheck={false} />
-      <button type="submit" disabled={props.offline || props.loading}>{t("Go")}</button>
-      <button type="button" title={t("Refresh")} aria-label={`${title}: ${t("Refresh")}`} disabled={props.offline || props.loading} onClick={() => props.onNavigate(path)}>↻</button>
+      <button type="submit" className="btn btn-s" disabled={props.offline || props.loading}>{t("Go")}</button>
+      <button type="button" className="icon-button icon-button-boxed" title={t("Refresh")} aria-label={`${title}: ${t("Refresh")}`} disabled={props.offline || props.loading} onClick={() => props.onNavigate(path)}><Icon name="refresh" size={16} /></button>
     </form>
-    {props.offline ? <div className="sftp-empty"><span>{t("Not connected — Reconnect")}</span><button className="sftp-primary" onClick={props.onReconnect}>{t("Reconnect")}</button></div>
+    {props.offline ? <div className="sftp-empty"><span>{t("Not connected — Reconnect")}</span><button className="btn btn-primary" onClick={props.onReconnect}>{t("Reconnect")}</button></div>
       : <div className="sftp-table-wrap" aria-busy={props.loading}>
         <table className="sftp-table"><thead><tr>{([ ["name", "Name"], ["modified", "Modified"], ["size", "Size"], ["kind", "Kind"] ] as [Column, string][]).map(([column, label]) =>
-          <th key={column} aria-sort={sort.column === column ? sort.ascending ? "ascending" : "descending" : "none"}><button onClick={() => setSort({ column, ascending: sort.column === column ? !sort.ascending : true })}>{t(label)}{sort.column === column && <span aria-hidden="true">{sort.ascending ? " ↑" : " ↓"}</span>}</button></th>)}</tr></thead>
+          <th key={column} aria-sort={sort.column === column ? sort.ascending ? "ascending" : "descending" : "none"}><button onClick={() => setSort({ column, ascending: sort.column === column ? !sort.ascending : true })}>{t(label)}{sort.column === column && <Icon name="chevronDown" size={13} />}</button></th>)}</tr></thead>
           <tbody>{sorted.map((entry) => <tr key={entry.name} className={selected === entry.name ? "sftp-selected" : ""} onClick={() => onSelect(entry.name)}>
             <td><button className="sftp-file" onFocus={() => onSelect(entry.name)} onDoubleClick={() => props.onOpen(entry)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); props.onOpen(entry); } }} title={entry.name}>
-              <span className={entry.isDir ? "sftp-folder-mark" : "sftp-file-mark"} aria-hidden="true">{entry.isDir ? "▰" : "▤"}</span><span>{entry.name}</span>
+              <Icon name={entry.isDir ? "folder" : "file"} size={16} /><span>{entry.name}</span>
             </button></td><td>{modified(entry.modified)}</td><td>{entry.isDir ? "—" : size(entry.size)}</td><td>{kind(entry)}</td>
           </tr>)}</tbody></table>
         {sorted.length === 0 && <div className="sftp-empty">{props.loading ? t("Loading…") : t("This folder is empty")}</div>}
@@ -283,11 +284,12 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
     finally { setDialogBusy(false); }
   }
 
-  return <section className="page sftp-page" aria-label={t("SFTP")}>
-    <div className="toolbar sftp-toolbar"><h2>{t("SFTP")}</h2><span className="sftp-hint">{t("Double-click a folder to open it, or a file to transfer it")}</span><div className="toolbar-spacer" />
-      <label><input type="checkbox" checked={showHidden} onChange={(event) => session.update({ showHidden: event.target.checked })} />{t("Show hidden files")}</label>
+  const destructive = !naming && (Boolean(dialog) || !overwrite);
+  return <section className="sftp-page" aria-label={t("SFTP")}>
+    <div className="sftp-toolbar"><span className="sftp-hint">{t("Double-click a folder to open it, or a file to transfer it")}</span>
+      <label className="sftp-hidden-toggle"><span>{t("Show hidden files")}</span><input type="checkbox" role="switch" checked={showHidden} onChange={(event) => session.update({ showHidden: event.target.checked })} /></label>
     </div>
-    {remote.error && <div className="error sftp-error" role="alert">{remote.error}<button aria-label={t("Close")} onClick={() => session.update({ error: "" })}>×</button></div>}
+    {remote.error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{remote.error}</span><button className="icon-button icon-button-sm" aria-label={t("Close")} onClick={() => session.update({ error: "" })}><Icon name="close" size={14} /></button></div>}
     <div className="sftp-panes">
       <FilePane side="local" path={local.path} entries={local.entries} selected={localSelection} onSelect={setLocalSelection} loading={localBusy} showHidden={showHidden}
         transferDisabled={!remote.connected}
@@ -298,12 +300,12 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
         onAction={(operation) => void action("remote", operation)} onOpen={(entry) => entry.isDir ? void session.refresh(entry.path) : void transfer("remote", entry)}
         onReconnect={() => void run(async () => { await session.start(); await api.reconnect(sessionId); })} />
     </div>
-    <section className="sftp-transfers glass" aria-label={t("Transfers")}><header><strong>{t("Transfers")}</strong><span>{t("8 queued maximum")}</span><span className="sftp-queue-count">{remote.transfers.filter((row) => row.pending).length} / 8</span></header>
+    <section className="sftp-transfers" aria-label={t("Transfers")}><header><strong>{t("Transfers")}</strong><span>{t("8 queued maximum")}</span><span className="sftp-queue-count">{remote.transfers.filter((row) => row.pending).length} / 8</span></header>
       {remote.transfers.length === 0 ? <div className="sftp-no-transfers">{t("No transfers yet")}</div> : <div className="sftp-transfer-list">{[...remote.transfers].sort((a, b) => Number(b.pending) - Number(a.pending) || b.transfer - a.transfer).map((row) => {
         const percent = row.total > 0 ? Math.min(100, Math.round(row.transferred / row.total * 100)) : !row.pending && !row.error ? 100 : 0;
-        return <div className={`sftp-transfer${row.error ? " sftp-transfer-error" : ""}`} key={row.transfer}><div className="sftp-transfer-detail"><strong>{row.direction} · {row.name}</strong><span>{row.message || `${size(row.transferred)} / ${size(row.total)} · ${size(row.speed)}/s`}</span>
+        return <div className={`sftp-transfer${row.error ? " sftp-transfer-error" : ""}`} key={row.transfer}><div className="sftp-transfer-detail"><strong>{row.direction} · {row.name}</strong><span>{row.error && <Icon name="alert" size={14} />}{row.message || `${size(row.transferred)} / ${size(row.total)} · ${size(row.speed)}/s`}</span>
           <progress aria-label={`${row.direction} · ${row.name}`} max={100} value={percent} /></div>
-          <span>{percent}%</span><button disabled={!row.pending || row.cancelling} onClick={() => void run(async () => {
+          <span className="sftp-percent">{percent}%</span><button className="btn btn-ghost btn-s" disabled={!row.pending || row.cancelling} onClick={() => void run(async () => {
             await api.cancelTransfer(sessionId, row.transfer);
             const snapshot = session.snapshot();
             // Overwrite requests are paused outside the worker: cancellation has no
@@ -313,14 +315,14 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
           })}>{row.cancelling && row.pending ? t("Cancelling…") : t("Cancel")}</button></div>;
       })}</div>}
     </section>
-    {activeDialog && <dialog className="sftp-modal-backdrop" ref={(node) => { if (node && !node.open) node.showModal(); }} onCancel={(event) => { event.preventDefault(); if (!dialogBusy) dismissDialog(); }}>
-      <form className="sftp-dialog" role="dialog" aria-modal="true" aria-labelledby="sftp-dialog-title" onSubmit={(event) => { event.preventDefault(); void acceptDialog(); }}>
-        <h3 id="sftp-dialog-title">{dialogTitle}</h3>
-        {naming ? <label>{dialog.kind === "mkdir" ? t("Folder name") : t("New name")}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} required disabled={dialogBusy} /></label>
+    {activeDialog && <dialog className="dialog" aria-labelledby="sftp-dialog-title" ref={(node) => { if (node && !node.open) node.showModal(); }} onCancel={(event) => { event.preventDefault(); if (!dialogBusy) dismissDialog(); }}>
+      <form onSubmit={(event) => { event.preventDefault(); void acceptDialog(); }}>
+        <h2 id="sftp-dialog-title">{dialogTitle}</h2>
+        {naming ? <label className="field">{dialog.kind === "mkdir" ? t("Folder name") : t("New name")}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} required disabled={dialogBusy} /></label>
           : <p>{!dialog && overwrite ? t(overwrite.folder ? "A folder with this name already exists. Merge and overwrite matching files?" : "A file with this name already exists. Overwrite it?")
             : t("Delete {name}? {files} files, {dirs} subfolders, {size}. This cannot be undone.", { name: deletionName || "", files: summary?.files ?? 0, dirs: summary?.dirs ?? 0, size: size(summary?.bytes ?? 0) })}</p>}
-        {remote.error && <p className="sftp-danger" role="alert">{remote.error}</p>}
-        <footer><button type="button" autoFocus={!naming} disabled={dialogBusy} onClick={dismissDialog}>{t("Cancel")}</button><button className="sftp-primary" type="submit" disabled={dialogBusy || (naming && !value.trim())}>{naming ? dialog.kind === "mkdir" ? t("Create") : t("Save") : !dialog && overwrite ? t("Overwrite") : t("Delete")}</button></footer>
+        {remote.error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{remote.error}</span></div>}
+        <div className="dialog-actions"><button type="button" className="btn" autoFocus={!naming} disabled={dialogBusy} onClick={dismissDialog}>{t("Cancel")}</button><button className={`btn ${destructive ? "btn-danger" : "btn-primary"}`} type="submit" disabled={dialogBusy || (naming && !value.trim())}>{naming ? dialog.kind === "mkdir" ? t("Create") : t("Save") : !dialog && overwrite ? t("Overwrite") : t("Delete")}</button></div>
       </form>
     </dialog>}
   </section>;

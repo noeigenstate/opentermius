@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { answerPrompt, type SessionPrompt } from "../api/sessions";
 import { t } from "../i18n";
+import { Icon } from "../icons";
 import { Dialog } from "./Dialog";
 
 export function PromptDialog({ prompt, onAnswered }: { prompt: SessionPrompt; onAnswered: (promptId: string) => void }) {
@@ -32,21 +33,21 @@ export function PromptDialog({ prompt, onAnswered }: { prompt: SessionPrompt; on
       <form onSubmit={(event) => { event.preventDefault(); void answer(true); }}>
         <p className="prompt-message">{prompt.message}</p>
         {prompt.kind === "hostKey" && <>
-          <code className="host-fingerprint">{prompt.fingerprint}</code>
+          <code className="dialog-code">{prompt.fingerprint}</code>
           <p>{t("Verify this fingerprint through a trusted channel before trusting it.")}</p>
         </>}
         {fields.map((field, index) => (
-          <label className="prompt-field" key={index}>
+          <label className="field" key={index}>
             <span>{field.prompt}</span>
             <input autoFocus={index === 0} autoComplete="off" spellCheck={false} type={field.echo ? "text" : "password"}
               disabled={busy} required={prompt.kind === "username"} maxLength={8192} value={answers[index] ?? ""}
               onChange={(event) => setAnswers((current) => current.map((value, i) => i === index ? event.target.value : value))} />
           </label>
         ))}
-        {error && <p className="terminal-error" role="alert">{error}</p>}
+        {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span></div>}
         <div className="dialog-actions">
-          <button type="button" disabled={busy} onClick={() => { void answer(false); }}>{t("Cancel")}</button>
-          <button type="submit" className="primary-button" disabled={busy}>{t(prompt.kind === "hostKey" ? "Trust and connect" : "Connect")}</button>
+          <button type="button" className="btn" disabled={busy} onClick={() => { void answer(false); }}>{t("Cancel")}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}>{t(prompt.kind === "hostKey" ? "Trust and connect" : "Connect")}</button>
         </div>
       </form>
     </Dialog>

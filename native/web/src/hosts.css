@@ -95,7 +95,6 @@
   .page-controls { flex-wrap: wrap; }
 }
 
-@keyframes card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes star-pop { 0% { transform: scale(1); } 45% { transform: scale(1.25); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .host-card:hover, .hosts-list .host-card:hover { transform: none; }

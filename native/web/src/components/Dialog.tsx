@@ -14,7 +14,7 @@ export function Dialog({ title, children, onClose, busy = false }: {
     return () => { element.close(); };
   }, []);
   return (
-    <dialog ref={dialog} className="terminal-dialog" aria-labelledby={titleId} onCancel={(event) => {
+    <dialog ref={dialog} className="dialog" aria-labelledby={titleId} onCancel={(event) => {
       event.preventDefault();
       if (!busy) onClose();
     }}>

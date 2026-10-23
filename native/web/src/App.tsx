@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { listHosts, type Host, type Usage } from "./api/hosts";
 import { closeSession, connectHost, sessionInput, duplicateSession, forgetSession, latestSessionStatus, listSessions, openLocalTerminal, reconnectSession, startSessionEvents, subscribeSessions, type SessionInfo, type SessionPrompt } from "./api/sessions";
 import { t, setLanguage } from "./i18n";
+import { Icon } from "./icons";
 import { getSettings, saveSettings, onSettingsChanged, type Settings } from "./api/settings";
 import { useUpdates } from "./api/updates";
 import { SettingsPage } from "./pages/Settings";
@@ -165,7 +166,7 @@ export default function App() {
             onClose: (id) => { void run(id, async () => { await closeSession(id); removeSession(id); }); },
           }} />
           <main className={`content${activeSessionId ? " session-content" : ""}`}>
-            {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
+            {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button className="icon-button icon-button-sm" aria-label={t("Dismiss")} onClick={() => setError("")}><Icon name="close" size={14} /></button></div>}
             <div id="hosts-panel" hidden={activeSessionId !== null}>
               {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
                 : section === "keychain" ? <KeychainPage />

@@ -227,23 +227,23 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
         </div>
       )}
       {menu && <Menu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
-        { label: t("Edit"), onSelect: () => edit(menu.host.id) },
-        { label: t("Duplicate"), onSelect: () => duplicate(menu.host.id) },
-        { label: t("Delete"), danger: true, onSelect: () => askDelete(menu.host) },
-        { label: t("Connect"), disabled: !onConnect, onSelect: () => onConnect?.(menu.host.id) },
+        { label: t("Edit"), icon: "edit", onSelect: () => edit(menu.host.id) },
+        { label: t("Duplicate"), icon: "copy", onSelect: () => duplicate(menu.host.id) },
+        { label: t("Delete"), icon: "trash", danger: true, onSelect: () => askDelete(menu.host) },
+        { label: t("Connect"), icon: "prompt", disabled: !onConnect, onSelect: () => onConnect?.(menu.host.id) },
       ]} />}
       {editor && <HostEditor initial={editor} groups={groups} onClose={() => setEditor(null)} onSaved={async (hostId) => { setSelected(hostId); await refresh(); }} onConnect={onConnect} />}
       {deleting && <HostModal titleId="host-delete-title" onClose={() => { if (!busy) setDeleting(null); }}>
         <h2 id="host-delete-title">{t("Delete host?")}</h2><p>{t('Remove "{name}"? This cannot be undone.', { name: deleting.name })}</p>
-        {dialogError && <div className="host-error" role="alert">{dialogError}</div>}
-        <div className="host-dialog-actions"><button autoFocus className="host-button" disabled={busy} onClick={() => setDeleting(null)}>{t("Cancel")}</button><button className="host-button host-danger-button" disabled={busy} onClick={() => void remove()}>{t("Delete")}</button></div>
+        {dialogError && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{dialogError}</span></div>}
+        <div className="dialog-actions"><button autoFocus className="btn" disabled={busy} onClick={() => setDeleting(null)}>{t("Cancel")}</button><button className="btn btn-danger" disabled={busy} onClick={() => void remove()}>{t("Delete")}</button></div>
       </HostModal>}
       {renaming && <HostModal titleId="host-rename-title" onClose={() => { if (!busy) setRenaming(null); }}>
         <form onSubmit={(event) => { event.preventDefault(); void rename(); }}>
           <h2 id="host-rename-title">{t("Rename group")}</h2><p>{t("Rename the group and move its hosts with it.")}</p>
-          <label className="host-field">{t("Group name")}<input autoFocus value={renaming.value} disabled={busy} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} required /></label>
-          {dialogError && <div className="host-error" role="alert">{dialogError}</div>}
-          <div className="host-dialog-actions"><button type="button" className="host-button" disabled={busy} onClick={() => setRenaming(null)}>{t("Cancel")}</button><button type="submit" className="host-button host-primary" disabled={busy || !renaming.value.trim()}>{t("Rename")}</button></div>
+          <label className="field">{t("Group name")}<input autoFocus value={renaming.value} disabled={busy} onChange={(event) => setRenaming({ ...renaming, value: event.target.value })} required /></label>
+          {dialogError && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{dialogError}</span></div>}
+          <div className="dialog-actions"><button type="button" className="btn" disabled={busy} onClick={() => setRenaming(null)}>{t("Cancel")}</button><button type="submit" className="btn btn-primary" disabled={busy || !renaming.value.trim()}>{t("Rename")}</button></div>
         </form>
       </HostModal>}
     </section>

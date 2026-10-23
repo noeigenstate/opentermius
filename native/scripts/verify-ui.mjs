@@ -184,7 +184,7 @@ export async function verifyUi({ port = 9337, output }) {
     await click('.sidebar .nav-item', { index });
     await waitFor(`document.querySelector(${JSON.stringify(pageSelector)})?.textContent.trim() === ${JSON.stringify(label)}`, 'Navigation did not show the expected page.');
     await delay(450);
-    assert.equal(await cdp.evaluate(`document.querySelectorAll('main .feature-error, main .settings-error').length`), 0, 'Page reported an error.');
+    assert.equal(await cdp.evaluate(`document.querySelectorAll('main .banner-error').length`), 0, 'Page reported an error.');
     if (file) await capture(file);
     return { headingMatchesNavigation: true };
   }
@@ -391,15 +391,15 @@ export async function verifyUi({ port = 9337, output }) {
       } finally {
         await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', buttons: 0, clickCount: 1, ...position });
       }
-      await waitFor(`!!document.querySelector('dialog.host-editor[open]')`, 'New-host editor did not open.');
+      await waitFor(`!!document.querySelector('dialog.inspector[open]')`, 'New-host editor did not open.');
       await delay(350);
       await capture('host-editor.png');
-      assert(await cdp.evaluate(`document.querySelector('dialog.host-editor').contains(document.activeElement)`), 'Editor did not contain keyboard focus.');
-      await click('dialog.host-editor .host-editor-fields input');
+      assert(await cdp.evaluate(`document.querySelector('dialog.inspector').contains(document.activeElement)`), 'Editor did not contain keyboard focus.');
+      await click('dialog.inspector .inspector-fields input');
       await cdp.send('Input.insertText', { text: 'discard-only.invalid' });
       await key('Escape');
-      await waitFor(`!!document.querySelector('dialog.host-dialog[open]')`, 'Dirty editor did not ask to discard.');
-      await click('dialog.host-dialog .host-danger-button');
+      await waitFor(`!!document.querySelector('dialog.dialog[open]')`, 'Dirty editor did not ask to discard.');
+      await click('dialog.dialog .btn-danger');
       await waitFor(`document.querySelectorAll('dialog[open]').length === 0`, 'Discard did not close the editor.');
       assert.equal(await cdp.evaluate(`document.querySelectorAll('.host-card').length`), 4, 'Discard changed the fixture host count.');
       return { hovered, pressed, dirtyDiscardConfirmed: true };
@@ -486,9 +486,9 @@ export async function verifyUi({ port = 9337, output }) {
       return layout;
     });
 
-    await check('keychain-page', () => navigate(1, 'main .feature-heading h1', 'keychain.png'));
-    await check('snippets-page', () => navigate(2, 'main .feature-heading h1', 'snippets.png'));
-    await check('settings-page', () => navigate(5, 'main .settings-heading h1', 'settings.png'));
+    await check('keychain-page', () => navigate(1, 'main .page-header h1', 'keychain.png'));
+    await check('snippets-page', () => navigate(2, 'main .page-header h1', 'snippets.png'));
+    await check('settings-page', () => navigate(5, 'main .page-header h1', 'settings.png'));
 
     await check('reduced-motion-preference', async () => {
       await navigate(0, 'main .page-header h1');

@@ -102,9 +102,12 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
   if (!settings) return <div className="empty" role="status">{t("Loading settings…")}</div>;
 
   return <div className="page settings-page">
-    <div className="settings-heading"><div className="settings-heading-copy"><h1>{t("Settings")}</h1><p>{t("Customize your workspace and connections.")}</p></div><span className="settings-save-state" data-saving={saving} role="status">{saving ? t("Saving…") : t("Changes save automatically")}</span></div>
-    {error && <p className="settings-error" role="alert">{error}</p>}
-    {message && <p className="settings-notice" role="status">{message}</p>}
+    <header className="page-header">
+      <div><h1>{t("Settings")}</h1><p>{t("Customize your workspace and connections.")}</p></div>
+      <div className="page-actions"><span className="settings-save-state" data-saving={saving} role="status"><i className={`dot${saving ? " dot-busy" : " dot-online"}`} />{saving ? t("Saving…") : t("Changes save automatically")}</span></div>
+    </header>
+    {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span></div>}
+    {message && <div className="banner banner-ok" role="status"><Icon name="check" size={16} /><span>{message}</span></div>}
     <fieldset className="settings-fields" disabled={saving || busy || recovery}>
       <Group title="Appearance" icon="settings">
         <label className="settings-row"><span>{t("Language")}</span><select aria-label={t("Language")} value={settings.language} onChange={e => change("language", e.target.value as Settings["language"])}><option value="en">{t("English")}</option><option value="zh-CN">{t("Simplified Chinese")}</option><option value="system">{t("System")}</option></select></label>
@@ -127,19 +130,19 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
         <Toggle label="Show hidden files" value={settings.showHiddenFiles} onChange={v => change("showHiddenFiles", v)} />
       </Group>
       <Group title="Data" icon="keychain">
-        <div className="settings-actions"><button className="settings-button" onClick={() => void dataAction(importJson, true)}>{t("Import hosts JSON")}</button><button className="settings-button" onClick={() => void dataAction(xshell, true)}>{t("Import from Xshell")}</button><button className="settings-button" onClick={() => void dataAction(windterm, true)}>{t("Import from WindTerm")}</button><button className="settings-button" onClick={() => void dataAction(exportJson)}>{t("Export hosts")}</button><button className="settings-button" onClick={() => setRecovery(true)}>{t("Backup & Restore")}</button></div>
+        <div className="settings-actions"><button className="btn" onClick={() => void dataAction(importJson, true)}>{t("Import hosts JSON")}</button><button className="btn" onClick={() => void dataAction(xshell, true)}>{t("Import from Xshell")}</button><button className="btn" onClick={() => void dataAction(windterm, true)}>{t("Import from WindTerm")}</button><button className="btn" onClick={() => void dataAction(exportJson)}>{t("Export hosts")}</button><button className="btn" onClick={() => setRecovery(true)}>{t("Backup & Restore")}</button></div>
         <p className="settings-hint">{t("Host imports and exports exclude credentials. Use a recovery code for a complete backup.")}</p>
       </Group>
       <Group title="About" icon="hosts">
-        <div className="settings-row"><span>{t("Version")}</span><span className="settings-version">{info?.version ?? "—"}</span></div>
-        <div className="settings-row"><span>{t("Configuration folder")}<small className="settings-path">{info?.configFolder ?? "—"}</small></span><button className="settings-button" onClick={() => void dataAction(async () => { await openConfigFolder(); return null; })}>{t("Open")}</button></div>
+        <div className="settings-row"><span>{t("Version")}</span><span className="chip">{info?.version ?? "—"}</span></div>
+        <div className="settings-row"><span>{t("Configuration folder")}<small className="settings-path">{info?.configFolder ?? "—"}</small></span><button className="btn" onClick={() => void dataAction(async () => { await openConfigFolder(); return null; })}>{t("Open")}</button></div>
         <Toggle label="Check for updates automatically" value={settings.autoUpdate} onChange={v => change("autoUpdate", v)} />
-        <div className="settings-actions"><button className="settings-button" disabled={updates.busy} onClick={() => void updates.check()}>{t("Check now")}</button>{updates.result?.version && <button className="settings-button settings-primary" data-depth="true" disabled={updates.busy} onClick={() => void updates.install(updates.result!.version!)}>{t("Update to {version}", { version: updates.result.version })}</button>}</div>
+        <div className="settings-actions"><button className="btn" disabled={updates.busy} onClick={() => void updates.check()}>{t("Check now")}</button>{updates.result?.version && <button className="btn btn-primary" disabled={updates.busy} onClick={() => void updates.install(updates.result!.version!)}>{t("Update to {version}", { version: updates.result.version })}</button>}</div>
         <p className="settings-hint" role="status">{updates.busy ? t(updates.installing ? "Downloading and verifying update…" : "Checking for updates…") : updates.result?.upToDate ? t("OpenTermius is up to date") : updates.result?.version ? t("Version {version} is available", { version: updates.result.version }) : t("Build copies open the release page for manual installation.")}</p>
-        {updates.error && <p className="settings-error" role="alert">{updates.error}</p>}
+        {updates.error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{updates.error}</span></div>}
       </Group>
     </fieldset>
-    {busy && <p role="status">{t("Working…")}</p>}
+    {busy && <p className="feature-loading" role="status">{t("Working…")}</p>}
     {recovery && <Recovery onClose={() => setRecovery(false)} onRestored={onDataChanged} />}
   </div>;
 }

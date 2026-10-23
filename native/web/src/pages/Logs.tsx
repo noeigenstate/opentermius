@@ -68,23 +68,27 @@ export function LogsPage({ onConnect, visible: pageVisible = true }: { onConnect
   const query = search.trim().toLowerCase();
   const visible = entries.filter(entry => (!status || entry.status === status) && [entry.label, entry.address, entry.kind, entry.status, t(statuses[entry.status]), entry.error || ""].some(value => value.toLowerCase().includes(query)));
   return <section className="page feature-page">
-    <header className="feature-header">
-      <div className="feature-heading"><h1>{t("Logs")}</h1><p>{t("Review recent connections and session activity.")}</p></div>
-      <label className="search"><Icon name="search" /><input aria-label={t("Filter logs")} placeholder={t("Filter logs")} value={search} onChange={e => setSearch(e.target.value)} /></label>
-      <label className="feature-filter"><span>{t("Status")}</span><select value={status} onChange={e => setStatus(e.target.value)}><option value="">{t("All")}</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-      <button className="feature-button danger" disabled={busy || !entries.length} onClick={() => void clearHistory()}>{t("Clear logs")}</button>
+    <header className="page-header">
+      <div><h1>{t("Logs")}</h1><p>{t("Review recent connections and session activity.")}</p></div>
+      <div className="page-actions"><button className="btn btn-l btn-danger" disabled={busy || !entries.length} onClick={() => void clearHistory()}><Icon name="trash" size={16} />{t("Clear logs")}</button></div>
     </header>
-    {error && <div className="feature-error" role="alert">{error}</div>}
-    {loading ? <p role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="feature-empty"><span className="feature-empty-symbol"><Icon name="logs" size={34} /></span><h2>{t(entries.length ? "No matching sessions" : "No log entries")}</h2><p>{t("Connect to a host or open a terminal to see it here.")}</p><button className="feature-button" disabled={busy} onClick={() => { setSearch(""); setStatus(""); void act(refresh); }}>{t("Refresh")}</button></div> : <div className="feature-table-wrap"><table className="feature-table feature-log-table"><thead><tr>{["Time", "Host", "Address", "Protocol", "Status", "Duration", "Error", "Actions"].map(label => <th key={label}>{t(label)}</th>)}</tr></thead><tbody>
+    <div className="page-controls">
+      <div className="pills" role="group" aria-label={t("Status")}>
+        {[["", "All"], ...Object.entries(statuses)].map(([value, label]) => <button key={value} className="pill pill-sm" aria-pressed={status === value} onClick={() => setStatus(value)}><span className="pill-label" data-text={t(label)}>{t(label)}</span><span className="pill-count">{value ? entries.filter(entry => entry.status === value).length : entries.length}</span></button>)}
+      </div>
+      <label className="search"><Icon name="search" size={18} /><input aria-label={t("Filter logs")} placeholder={t("Filter logs")} value={search} onChange={e => setSearch(e.target.value)} /></label>
+    </div>
+    {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span></div>}
+    {loading ? <p className="feature-loading" role="status">{t("Loading…")}</p> : visible.length === 0 ? <div className="empty-state"><span className="empty-glyph"><Icon name="logs" size={32} /></span><h2>{t(entries.length ? "No matching sessions" : "No log entries")}</h2><p>{t("Connect to a host or open a terminal to see it here.")}</p><button className="btn btn-l" disabled={busy} onClick={() => { setSearch(""); setStatus(""); void act(refresh); }}><Icon name="refresh" size={16} />{t("Refresh")}</button></div> : <div className="table-card"><table className="log-table"><thead><tr>{["Time", "Host", "Address", "Protocol", "Status", "Duration", "Error", "Actions"].map(label => <th key={label}>{t(label)}</th>)}</tr></thead><tbody>
       {visible.map(entry => <tr key={entry.id}>
         <td>{new Date(entry.startedAt).toLocaleString()}</td>
         <td>{entry.kind === "local" ? t("Local Terminal") : entry.label}</td>
-        <td className="feature-mono feature-wrap">{entry.kind === "local" ? t("Local") : entry.address}</td>
+        <td className="feature-mono">{entry.kind === "local" ? t("Local") : entry.address}</td>
         <td>{entry.kind === "ssh" ? "SSH" : t("Local")}</td>
-        <td><span className={`feature-status status-${entry.status}`}>{t(statuses[entry.status])}</span></td>
+        <td><span className={`status-chip status-${entry.status}`}>{entry.status === "failed" ? <Icon name="alert" size={13} /> : <i className={`dot${entry.status === "connected" ? " dot-online" : entry.status === "connecting" ? " dot-busy" : ""}`} />}{t(statuses[entry.status])}</span></td>
         <td>{duration(entry, now)}</td>
-        <td className="feature-log-error">{entry.error || "—"}</td>
-        <td>{entry.canConnect && <button className="feature-button" disabled={busy || !onConnect} title={!onConnect ? t("Session connection is not available") : undefined} onClick={() => void act(async () => { await onConnect?.(entry.hostId); })}>{t("Connect again")}</button>}</td>
+        <td className={entry.error ? "log-error" : undefined}>{entry.error || "—"}</td>
+        <td>{entry.canConnect && <button className="btn btn-s" disabled={busy || !onConnect} title={!onConnect ? t("Session connection is not available") : undefined} onClick={() => void act(async () => { await onConnect?.(entry.hostId); })}><Icon name="refresh" size={14} />{t("Connect again")}</button>}</td>
       </tr>)}
     </tbody></table></div>}
   </section>;

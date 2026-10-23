@@ -70,9 +70,9 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
       <button className="icon-button new-terminal" data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}><Icon name="plus" size={16} /></button>
       {menu && selected && createPortal(
         <div ref={menuRef} className="menu" role="menu" style={{ left: menu.left, top: menu.top }} aria-label={t("Session menu")}>
-          <button role="menuitem" onClick={() => { setMenu(null); onReconnect(selected.sessionId); }}>{t("Reconnect")}</button>
-          <button role="menuitem" onClick={() => { setMenu(null); onDuplicate(selected.sessionId); }}>{t("Duplicate session")}</button>
-          <button role="menuitem" onClick={() => { setMenu(null); onClose(selected.sessionId); }}>{t("Close session")}</button>
+          <button role="menuitem" onClick={() => { setMenu(null); onReconnect(selected.sessionId); }}><Icon name="refresh" size={16} />{t("Reconnect")}</button>
+          <button role="menuitem" onClick={() => { setMenu(null); onDuplicate(selected.sessionId); }}><Icon name="copy" size={16} />{t("Duplicate session")}</button>
+          <button role="menuitem" onClick={() => { setMenu(null); onClose(selected.sessionId); }}><Icon name="close" size={16} />{t("Close session")}</button>
         </div>, document.body,
       )}
     </>

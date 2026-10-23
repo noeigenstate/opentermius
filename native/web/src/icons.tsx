@@ -21,6 +21,7 @@ const paths = {
   close: "M6 6l12 12M18 6L6 18",
   arrowUp: "M12 19V5M6 11l6-6 6 6",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6",
+  check: "M5 12.5l4.5 4.5L19 7.5",
   alert: "M12 4l9 16H3zM12 10v4M12 17h.01",
   folder: "M3 6h6l2 2h10v11H3z",
   file: "M6 3h8l5 5v13H6zM14 3v5h5",

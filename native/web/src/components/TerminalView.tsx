@@ -153,8 +153,8 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       {paste !== null && <Dialog title={t("Paste multiple lines")} onClose={() => { setPaste(null); terminal.current?.focus(); }}>
         <p>{t("The clipboard contains {lines} lines. Paste them into the terminal?", { lines: paste.replace(/\r\n?/g, "\n").split("\n").length })}</p>
         <div className="dialog-actions">
-          <button autoFocus onClick={() => { setPaste(null); terminal.current?.focus(); }}>{t("Cancel")}</button>
-          <button className="primary-button" onClick={() => {
+          <button autoFocus className="btn" onClick={() => { setPaste(null); terminal.current?.focus(); }}>{t("Cancel")}</button>
+          <button className="btn btn-primary" onClick={() => {
             if (!ended && !blocked) terminal.current?.paste(paste.replace(/\x1b/g, ""));
             setPaste(null);
             terminal.current?.focus();
