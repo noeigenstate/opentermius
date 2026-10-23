@@ -260,8 +260,8 @@ export async function verifyUi({ port = 9337, output }) {
     await check('single-native-frame-and-aligned-tab-action', async () => {
       await click('.new-terminal');
       await waitFor(`document.querySelectorAll('.session-tab').length === 1`, 'New terminal did not create a session tab.');
-      await click('.session-tabs > .tab[role="tab"]');
-      await waitFor(`!document.querySelector('#hosts-panel').hidden`, 'Workspace tab did not restore the hosts page.');
+      await click('.sidebar .nav-item', { index: 0 });
+      await waitFor(`!document.querySelector('#hosts-panel').hidden`, 'Hosts navigation did not restore the hosts page.');
       await delay(220);
       const frame = await cdp.evaluate(`(async () => {
         const inner = await window.__TAURI_INTERNALS__.invoke('plugin:window|inner_size', { label: 'main' });
@@ -271,7 +271,7 @@ export async function verifyUi({ port = 9337, output }) {
         const style = getComputedStyle(app);
         const workspace = getComputedStyle(document.querySelector('.workspace-shell'));
         const bounds = app.getBoundingClientRect();
-        const tab = document.querySelector('.session-tabs > .tab:last-child').getBoundingClientRect();
+        const tab = document.querySelector('.session-tabs > .session-tab:last-child').getBoundingClientRect();
         const plus = document.querySelector('.new-terminal');
         const action = plus.getBoundingClientRect();
         return { inner, outer, border: style.borderTopWidth, radius: style.borderRadius,
@@ -302,6 +302,24 @@ export async function verifyUi({ port = 9337, output }) {
       assert.equal(frame.inner.height, frame.outer.height, 'Native shadow leaves a vertical frame.');
       assert(frame.centerOffset < 1 && frame.gap >= 0 && frame.gap <= 10, 'New terminal action is not aligned with the tabs.');
       assert(frame.sameContainer && frame.svgIcon, 'New terminal action is outside the tab layout or uses a text glyph.');
+      await check('session-tab-icons-on-midline', async () => {
+        const geometry = await cdp.evaluate(`(() => {
+          const tab = document.querySelector('.session-tab');
+          const centre = element => { const rect = element.getBoundingClientRect(); return rect.top + rect.height / 2; };
+          const middle = centre(tab);
+          const parts = [['status', tab.querySelector('.tab-icon svg, .tab-icon .dot')], ['menu', tab.querySelector('.tab-action:not(.tab-close) svg')],
+            ['close', tab.querySelector('.tab-close svg')], ['title', tab.querySelector('.session-tab-title')]];
+          const actions = [...tab.querySelectorAll('.tab-action')];
+          return { offsets: Object.fromEntries(parts.map(([name, element]) => [name, element ? Math.abs(centre(element) - middle) : null])),
+            sizes: [...tab.querySelectorAll('.tab-action svg')].map(svg => { const rect = svg.getBoundingClientRect(); return [rect.width, rect.height]; }),
+            textGlyphs: actions.filter(action => [...action.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim())).length };
+        })()`);
+        for (const [name, offset] of Object.entries(geometry.offsets)) assert(offset !== null && offset < 0.5, `The session tab ${name} is ${offset}px off the tab midline.`);
+        assert.equal(geometry.sizes.length, 2, 'The session tab must show a menu and a close action.');
+        assert(geometry.sizes.every(([width, height]) => width === geometry.sizes[0][0] && height === geometry.sizes[0][1]), 'The tab actions use different icon sizes.');
+        assert.equal(geometry.textGlyphs, 0, 'The tab actions must be SVG icons, not text glyphs.');
+        return geometry;
+      });
       await click('.session-tab .tab-close');
       await waitFor(`document.querySelectorAll('.session-tabs').length === 0`, 'Closing the final session did not restore the empty strip.');
       await capture('window-frame.png');
@@ -428,10 +446,10 @@ export async function verifyUi({ port = 9337, output }) {
 
     await check('host-context-menu-and-escape', async () => {
       await click('.host-card', { button: 'right' });
-      await waitFor(`!!document.querySelector('.host-menu[role="menu"]')`, 'Host context menu did not open.');
-      assert(await cdp.evaluate(`document.querySelector('.host-menu').contains(document.activeElement)`), 'Context menu did not receive focus.');
+      await waitFor(`!!document.querySelector('.menu[role="menu"]')`, 'Host context menu did not open.');
+      assert(await cdp.evaluate(`document.querySelector('.menu').contains(document.activeElement)`), 'Context menu did not receive focus.');
       await key('Escape');
-      await waitFor(`!document.querySelector('.host-menu')`, 'Escape did not dismiss the context menu.');
+      await waitFor(`!document.querySelector('.menu')`, 'Escape did not dismiss the context menu.');
       return { opened: true, focused: true, dismissed: true };
     });
 

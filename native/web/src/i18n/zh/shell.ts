@@ -3,7 +3,6 @@ export default {
   OpenTermius: "OpenTermius",
   Favorites: "收藏",
   Navigation: "导航",
-  Workspace: "工作区",
   Activity: "活动记录",
   "Stored on this device": "数据保存在此设备",
   Hosts: "主机",

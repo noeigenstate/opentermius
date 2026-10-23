@@ -226,52 +226,56 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .surface-hint-above::before { top: auto; bottom: -4px; }
 
 
+/* --- Session strip: tabs ------------------------------------------------------ */
+.titlebar-tabs { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: calc(100% - 160px); height: 100%; margin-right: 8px; }
+.session-tabs { display: flex; align-items: center; gap: 5px; min-width: 0; height: 100%; overflow-x: auto; scrollbar-width: none; }
+.session-tabs::-webkit-scrollbar { display: none; }
+.session-tab { position: relative; display: flex; flex: 0 1 auto; align-items: center; gap: 4px; width: 168px; min-width: 112px; height: 32px; padding: 0 6px 0 10px; border-radius: 10px; font-size: 12px; font-weight: 500; color: var(--secondary); transition: background-color 120ms, color 120ms; animation: tab-in 180ms var(--ease-out); }
+.session-tab:hover { color: var(--ink); background: var(--hover); }
+.session-tab:has(.session-tab-select:focus-visible) { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus); }
+.tab-active, .tab-active:hover { color: var(--ink); font-weight: 700; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 3px 8px rgba(0, 0, 0, .08); }
+.session-tab-select { display: flex; align-items: center; flex: 1; gap: 6px; min-width: 0; height: 100%; text-align: left; }
+.session-tab-select:focus-visible { outline: none; }
+.tab-icon { display: grid; place-items: center; flex: none; width: 16px; height: 16px; }
+.session-tab-title { overflow: hidden; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.tab-off .session-tab-title { color: var(--muted); }
+.tab-off.tab-active .session-tab-title { color: var(--secondary); }
+/* Both actions are 20px boxes around 14px SVG icons, so they share the tab's midline with the title. */
+.tab-action { --size: 20px; border-radius: 7px; opacity: 0; transition: opacity 120ms linear, background-color var(--duration-fast), color var(--duration-fast), transform 120ms var(--ease-out); }
+.session-tab:hover .tab-action, .session-tab:focus-within .tab-action, .tab-active .tab-action { opacity: 1; }
+.tab-action:hover:not(:disabled) { background: var(--pressed); }
+.new-terminal { --size: 32px; position: relative; border-radius: 10px; }
+.new-terminal:first-child::before { content: ""; position: absolute; inset: 0; border: 1.5px dashed var(--muted); border-radius: inherit; pointer-events: none; }
+
+/* --- Menus -------------------------------------------------------------------- */
+.menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 173px; padding: 5px; border-radius: 11px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), var(--shadow-menu); animation: popover-in 140ms var(--ease-out); }
+.menu button { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; text-align: left; white-space: nowrap; color: var(--text); }
+.menu button:hover:not(:disabled), .menu button:focus-visible { color: var(--ink); background: var(--hover); }
+.menu button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus); }
+.menu button:disabled { color: var(--disabled); }
+.menu-danger { font-weight: 700; color: var(--ink); }
+
+/* --- Session page ------------------------------------------------------------- */
+.session-page { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.session-bar { display: flex; flex: none; align-items: center; gap: 13px; height: 45px; padding: 0 16px; }
+.session-host { flex: 1; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.session-connection { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--secondary); white-space: nowrap; }
+.session-connection[data-connected="true"] { font-weight: 700; color: var(--text); }
+.terminal-view { position: relative; display: flex; flex: 1; min-height: 0; margin: 0 16px 16px; overflow: hidden; border-radius: 11px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), var(--shadow-sm); }
+.xterm-container { flex: 1; min-width: 0; min-height: 0; padding: 14px 18px; overflow: hidden; }
+.xterm-container .xterm { height: 100%; }
+.terminal-notice { position: absolute; bottom: 19px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); padding: 9px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 8px 24px rgba(0, 0, 0, .18); transform: translateX(-50%); }
+.terminal-error { bottom: 67px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; box-shadow: inset 4px 0 0 var(--danger), 0 0 0 1.5px var(--danger), 0 8px 24px rgba(0, 0, 0, .18); }
+.reconnect-hint:hover:not(:disabled) { background: var(--surface); }
+.session-sftp { flex: 1; min-height: 0; overflow: auto; }
+.session-content > .banner { flex: none; margin: 4px 16px 0; }
+
 /* ===== Legacy rules, replaced phase by phase ===== */
 .glass { background: var(--card); border: 1px solid var(--card-border); }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .toolbar-spacer { flex: 1; }
 .error { margin: 12px 20px 0; padding: 10px 12px; border-radius: 8px; color: #b91c1c; background: rgba(239, 68, 68, 0.1); }
-.tab { position: relative; display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 13px; border-radius: 9px; min-width: 150px; color: var(--secondary); font-size: 12px; font-weight: 500; transition: background var(--duration-fast), color var(--duration-fast), transform var(--duration-fast); }
-.tab:hover { background: rgba(255, 255, 255, .6); color: var(--text); }
-.tab-active { background: #fff; color: var(--text); box-shadow: var(--shadow-sm), inset 0 1px 0 #fff; }
-/* --- Terminal sessions ----------------------------------------------------- */
-[hidden] { display: none !important; }
-.content { position: relative; }
-.session-content { display: flex; flex-direction: column; overflow: hidden; }
-.session-app-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
-.session-app-error button { font-size: 20px; }
-.titlebar-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: calc(100% - 180px); height: 100%; }
-.session-tabs { display: flex; align-items: center; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; height: 100%; }
-.session-tabs::-webkit-scrollbar { display: none; }
-.session-tabs > .tab { flex: none; }
-.session-tab { padding: 0 5px 0 0; gap: 0; min-width: 140px; max-width: 240px; }
-.session-tab-select { display: flex; align-items: center; gap: 6px; min-width: 0; height: 100%; flex: 1; padding: 0 6px; text-align: left; }
-.session-tab-title { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-.tab-action { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 5px; font-size: 18px; }
-.tab-action:hover { background: var(--hover); }
-.tab-close { opacity: 0; transition: opacity 120ms; }
-.session-tab:hover .tab-close, .session-tab:focus-within .tab-close, .tab-active .tab-close { opacity: 1; }
 
-.new-terminal { display: grid; place-items: center; flex: none; width: 34px; height: 34px; padding: 0; border-radius: 9px; color: var(--secondary); transition: transform var(--duration-fast), background var(--duration-fast); }
-.new-terminal:hover { background: var(--hover); }
-.new-terminal:active { transform: scale(.94); }
-.titlebar-spacer { min-width: 24px; }
-.session-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; padding: 5px; min-width: 200px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card); box-shadow: 0 8px 28px rgba(30, 41, 59, 0.18); }
-.session-menu button { text-align: left; padding: 8px 12px; border-radius: 6px; }
-.session-menu button:hover, .session-menu button:focus-visible { background: var(--hover); }
-button:disabled { cursor: default; opacity: 0.5; }
-.session-page { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
-.session-bar { height: 48px; flex: none; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-width: 0 0 1px; }
-.session-host { flex: 1; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.local-badge { padding: 4px 10px; border-radius: 5px; background: var(--card); font-size: 12px; font-weight: 600; }
-.terminal-view { position: relative; flex: 1; display: flex; min-height: 0; background: #fff; }
-.xterm-container { min-width: 0; min-height: 0; flex: 1; padding: 10px; overflow: hidden; }
-.xterm-container .xterm { height: 100%; }
-.terminal-notice { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); padding: 9px 14px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--card); box-shadow: 0 3px 16px rgba(30, 41, 59, 0.1); }
-.terminal-notice.terminal-error { bottom: 55px; display: flex; align-items: center; gap: 12px; }
-.terminal-error { color: #b91c1c; overflow-wrap: anywhere; }
-.reconnect-hint { color: var(--secondary); }
-.session-sftp { flex: 1; min-height: 0; overflow: auto; }
 .terminal-dialog { width: min(480px, calc(100vw - 40px)); max-height: calc(100vh - 40px); padding: 24px; color: var(--text); border: 1px solid var(--card-border); border-radius: 14px; background: var(--card); box-shadow: 0 20px 80px rgba(30, 41, 59, 0.24); }
 .terminal-dialog::backdrop { background: rgba(30, 41, 59, 0.26); }
 .terminal-dialog h2 { margin: 0 0 18px; font-size: 18px; }
@@ -356,10 +360,6 @@ button:disabled { cursor: default; opacity: 0.5; }
 @media (max-width: 1040px) { .sftp-hint { display: none; } .sftp-page { padding: 12px; } .sftp-panes { gap: 8px; } }
 @media (prefers-reduced-motion: reduce) { .sftp-transfer progress::-webkit-progress-value { transition: none; } }
 /* --- Host management ------------------------------------------------------- */
-.host-menu { position: fixed; z-index: 20; width: 172px; padding: 5px; border-radius: 10px; box-shadow: 0 12px 36px rgba(30, 41, 59, 0.16); }
-.host-menu button { display: block; width: 100%; padding: 9px 12px; border-radius: 6px; text-align: left; }
-.host-menu button:hover, .host-menu button:focus-visible { background: var(--hover); outline: none; }
-.host-danger { color: var(--danger); }
 .host-editor, .host-dialog { color: var(--text); box-shadow: 0 12px 50px rgba(30, 41, 59, 0.18); }
 .host-editor::backdrop, .host-dialog::backdrop { background: rgba(30, 41, 59, 0.18); }
 .host-editor { position: fixed; inset: 54px 0 0 auto; margin: 0; width: min(420px, 100vw); height: calc(100dvh - 54px); max-height: none; max-width: none; padding: 0; border-radius: 20px 0 0 20px; background: var(--surface); overflow: hidden; }
@@ -396,16 +396,11 @@ button:disabled { cursor: default; opacity: 0.5; }
 .host-error { margin: 0 0 16px; padding: 10px 12px; border-radius: 7px; background: rgba(239, 68, 68, 0.1); color: #b91c1c; overflow-wrap: anywhere; }
 .host-editor-form > .host-error { margin: 0 24px 12px; }
 .hosts-page button:disabled, .host-editor button:disabled, .host-dialog button:disabled, .host-menu button:disabled { opacity: 0.5; cursor: default; }
-.host-menu, .session-menu { border: 1px solid var(--card-border); background: rgba(255, 255, 255, .97); backdrop-filter: blur(12px); animation: popover-in 160ms var(--ease-out); }
-.host-menu button:hover, .session-menu button:hover { color: var(--accent-hover); background: var(--selected); }
-.host-menu .host-danger:hover { color: var(--danger); background: rgba(217, 45, 32, .06); }
 .host-dialog, .terminal-dialog, .sftp-dialog, .settings-recovery { border-radius: 20px; animation: dialog-in 240ms var(--ease-out); }
 .host-editor { animation: inspector-in 280ms var(--ease-out); }
 dialog::backdrop { animation: backdrop-in 180ms ease-out; }
-.session-connection { display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 11px; white-space: nowrap; }
-.session-bar { background: #f9f9fb; border-color: var(--card-border); }
-.session-tabs > .session-tab { animation: popover-in 180ms var(--ease-out); }
 
+@keyframes tab-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes popover-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }

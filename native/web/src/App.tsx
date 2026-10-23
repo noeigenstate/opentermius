@@ -156,7 +156,7 @@ export default function App() {
       <div className="app-body">
         <Sidebar section={activeSessionId ? null : section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
         <div className="workspace-shell">
-          <TitleBar tabs={{ sessions, activeSessionId, onSelect: (id) => { setActiveSessionId(id); if (id === null) setSection("hosts"); },
+          <TitleBar tabs={{ sessions, activeSessionId, onSelect: setActiveSessionId,
             onNew: () => { void run("local", async () => {
               await addSession(await openLocalTerminal());
             }); },
@@ -166,7 +166,7 @@ export default function App() {
           }} />
           <main className={`content${activeSessionId ? " session-content" : ""}`}>
             {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
-            <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
+            <div id="hosts-panel" hidden={activeSessionId !== null}>
               {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
                 : section === "keychain" ? <KeychainPage />
                 : section === "snippets" ? <SnippetsPage onRun={runSnippet} />

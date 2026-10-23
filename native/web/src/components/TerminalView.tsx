@@ -5,6 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { sessionInput, sessionResize, subscribeSession } from "../api/sessions";
 import { t } from "../i18n";
+import { Icon } from "../icons";
 import { Dialog } from "./Dialog";
 
 const FONT_FAMILY = '"Cascadia Mono", Consolas, monospace';
@@ -147,7 +148,7 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
   return (
     <div className="terminal-view" hidden={!visible}>
       <div ref={container} className="xterm-container" aria-label={t("Terminal")} />
-      {error && <div className="terminal-notice terminal-error" role="alert">{error}<button onClick={() => setError("")} aria-label={t("Dismiss")}>×</button></div>}
+      {error && <div className="terminal-notice terminal-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button className="icon-button icon-button-sm" onClick={() => setError("")} aria-label={t("Dismiss")}><Icon name="close" size={14} /></button></div>}
       {ended && <button className="terminal-notice reconnect-hint" disabled={local} onClick={onReconnect}>{t(local ? "Local terminal exited" : "Press Enter to reconnect")}</button>}
       {paste !== null && <Dialog title={t("Paste multiple lines")} onClose={() => { setPaste(null); terminal.current?.focus(); }}>
         <p>{t("The clipboard contains {lines} lines. Paste them into the terminal?", { lines: paste.replace(/\r\n?/g, "\n").split("\n").length })}</p>

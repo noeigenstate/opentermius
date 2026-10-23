@@ -38,7 +38,7 @@ export function Menu({ x, y, items, onClose }: { x: number; y: number; items: Me
   }, []);
 
   return createPortal(
-    <div ref={menu} className="host-menu glass" role="menu" style={position} onKeyDown={(event) => {
+    <div ref={menu} className="menu" role="menu" style={position} onKeyDown={(event) => {
       event.stopPropagation();
       if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); onClose(); }
       const buttons = Array.from(menu.current!.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
@@ -46,7 +46,7 @@ export function Menu({ x, y, items, onClose }: { x: number; y: number; items: Me
       const next = event.key === "ArrowDown" ? (index + 1) % buttons.length : event.key === "ArrowUp" ? (index - 1 + buttons.length) % buttons.length : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : -1;
       if (next >= 0) { event.preventDefault(); buttons[next]?.focus(); }
     }}>
-      {items.map((item) => <button key={item.label} type="button" role="menuitem" disabled={item.disabled} className={item.danger ? "host-danger" : ""} onClick={() => { onClose(); item.onSelect(); }}>{item.label}</button>)}
+      {items.map((item) => <button key={item.label} type="button" role="menuitem" disabled={item.disabled} className={item.danger ? "menu-danger" : ""} onClick={() => { onClose(); item.onSelect(); }}>{item.label}</button>)}
     </div>, document.body,
   );
 }
