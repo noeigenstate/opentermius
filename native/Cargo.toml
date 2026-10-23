@@ -1,6 +1,6 @@
 [package]
 name = "opentermius"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Core of OpenTermius, a lightweight, local-first SSH and SFTP client"
 repository = "https://github.com/noeigenstate/opentermius"

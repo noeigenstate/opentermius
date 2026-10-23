@@ -1,6 +1,6 @@
 [package]
 name = "opentermius-desktop"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "OpenTermius desktop app: Tauri shell around the Rust core with a React UI"
 license = "UNLICENSED"
