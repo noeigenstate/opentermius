@@ -288,9 +288,9 @@ export async function verifyUi({ port = 9337, output }) {
         // Chromium snaps the hairline at native DPI, including under CDP metrics emulation.
         assert(Math.abs(parseFloat(frame.border) * frame.scale - Math.floor(frame.scale)) < .01, 'Expected one hairline window outline.');
         assert.equal(frame.radius, '10px');
-        assert.equal(frame.background, 'rgb(238, 241, 246)');
+        assert.equal(frame.background, 'rgb(243, 243, 243)');
         assert.equal(frame.overflow, 'hidden');
-        assert.equal(frame.borderColor, 'rgba(60, 60, 67, 0.14)');
+        assert.equal(frame.borderColor, 'rgb(217, 217, 217)');
       } else {
         assert.equal(frame.border, '0px');
         assert.equal(frame.radius, '0px');
@@ -337,12 +337,12 @@ export async function verifyUi({ port = 9337, output }) {
       await waitFor(`performance.timeOrigin !== ${timeOrigin} && document.readyState === 'complete' && document.documentElement.dataset.windowShape === ${JSON.stringify(shape)} && document.querySelectorAll('.host-card').length === 4`, 'Page load did not republish the window contour.');
       return { shape };
     });
-    await check('apple-surface-and-accent', async () => {
+    await check('neutral-surface-and-accent', async () => {
       const styles = await cdp.evaluate(`({ background: getComputedStyle(document.querySelector('main.content')).backgroundColor,
         accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-        primaryTransform: getComputedStyle(document.querySelector('.hosts-header .host-create')).transform })`);
-      assert.equal(styles.background, 'rgb(245, 245, 247)');
-      assert.equal(styles.accent.toLowerCase(), '#007aff');
+        primaryTransform: getComputedStyle(document.querySelector('.page-header .btn-primary')).transform })`);
+      assert.equal(styles.background, 'rgb(243, 243, 243)');
+      assert.equal(styles.accent.toLowerCase(), '#2c2c2c');
       assert.equal(styles.primaryTransform, 'none', 'Idle primary buttons must release their transform.');
       return styles;
     });
@@ -355,10 +355,10 @@ export async function verifyUi({ port = 9337, output }) {
     await capture('hosts.png');
 
     await check('primary-hover-press-and-host-editor', async () => {
-      const position = await point('.hosts-header .host-create');
+      const position = await point('.page-header .btn-primary');
       await move(position);
       await delay(250);
-      const hovered = await cdp.evaluate(`getComputedStyle(document.querySelector('.hosts-header .host-create')).transform`);
+      const hovered = await cdp.evaluate(`getComputedStyle(document.querySelector('.page-header .btn-primary')).transform`);
       assert(report.runtime.fineHover && !report.runtime.reducedMotion, 'Motion checks require a fine pointer and no-preference media emulation.');
       assert.notEqual(hovered, 'none', 'Primary button did not respond to hover.');
       await capture('hover.png');
@@ -366,7 +366,7 @@ export async function verifyUi({ port = 9337, output }) {
       let pressed;
       try {
         await delay(110);
-        pressed = await cdp.evaluate(`getComputedStyle(document.querySelector('.hosts-header .host-create')).transform`);
+        pressed = await cdp.evaluate(`getComputedStyle(document.querySelector('.page-header .btn-primary')).transform`);
         assert.notEqual(pressed, 'none', 'Primary button did not respond to press.');
         assert.notEqual(pressed, hovered, 'Primary button did not respond to press.');
         await capture('pressed.png');
@@ -420,7 +420,7 @@ export async function verifyUi({ port = 9337, output }) {
     await check('search-empty-state-and-clear', async () => {
       await click('.hosts-search input');
       await cdp.send('Input.insertText', { text: 'fixture-no-match-62843' });
-      await waitFor(`document.querySelectorAll('.host-card').length === 0 && !!document.querySelector('.hosts-empty')`, 'Search did not show its empty state.');
+      await waitFor(`document.querySelectorAll('.host-card').length === 0 && !!document.querySelector('.empty-state')`, 'Search did not show its empty state.');
       await click('.hosts-clear');
       await waitFor(`document.querySelectorAll('.host-card').length === 4`, 'Clear search did not restore all four fixture hosts.');
       return { emptyState: true, restored: 4 };
@@ -473,17 +473,17 @@ export async function verifyUi({ port = 9337, output }) {
     await check('settings-page', () => navigate(5, 'main .settings-heading h1', 'settings.png'));
 
     await check('reduced-motion-preference', async () => {
-      await navigate(0, 'main .hosts-header h1');
+      await navigate(0, 'main .page-header h1');
       await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
       mediaOverridden = true;
-      await move(await point('.hosts-header .host-create'));
+      await move(await point('.page-header .btn-primary'));
       await delay(100);
       const state = await cdp.evaluate(`({ matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
         hasFocus: document.hasFocus(), motionPaused: document.documentElement.dataset.motionPaused,
-        primaryTransform: getComputedStyle(document.querySelector('.hosts-header .host-create')).transform,
+        primaryTransform: getComputedStyle(document.querySelector('.page-header .btn-primary')).transform,
         pageAnimation: getComputedStyle(document.querySelector('.hosts-page')).animationName,
         cardAnimation: getComputedStyle(document.querySelector('.host-card')).animationName,
-        primaryTransition: getComputedStyle(document.querySelector('.hosts-header .host-create')).transitionDuration })`);
+        primaryTransition: getComputedStyle(document.querySelector('.page-header .btn-primary')).transitionDuration })`);
       assert(state.matches, 'Reduced-motion media preference was not emulated.');
       assert.equal(state.primaryTransform, 'none');
       assert.equal(state.pageAnimation, 'none');
