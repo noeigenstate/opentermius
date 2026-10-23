@@ -30,6 +30,7 @@ export default function App() {
   const [hosts, setHosts] = useState<Host[]>([]);
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [initialSessionViews, setInitialSessionViews] = useState<Record<string, "terminal" | "sftp">>({});
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [prompts, setPrompts] = useState<SessionPrompt[]>([]);
   const [usageByHost, setUsageByHost] = useState<Record<string, Usage>>({});
@@ -68,12 +69,14 @@ export default function App() {
     setSessions((current) => current.filter((session) => session.sessionId !== sessionId));
     setActiveSessionId((current) => current === sessionId ? null : current);
     setPrompts((current) => current.filter((prompt) => prompt.sessionId !== sessionId));
+    setInitialSessionViews((current) => { const next = { ...current }; delete next[sessionId]; return next; });
   }
 
-  async function addSession(sessionId: string) {
+  async function addSession(sessionId: string, initialView: "terminal" | "sftp" = "terminal") {
     const session = (await listSessions()).find((item) => item.sessionId === sessionId);
     if (!session) return;
     const status = latestSessionStatus(session.sessionId);
+    setInitialSessionViews((current) => ({ ...current, [sessionId]: initialView }));
     setSessions((current) => [...current.filter((item) => item.sessionId !== session.sessionId), {
       ...session, ...(status ? { connected: status.connected, ended: status.ended } : {}),
     }]);
@@ -106,9 +109,9 @@ export default function App() {
       setActiveSessionId(target);
     });
   };
-  const connect = (hostId: string) => {
+  const connect = (hostId: string, initialView: "terminal" | "sftp" = "terminal") => {
     void run(`host:${hostId}`, async () => {
-      await addSession(await connectHost(hostId));
+      await addSession(await connectHost(hostId), initialView);
     });
   };
 
@@ -163,7 +166,7 @@ export default function App() {
         <main className={`content${activeSessionId ? " session-content" : ""}`}>
           {error && <div className="error session-app-error" role="alert">{error}<button aria-label={t("Dismiss")} onClick={() => setError("")}>×</button></div>}
           <div id="hosts-panel" role="tabpanel" hidden={activeSessionId !== null}>
-            {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
+            {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
               : section === "keychain" ? <KeychainPage />
               : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
               : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
@@ -172,7 +175,7 @@ export default function App() {
           </div>
           <Suspense fallback={<div className="empty">{t("Loading terminal…")}</div>}>
             {sessions.map((session) => <SessionPage key={session.sessionId} session={session} visible={activeSessionId === session.sessionId}
-              blocked={prompts.length > 0} onReconnect={() => reconnect(session.sessionId)} />)}
+              initialView={initialSessionViews[session.sessionId]} blocked={prompts.length > 0} onReconnect={() => reconnect(session.sessionId)} />)}
           </Suspense>
         </main>
       </div>

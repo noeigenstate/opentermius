@@ -353,7 +353,7 @@ export async function verifyUi({ port = 9337, output }) {
     });
 
     await check('group-filter-production-and-all', async () => {
-      await click('.hosts-groups .pill', { text: 'Production' });
+      await click('.hosts-groups .pill .host-group-label', { text: 'Production' });
       await waitFor(`document.querySelectorAll('.host-card').length === 2`, 'Production did not show two fixture hosts.');
       await click('.hosts-groups .pill', { index: 0 });
       await waitFor(`document.querySelectorAll('.host-card').length === 4`, 'All did not restore all four fixture hosts.');
@@ -380,6 +380,10 @@ export async function verifyUi({ port = 9337, output }) {
 
     await check('keyboard-focus-visible', async () => {
       await click('.hosts-search input');
+      await key('Tab');
+      assert(await cdp.evaluate(`document.activeElement.matches('.hosts-view-toggle button:first-child:focus-visible')`), 'Grid view did not receive visible keyboard focus.');
+      await key('Tab');
+      assert(await cdp.evaluate(`document.activeElement.matches('.hosts-view-toggle button:last-child:focus-visible')`), 'List view did not receive visible keyboard focus.');
       await key('Tab');
       const focus = await cdp.evaluate(`(() => { const element = document.activeElement; const style = getComputedStyle(element);
         return { hostCard: element.matches('.host-card'), visible: element.matches(':focus-visible'),

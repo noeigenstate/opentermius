@@ -1,0 +1,184 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import ts from "typescript";
+
+const source = await readFile(new URL("../src/pages/Hosts.tsx", import.meta.url), "utf8");
+const moduleUrl = (code) => `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+let fixture = 0;
+
+// Run the actual page and its pure functions with hooks and native IPC isolated.
+async function createPage(context, storage = new Map()) {
+  const originals = ["localStorage", "HTMLButtonElement", "getComputedStyle"].map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value),
+  } });
+  Object.defineProperty(globalThis, "HTMLButtonElement", { configurable: true, value: class {} });
+  Object.defineProperty(globalThis, "getComputedStyle", { configurable: true, value: () => ({ gridTemplateColumns: "1fr 1fr 1fr" }) });
+  context.after(() => {
+    for (const [name, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  });
+  const mockUrl = moduleUrl(`
+    // fixture ${++fixture}
+    let cursor = 0;
+    const slots = [];
+    export const calls = [];
+    export let hosts = [];
+    export function setHosts(next) { hosts = next; }
+    export function begin() { cursor = 0; }
+    export function useState(initial) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
+      return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
+    }
+    export function useRef(initial) { return useState(() => ({ current: initial }))[0]; }
+    export function useMemo(compute) { return compute(); }
+    export function jsx(type, props) { return { type, props }; }
+    export const jsxs = jsx;
+    export function t(text) { return text; }
+    export function Icon() {}
+    export function UsageRing() {}
+    export function HostEditor() {}
+    export function HostModal() {}
+    export function Menu() {}
+    export async function setHostFavorite(id, favorite) { calls.push({ id, favorite }); }
+    export async function listHosts() { calls.push("list_hosts"); return hosts; }
+    export async function getHost() {}
+    export async function deleteHost() {}
+    export async function duplicateHost() {}
+    export async function renameGroup() {}
+    export function newHostDraft(group) { return { group }; }
+    export async function parseQuickConnect(text) { calls.push({ quickConnect: text }); return { host: "example.invalid" }; }
+  `);
+  let compiled = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  compiled = compiled.replace(/^import "\.\.\/hosts\.css";\r?\n/m, "").replace(/from "[^"]+"/g, `from ${JSON.stringify(mockUrl)}`);
+  const page = await import(moduleUrl(compiled));
+  const mock = await import(mockUrl);
+  return { ...page, mock, render: (props) => { mock.begin(); return page.HostsPage(props); } };
+}
+
+function findAll(node, predicate) {
+  if (Array.isArray(node)) return node.flatMap((child) => findAll(child, predicate));
+  if (!node || typeof node !== "object") return [];
+  return [...(predicate(node) ? [node] : []), ...findAll(node.props?.children, predicate)];
+}
+const byClass = (tree, className) => findAll(tree, (node) => node.props?.className?.split(" ").includes(className));
+const host = (id, group = "", favorite = false) => ({ id, name: id, host: "example.invalid", port: 22, username: "fixture", group, tags: [], favorite, lastConnected: null });
+const flush = async () => { await new Promise((resolve) => setImmediate(resolve)); };
+
+test("favorite filtering preserves source data and order, including legacy missing flags", async (context) => {
+  const { filterFavorites } = await createPage(context);
+  const hosts = [host("a", "Work", true), host("b"), host("c", "Work", true), { ...host("legacy"), favorite: undefined }];
+  assert.equal(filterFavorites(hosts, false), hosts);
+  assert.deepEqual(filterFavorites(hosts, true), [hosts[0], hosts[2]]);
+  assert.equal(filterFavorites(hosts, true)[0], hosts[0]);
+  assert.equal(hosts.length, 4);
+  assert.deepEqual(filterFavorites([], true), []);
+});
+
+test("group counts include ungrouped hosts and follow the favorites scope", async (context) => {
+  const { groupCounts, filterFavorites } = await createPage(context);
+  const hosts = [host("a", "Work", true), host("b", "Work"), host("c"), host("d", "work"), host("e", "", true)];
+  assert.deepEqual([...groupCounts(hosts)], [["Work", 2], ["", 2], ["work", 1]]);
+  assert.deepEqual([...groupCounts(filterFavorites(hosts, true))], [["Work", 1], ["", 1]]);
+  assert.equal(groupCounts([]).size, 0);
+});
+
+test("host tones are stable, bounded, and cover all six tones", async (context) => {
+  const { hostTone } = await createPage(context);
+  const tones = ["blue", "purple", "green", "orange", "pink", "cyan"];
+  assert.equal(hostTone(""), "blue");
+  assert.equal(hostTone("a"), "purple");
+  assert.equal(hostTone("fixture-0"), hostTone("fixture-0"));
+  for (const id of ["中文", "🖥️", "x".repeat(10000)]) assert(tones.includes(hostTone(id)));
+  assert.deepEqual(new Set(Array.from({ length: 100 }, (_, index) => hostTone(`fixture-${index}`))), new Set(tones));
+});
+
+test("page pills show counts and favorites have their own heading and empty state", async (context) => {
+  const { render } = await createPage(context);
+  const hosts = [host("a", "Work", true), host("b", "Work"), host("c")];
+  let tree = render({ hosts });
+  assert.deepEqual(byClass(tree, "host-group-count").map((node) => node.props.children), [3, 2, 1]);
+  tree = render({ hosts, favoritesOnly: true });
+  assert.deepEqual(byClass(tree, "host-group-count").map((node) => node.props.children), [1, 1]);
+  assert.equal(findAll(tree, (node) => node.type === "h1")[0].props.children, "Favorites");
+  tree = render({ hosts: [], favoritesOnly: true });
+  assert.equal(findAll(tree, (node) => node.type === "h2")[0].props.children, "No favorites yet");
+});
+
+test("list view persists and ArrowDown moves by one even when CSS reports three columns", async (context) => {
+  const storage = new Map();
+  const { render } = await createPage(context, storage);
+  const props = { hosts: [host("a"), host("b"), host("c")] };
+  let tree = render(props);
+  findAll(tree, (node) => node.props?.["aria-label"] === "List view")[0].props.onClick();
+  tree = render(props);
+  assert.equal(storage.get("hosts-view"), "list");
+  const list = byClass(tree, "hosts-list")[0];
+  let focused;
+  list.props.ref.current = { children: props.hosts.map((item) => ({ focus: () => { focused = item.id; } })) };
+  list.props.children[0].props.onSelect();
+  tree = render(props);
+  let prevented = false;
+  byClass(tree, "hosts-list")[0].props.onKeyDown({ key: "ArrowDown", target: {}, preventDefault: () => { prevented = true; } });
+  assert.equal(focused, "b");
+  assert(prevented);
+});
+
+test("favorites view preference is independent and unavailable storage is harmless", async (context) => {
+  const { render } = await createPage(context, new Map([["favorites-view", "list"], ["hosts-view", "grid"]]));
+  assert.equal(byClass(render({ hosts: [host("a", "", true)], favoritesOnly: true }), "hosts-list").length, 1);
+  localStorage.setItem = () => { throw Error("storage blocked"); };
+  findAll(render({ hosts: [] }), (node) => node.props?.["aria-label"] === "Grid view")[0].props.onClick();
+  const second = await createPage(context, { get() { throw Error("storage blocked"); } });
+  assert.equal(byClass(second.render({ hosts: [host("a")] }), "hosts-grid").length, 1);
+});
+
+test("favorite action persists the inverse flag and refreshes the host collection", async (context) => {
+  const { render, mock } = await createPage(context);
+  const hosts = [host("a")];
+  const updated = [host("a", "", true)];
+  mock.setHosts(updated);
+  let received;
+  const card = byClass(render({ hosts, onHostsChange: (next) => { received = next; } }), "hosts-grid")[0].props.children[0];
+  card.props.onFavorite();
+  await flush();
+  assert.deepEqual(mock.calls, [{ id: "a", favorite: true }, "list_hosts"]);
+  assert.equal(received, updated);
+});
+
+test("card exposes status, tone, favorite and SFTP actions without bubbling a connection", async (context) => {
+  const { render } = await createPage(context);
+  let connections = 0;
+  let sftp = 0;
+  const element = byClass(render({ hosts: [host("a", "", true)], onConnect: () => connections++, onSftp: () => sftp++, onlineHostIds: new Set(["a"]) }), "hosts-grid")[0].props.children[0];
+  const card = element.type(element.props);
+  assert.equal(card.props["data-online"], true);
+  assert.equal(byClass(card, "host-server-glyph")[0].props["data-tone"], "purple");
+  assert.equal(byClass(card, "host-favorite")[0].props["aria-pressed"], true);
+  let stopped = false;
+  byClass(card, "host-sftp")[0].props.onClick({ stopPropagation: () => { stopped = true; } });
+  assert(stopped);
+  assert.equal(sftp, 1);
+  assert.equal(connections, 0);
+  assert.equal(byClass(card, "host-card-footer").length, 0);
+  assert.equal(byClass(card, "host-usage-note").length, 0);
+});
+
+test("search retains ssh quick connect with the new placeholder", async (context) => {
+  const { render, mock } = await createPage(context);
+  let draft;
+  const props = { hosts: [], onQuickConnect: (next) => { draft = next; } };
+  const input = () => findAll(render(props), (node) => node.type === "input")[0];
+  assert.equal(input().props.placeholder, "Search hosts, IPs or tags…");
+  input().props.onChange({ target: { value: "ssh fixture@example.invalid" } });
+  input().props.onKeyDown({ key: "Enter", preventDefault() {} });
+  await flush();
+  assert.equal(draft.host, "example.invalid");
+  assert.deepEqual(mock.calls, [{ quickConnect: "ssh fixture@example.invalid" }]);
+});

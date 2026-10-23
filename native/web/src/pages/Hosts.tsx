@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { deleteHost, duplicateHost, getHost, listHosts, newHostDraft, parseQuickConnect, renameGroup, type Host, type HostDraft, type Usage } from "../api/hosts";
+import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { deleteHost, duplicateHost, getHost, listHosts, newHostDraft, parseQuickConnect, renameGroup, setHostFavorite, type Host, type HostDraft, type Usage } from "../api/hosts";
 import { t } from "../i18n";
 import { Icon } from "../icons";
 import { UsageRing } from "../components/UsageRing";
@@ -13,18 +13,39 @@ export function filterFavorites(hosts: Host[], favoritesOnly: boolean): Host[] {
   return favoritesOnly ? hosts.filter((host) => host.favorite) : hosts;
 }
 
+export function groupCounts(hosts: Host[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const host of hosts) counts.set(host.group, (counts.get(host.group) ?? 0) + 1);
+  return counts;
+}
+
+export function hostTone(id: string) {
+  const tones = ["blue", "purple", "green", "orange", "pink", "cyan"] as const;
+  let hash = 0;
+  for (let index = 0; index < id.length; index++) hash = (Math.imul(hash, 31) + id.charCodeAt(index)) >>> 0;
+  return tones[hash % tones.length];
+}
+
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
-function HostCard({ host, usage, online, selected, onSelect, onConnect, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; onSelect: () => void; onConnect?: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
+function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, onSftp, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onSftp?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
+  const favoriteLabel = t(host.favorite ? "Remove from favorites" : "Add to favorites");
+  const openMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    onSelect();
+    onMenu(rect.right - 172, rect.bottom + 4);
+  };
   return (
-    <article className={`host-card${selected ? " host-card-selected" : ""}`} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
+    <article className={`host-card${selected ? " host-card-selected" : ""}`} data-online={online} data-selected={selected} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
       <header className="host-card-header">
-        <span className="host-server-glyph"><Icon name="hosts" size={23} /><i className={`host-indicator${online ? " host-indicator-online" : ""}`} /></span>
+        <span className="host-server-glyph" data-tone={hostTone(host.id)}><Icon name="hosts" size={23} /></span>
         <div className="host-card-identity">
           <h3 title={host.name}>{host.name}</h3>
-          <span className={`host-connection-state${online ? " is-connected" : ""}`}>{online ? t("Connected") : t("Disconnected")}</span>
+          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`host-indicator${online ? " host-indicator-online" : ""}`} />{online ? t("Online") : t("Disconnected")}</span>
         </div>
-        <button className="icon-button host-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); onSelect(); onMenu(rect.right - 172, rect.bottom + 4); }}><Icon name="more" /></button>
+        <button className="icon-button host-favorite" aria-pressed={host.favorite} aria-label={favoriteLabel} data-tooltip={favoriteLabel} disabled={busy} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onFavorite(); }}><Icon name="star" /></button>
+        <button className="icon-button host-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={openMenu}><Icon name="more" /></button>
       </header>
       <p className="host-endpoint" title={`${host.username ? `${host.username}@` : ""}${host.host}:${host.port}`}>
         <span>{host.username && `${host.username}@`}{host.host}</span><span className="host-port-number">:{host.port}</span>
@@ -37,13 +58,14 @@ function HostCard({ host, usage, online, selected, onSelect, onConnect, onEdit, 
       </div>
       <div className="host-metrics">
         <UsageRing value={usage.cpu} label={t("CPU")} />
-        <UsageRing value={usage.memory} label={t("MEM")} />
-        <UsageRing value={usage.disk} label={t("DISK")} />
+        <UsageRing value={usage.memory} label={t("Memory")} />
+        <UsageRing value={usage.disk} label={t("Disk")} />
       </div>
-      <footer className="host-card-footer">
-        <span className="host-usage-note">{online ? t("Session metrics") : t("No active session")}</span>
+      <div className="host-card-actions">
         <button className="host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="terminal" size={14} />{t("Connect")}</button>
-      </footer>
+        <button className="icon-button host-sftp" disabled={!onSftp} aria-label={t("Open SFTP")} data-tooltip={t("Open SFTP")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onSftp?.(); }}><Icon name="external" /></button>
+        <button className="icon-button host-action-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={openMenu}><Icon name="more" /></button>
+      </div>
     </article>
   );
 }
@@ -53,14 +75,24 @@ interface Props {
   favoritesOnly?: boolean;
   onHostsChange?: (hosts: Host[]) => void;
   onConnect?: (hostId: string) => void;
+  onSftp?: (hostId: string) => void;
   onQuickConnect?: (draft: HostDraft) => void;
   /** Live usage and connection state from open sessions, by host id. */
   usageByHost?: Record<string, Usage>;
   onlineHostIds?: ReadonlySet<string>;
 }
 
-export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
+export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onSftp, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
   const hosts = useMemo(() => filterFavorites(allHosts, favoritesOnly), [allHosts, favoritesOnly]);
+  const viewKey = favoritesOnly ? "favorites-view" : "hosts-view";
+  const [view, setView] = useState<"grid" | "list">(() => {
+    try { return localStorage.getItem(viewKey) === "list" ? "list" : "grid"; }
+    catch { return "grid"; }
+  });
+  const changeView = (next: "grid" | "list") => {
+    setView(next);
+    try { localStorage.setItem(viewKey, next); } catch { /* The view still works when storage is unavailable. */ }
+  };
   const [group, setGroup] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState("");
@@ -74,15 +106,15 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
   const grid = useRef<HTMLDivElement>(null);
   const pending = useRef(false);
 
-  const groups = useMemo(() => [...new Set(hosts.map((h) => h.group).filter(Boolean))].sort(), [hosts]);
-  const hasUngrouped = hosts.some((h) => !h.group);
+  const counts = useMemo(() => groupCounts(hosts), [hosts]);
+  const groups = useMemo(() => [...counts.keys()].filter(Boolean).sort(), [counts]);
+  const hasUngrouped = counts.has("");
   // A group that disappeared (renamed or emptied) falls back to "All".
   const activeGroup = group === "" || (group === NO_GROUP && hasUngrouped) || groups.includes(group) ? group : "";
   const query = search.trim().toLowerCase();
   const visible = hosts
     .filter((h) => activeGroup === "" || (activeGroup === NO_GROUP ? !h.group : h.group === activeGroup))
     .filter((h) => !query || [h.name, h.host, h.username, h.group, ...(h.tags ?? [])].some((v) => v.toLowerCase().includes(query)));
-  const connectedCount = hosts.filter((host) => onlineHostIds.has(host.id)).length;
   const addHost = () => setEditor(newHostDraft(activeGroup === NO_GROUP ? "" : activeGroup));
 
   const refresh = async () => {
@@ -100,6 +132,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
   const edit = (hostId: string) => void run(async () => { setEditor(await getHost(hostId)); });
   const askDelete = (host: Host) => { setDialogError(""); setDeleting(host); };
   const duplicate = (hostId: string) => void run(async () => { setSelected(await duplicateHost(hostId)); await refresh(); });
+  const toggleFavorite = (host: Host) => void run(async () => { await setHostFavorite(host.id, !host.favorite); await refresh(); });
   const quickConnect = () => void run(async () => {
     const draft = await parseQuickConnect(search);
     setSearch("");
@@ -133,7 +166,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
     const index = visible.findIndex((host) => host.id === selected);
     if (event.key === "Enter" && index >= 0) { event.preventDefault(); onConnect?.(selected); return; }
     if (event.key === "Delete" && index >= 0) { event.preventDefault(); askDelete(visible[index]); return; }
-    const columns = grid.current ? getComputedStyle(grid.current).gridTemplateColumns.split(" ").length : 1;
+    const columns = view === "list" || !grid.current ? 1 : getComputedStyle(grid.current).gridTemplateColumns.split(" ").length;
     const delta = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" ? -columns : event.key === "ArrowDown" ? columns : 0;
     if (!delta || !visible.length) return;
     event.preventDefault();
@@ -142,10 +175,10 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
     (grid.current?.children[next] as HTMLElement | undefined)?.focus();
   };
 
-  const pill = (value: string, label: string) => (
+  const pill = (value: string, label: string, count: number) => (
     <button key={value} className={`pill${activeGroup === value ? " pill-active" : ""}`} aria-pressed={activeGroup === value} onClick={() => setGroup(value)} onContextMenu={value && value !== NO_GROUP ? (event) => { event.preventDefault(); setDialogError(""); setRenaming({ old: value, value }); } : undefined} onKeyDown={(event) => {
       if (value && value !== NO_GROUP && (event.key === "F2" || (event.shiftKey && event.key === "F10"))) { event.preventDefault(); setDialogError(""); setRenaming({ old: value, value }); }
-    }}>{label}</button>
+    }}><span className="host-group-label">{label}</span>{" "}<span className="host-group-count">{count}</span></button>
   );
 
   return (
@@ -157,41 +190,37 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
         </div>
         <button className="host-create" data-depth disabled={busy} onClick={addHost}><Icon name="plus" size={17} />{t("New host")}</button>
       </header>
-      <div className="hosts-summary" aria-label={t("Connection overview")}>
-        <span><Icon name="hosts" size={14} /><strong>{hosts.length}</strong>{t("Saved hosts")}</span>
-        <span><i className={`host-indicator${connectedCount ? " host-indicator-online" : ""}`} /><strong>{connectedCount}</strong>{t("Connected")}</span>
-      </div>
       <div className="hosts-controls">
         <div className="pills hosts-groups" role="group" aria-label={t("Filter by group")}>
-          {pill("", t("All"))}
-          {groups.map((g) => pill(g, g))}
-          {groups.length > 0 && hasUngrouped && pill(NO_GROUP, t("No group"))}
+          {pill("", t("All"), hosts.length)}
+          {groups.map((g) => pill(g, g, counts.get(g) ?? 0))}
+          {hasUngrouped && pill(NO_GROUP, t("No group"), counts.get("") ?? 0)}
         </div>
         <label className="search hosts-search">
           <Icon name="search" />
-          <input aria-label={t("Search, or ssh user@host")} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search, or ssh user@host")} onKeyDown={(event) => {
+          <input aria-label={t("Search hosts, IPs or tags…")} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search hosts, IPs or tags…")} onKeyDown={(event) => {
             if (event.key === "Enter" && /^ssh(?:\s|$)/i.test(search.trim())) { event.preventDefault(); quickConnect(); }
             if (event.key === "ArrowDown" && visible.length) { event.preventDefault(); (grid.current?.children[0] as HTMLElement | undefined)?.focus(); }
           }} />
           {search && <button type="button" className="hosts-clear" aria-label={t("Clear search")} data-tooltip={t("Clear search")} onClick={() => setSearch("")}><Icon name="close" size={13} /></button>}
         </label>
+        <div className="hosts-view-toggle" role="group" aria-label={t("Host view")}>
+          <button className="icon-button" aria-label={t("Grid view")} data-tooltip={t("Grid view")} aria-pressed={view === "grid"} onClick={() => changeView("grid")}><Icon name="grid" /></button>
+          <button className="icon-button" aria-label={t("List view")} data-tooltip={t("List view")} aria-pressed={view === "list"} onClick={() => changeView("list")}><Icon name="list" /></button>
+        </div>
       </div>
       {error && <div className="host-error" role="alert">{error}</div>}
-      <div className="hosts-section-heading">
-        <h2>{activeGroup === NO_GROUP ? t("No group") : activeGroup || t("All hosts")}<span>{visible.length}</span></h2>
-        <span>{onConnect ? t("Double-click to connect") : t("Double-click to edit")}</span>
-      </div>
       {visible.length === 0 ? (
         <div className="hosts-empty">
           <span className="hosts-empty-glyph"><Icon name={hosts.length === 0 ? "hosts" : "search"} size={34} /></span>
           <h2>{hosts.length === 0 ? t(favoritesOnly ? "No favorites yet" : "No hosts yet") : t("No matching hosts")}</h2>
           <p>{hosts.length === 0 ? t(favoritesOnly ? "Star a host to find it here." : "Add a host to keep its connection details in one place.") : t("Try another search or choose a different group.")}</p>
-          <button className={hosts.length === 0 ? "host-create" : "host-empty-reset"} data-depth disabled={busy} onClick={hosts.length === 0 ? addHost : () => { setSearch(""); setGroup(""); }}><Icon name={hosts.length === 0 ? "plus" : "close"} size={16} />{hosts.length === 0 ? t("New host") : t("Clear filters")}</button>
+          {(!favoritesOnly || hosts.length > 0) && <button className={hosts.length === 0 ? "host-create" : "host-empty-reset"} data-depth disabled={busy} onClick={hosts.length === 0 ? addHost : () => { setSearch(""); setGroup(""); }}><Icon name={hosts.length === 0 ? "plus" : "close"} size={16} />{hosts.length === 0 ? t("New host") : t("Clear filters")}</button>}
         </div>
       ) : (
-        <div className="hosts-grid" ref={grid} onKeyDown={moveSelection}>
+        <div className={`hosts-${view}`} ref={grid} onKeyDown={moveSelection}>
           {visible.map((h) => (
-            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
+            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onSftp={onSftp ? () => onSftp(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
           ))}
         </div>
       )}

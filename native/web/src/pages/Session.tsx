@@ -6,14 +6,15 @@ import { t } from "../i18n";
 
 const SftpView = lazy(() => import("./Sftp").then((module) => ({ default: module.SftpView })));
 
-export function SessionPage({ session, visible, blocked, onReconnect }: {
+export function SessionPage({ session, visible, blocked, initialView = "terminal", onReconnect }: {
   session: SessionInfo;
   visible: boolean;
   blocked: boolean;
+  initialView?: "terminal" | "sftp";
   onReconnect: () => void;
 }) {
-  const [view, setView] = useState<"terminal" | "sftp">("terminal");
-  const [sftpOpened, setSftpOpened] = useState(false);
+  const [view, setView] = useState<"terminal" | "sftp">(initialView);
+  const [sftpOpened, setSftpOpened] = useState(initialView === "sftp");
   return (
     <section className="session-page" role="tabpanel" id={`session-panel-${session.sessionId}`} hidden={!visible}>
       <SessionBar session={session} view={view} onViewChange={(next) => { setView(next); if (next === "sftp") setSftpOpened(true); }} />
