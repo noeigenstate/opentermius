@@ -13,10 +13,16 @@ configuration formats independent of visual changes.
 
 - Keep the workspace opaque (`--surface`) so the desktop wallpaper cannot turn
   its background muddy. Use glass for navigation and transient controls.
-- Reuse the shared neutral palette and blue accent. `--accent-fill` is darker
-  than the accent to give small white button labels sufficient contrast.
-- Use green/amber/red for actual state or thresholds, with a text label as well
-  as colour. Unknown metrics remain unknown; screenshots must not invent usage.
+- Colour lives only in the `:root` block of `styles.css`: the neutral scale
+  `--g0`..`--g9` and the semantic tokens (`--accent`, `--accent-fill`,
+  `--success`, `--danger`, `--surface`, `--sidebar`, tone tiles, ...) that
+  reference it. Rules elsewhere use semantic tokens only, with no hex or rgb
+  colour literals (rgba shadows of pure black are fine), so a palette change is a
+  token remap. Keep `--accent-fill` dark enough for small button labels.
+- State is never carried by hue alone: online is a filled dot with a bold label
+  (offline is a hollow dot), usage rings thicken from 70 % and gain a badge from
+  90 %, destructive actions use the outlined `btn-danger`. Unknown metrics
+  remain unknown; screenshots must not invent usage.
 - Keep shared control styles in `styles.css`, host workspace styles in
   `hosts.css`, and auxiliary workspace styles in `workspaces.css`. Replace
   obsolete rules when moving them instead of stacking conflicting overrides.
