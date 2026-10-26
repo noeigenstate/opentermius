@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./workspaces.css";
 import App from "./App";
+import { restoreTheme } from "./theme";
 
+restoreTheme();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />

@@ -10,6 +10,35 @@ import { Dialog } from "./Dialog";
 
 const FONT_FAMILY = '"Cascadia Mono", Consolas, monospace';
 
+function terminalTheme() {
+  const style = getComputedStyle(document.documentElement);
+  const color = (name: string) => style.getPropertyValue(`--term-${name}`).trim();
+  return {
+    background: color("background"),
+    foreground: color("foreground"),
+    cursor: color("cursor"),
+    cursorAccent: color("cursor-accent"),
+    selectionBackground: color("selection-background"),
+    selectionForeground: color("selection-foreground"),
+    black: color("black"),
+    red: color("red"),
+    green: color("green"),
+    yellow: color("yellow"),
+    blue: color("blue"),
+    magenta: color("magenta"),
+    cyan: color("cyan"),
+    white: color("white"),
+    brightBlack: color("bright-black"),
+    brightRed: color("bright-red"),
+    brightGreen: color("bright-green"),
+    brightYellow: color("bright-yellow"),
+    brightBlue: color("bright-blue"),
+    brightMagenta: color("bright-magenta"),
+    brightCyan: color("bright-cyan"),
+    brightWhite: color("bright-white"),
+  };
+}
+
 export function TerminalView({ sessionId, visible, ended, local, blocked, onReconnect }: {
   sessionId: string;
   visible: boolean;
@@ -31,20 +60,15 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
     const xterm = new Terminal({
       fontFamily: FONT_FAMILY, fontSize: 14, cursorBlink: true,
       scrollback: 10000, allowProposedApi: false,
-      theme: {
-        background: "#ffffff", foreground: "#1d1d1f", cursor: "#007aff", cursorAccent: "#ffffff",
-        selectionBackground: "#cce4ff", selectionForeground: "#1d1d1f",
-        black: "#263238", red: "#b91c1c", green: "#166534", yellow: "#854d0e",
-        blue: "#1d4ed8", magenta: "#86198f", cyan: "#0e7490", white: "#cbd5e1",
-        brightBlack: "#64748b", brightRed: "#dc2626", brightGreen: "#15803d", brightYellow: "#a16207",
-        brightBlue: "#2563eb", brightMagenta: "#a21caf", brightCyan: "#0891b2", brightWhite: "#f1f5f9",
-      },
+      theme: terminalTheme(),
     });
     const fit = new FitAddon();
     xterm.loadAddon(fit);
     xterm.loadAddon(new WebLinksAddon());
     xterm.open(element);
     terminal.current = xterm;
+    const themeObserver = new MutationObserver(() => { xterm.options.theme = terminalTheme(); });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     let disposed = false;
     let frame = 0;
     const report = (reason: unknown) => { if (!disposed) setError(String(reason)); };
@@ -138,6 +162,7 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      themeObserver.disconnect();
       unsubscribe();
       input.dispose();
       binary.dispose();

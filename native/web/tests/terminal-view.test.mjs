@@ -12,7 +12,19 @@ async function mountTerminal(context, initial = {}) {
   const frames = new Map();
   let nextFrame = 0;
   const observers = new Set();
+  const themeObservers = new Set();
+  const root = { dataset: { theme: "light" } };
   const globals = {
+    document: { documentElement: root },
+    getComputedStyle(element) {
+      assert.equal(element, root);
+      return { getPropertyValue(name) { return ` ${root.dataset.theme}:${name} `; } };
+    },
+    MutationObserver: class {
+      constructor(callback) { this.callback = callback; themeObservers.add(this); }
+      observe(element, options) { assert.equal(element, root); assert.deepEqual(options, { attributes: true, attributeFilter: ["data-theme"] }); }
+      disconnect() { themeObservers.delete(this); }
+    },
     requestAnimationFrame(callback) { const id = ++nextFrame; frames.set(id, callback); return id; },
     cancelAnimationFrame(id) { frames.delete(id); },
     ResizeObserver: class {
@@ -77,7 +89,7 @@ async function mountTerminal(context, initial = {}) {
       opens = 0;
       disposed = false;
       measured = false;
-      constructor() { instances.push(this); }
+      constructor(options) { this.options = options; instances.push(this); }
       loadAddon(addon) { addon.activate?.(this); }
       open() { this.opens++; this.measured = element.clientWidth > 0 && element.clientHeight > 0; }
       resize(cols, rows) {
@@ -133,12 +145,34 @@ async function mountTerminal(context, initial = {}) {
   }
   render();
   return {
-    mock, frames, render,
+    mock, frames, render, themeObservers,
+    theme(value) { root.dataset.theme = value; for (const observer of themeObservers) observer.callback(); },
     terminal: mock.instances[0],
     resize() { for (const observer of observers) observer.callback(); },
     flush() { const pending = [...frames.values()]; frames.clear(); for (const callback of pending) callback(); },
   };
 }
+
+test("terminal palette comes from CSS and changes in place with the resolved app theme", async (context) => {
+  const page = await mountTerminal(context);
+  const colors = {
+    background: "background", foreground: "foreground", cursor: "cursor", cursorAccent: "cursor-accent",
+    selectionBackground: "selection-background", selectionForeground: "selection-foreground",
+    black: "black", red: "red", green: "green", yellow: "yellow", blue: "blue", magenta: "magenta", cyan: "cyan", white: "white",
+    brightBlack: "bright-black", brightRed: "bright-red", brightGreen: "bright-green", brightYellow: "bright-yellow",
+    brightBlue: "bright-blue", brightMagenta: "bright-magenta", brightCyan: "bright-cyan", brightWhite: "bright-white",
+  };
+  const expected = theme => Object.fromEntries(Object.entries(colors).map(([key, token]) => [key, `${theme}:--term-${token}`]));
+  assert.deepEqual(page.terminal.options.theme, expected("light"));
+  page.render({ visible: false });
+  page.theme("dark");
+  assert.deepEqual(page.terminal.options.theme, expected("dark"));
+  assert.equal(page.mock.instances.length, 1);
+  page.theme("light");
+  assert.deepEqual(page.terminal.options.theme, expected("light"));
+  page.mock.unmount();
+  assert.equal(page.themeObservers.size, 0);
+});
 
 test("returning to a terminal repaints every row at unchanged geometry without new output or remounting", async (context) => {
   const page = await mountTerminal(context);

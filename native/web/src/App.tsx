@@ -12,6 +12,7 @@ import { HostsPage } from "./pages/Hosts";
 import { TerminalsPage } from "./pages/Terminals";
 import { PromptDialog } from "./components/PromptDialog";
 import { SurfaceEffects } from "./components/SurfaceEffects";
+import { followTheme } from "./theme";
 
 const SessionPage = lazy(() => import("./pages/Session").then((module) => ({ default: module.SessionPage })));
 import { KeychainPage } from "./pages/Keychain";
@@ -56,6 +57,8 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const updates = useUpdates(settings?.autoUpdate ?? false);
+
+  useEffect(() => { if (settings) return followTheme(settings); }, [settings?.appearance, settings?.themeSchedule, settings?.themeDayStart, settings?.themeNightStart]);
 
   useEffect(() => { sessionState.current = { sessions, activeSessionId }; if (activeSessionId) lastSessionId.current = activeSessionId; }, [sessions, activeSessionId]);
 

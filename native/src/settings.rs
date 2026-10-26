@@ -34,8 +34,10 @@ pub const KEEPALIVE_MAX: u32 = 3600;
 pub const CONNECTION_TIMEOUT_DEFAULT: u32 = 15;
 pub const CONNECTION_TIMEOUT_MIN: u32 = 1;
 pub const CONNECTION_TIMEOUT_MAX: u32 = 300;
+pub const THEME_DAY_START: &str = "07:00";
+pub const THEME_NIGHT_START: &str = "19:00";
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Appearance {
     #[default]
@@ -67,6 +69,17 @@ impl Appearance {
             Self::Dark => true,
             Self::System => system_dark,
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for Appearance {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        Ok(match value.trim().to_ascii_lowercase().as_str() {
+            "dark" => Self::Dark,
+            "system" => Self::System,
+            _ => Self::Light,
+        })
     }
 }
 
@@ -280,6 +293,9 @@ pub struct Settings {
     pub bell: BellMode,
     pub color_scheme: ColorScheme,
     pub appearance: Appearance,
+    pub theme_schedule: bool,
+    pub theme_day_start: String,
+    pub theme_night_start: String,
     pub gpu_rendering: bool,
     pub keepalive_seconds: u32,
     pub connection_timeout_seconds: u32,
@@ -301,6 +317,9 @@ impl Default for Settings {
             bell: BellMode::Visual,
             color_scheme: ColorScheme::Default,
             appearance: Appearance::default(),
+            theme_schedule: false,
+            theme_day_start: THEME_DAY_START.into(),
+            theme_night_start: THEME_NIGHT_START.into(),
             gpu_rendering: false,
             keepalive_seconds: KEEPALIVE_DEFAULT,
             connection_timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
@@ -312,8 +331,24 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub fn is_dark(&self, system_dark: bool) -> bool {
+        use chrono::Timelike;
+        if !self.theme_schedule {
+            return self.appearance.is_dark(system_dark);
+        }
+        let now = chrono::Local::now();
+        schedule_is_dark(&self.theme_day_start, &self.theme_night_start, now.hour() * 60 + now.minute())
+    }
+
     /// Clamp persisted or user-entered values to the ranges exposed by the UI.
     pub fn sanitize(&mut self) {
+        if theme_minutes(&self.theme_day_start).is_none()
+            || theme_minutes(&self.theme_night_start).is_none()
+            || self.theme_day_start == self.theme_night_start
+        {
+            self.theme_day_start = THEME_DAY_START.into();
+            self.theme_night_start = THEME_NIGHT_START.into();
+        }
         self.font_size = self.font_size.clamp(FONT_SIZE_MIN, FONT_SIZE_MAX);
         self.scrollback_lines = self.scrollback_lines.clamp(SCROLLBACK_MIN, SCROLLBACK_MAX);
         self.keepalive_seconds = self.keepalive_seconds.min(KEEPALIVE_MAX);
@@ -326,6 +361,26 @@ impl Settings {
         self.sanitize();
         self
     }
+}
+
+fn theme_minutes(value: &str) -> Option<u32> {
+    let bytes = value.as_bytes();
+    if bytes.len() != 5 || bytes[2] != b':'
+        || ![bytes[0], bytes[1], bytes[3], bytes[4]].iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    let hours = u32::from(bytes[0] - b'0') * 10 + u32::from(bytes[1] - b'0');
+    let minutes = u32::from(bytes[3] - b'0') * 10 + u32::from(bytes[4] - b'0');
+    (hours < 24 && minutes < 60).then_some(hours * 60 + minutes)
+}
+
+fn schedule_is_dark(day: &str, night: &str, minutes: u32) -> bool {
+    let (day, night) = match (theme_minutes(day), theme_minutes(night)) {
+        (Some(day), Some(night)) if day != night => (day, night),
+        _ => (7 * 60, 19 * 60),
+    };
+    if day < night { minutes < day || minutes >= night } else { minutes < day && minutes >= night }
 }
 
 /// Persist settings with rollback, returning the normalized values that were
@@ -454,6 +509,7 @@ mod tests {
             confirm_overwrite: false,
             show_hidden_files: false,
             auto_update: false,
+            ..Settings::default()
         };
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("data.json");
@@ -468,6 +524,9 @@ mod tests {
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             let mut remaining = legacy["settings"].clone();
             remaining.as_object_mut().unwrap().remove("glassEffect");
+            remaining["themeSchedule"] = false.into();
+            remaining["themeDayStart"] = THEME_DAY_START.into();
+            remaining["themeNightStart"] = THEME_NIGHT_START.into();
             assert_eq!(saved["settings"], remaining);
             assert_eq!(
                 crate::store::Store::open(path.clone()).unwrap().data.settings,
@@ -510,10 +569,108 @@ mod tests {
             "showHiddenFiles",
             "connectionTimeoutSeconds",
             "colorScheme",
+            "themeSchedule",
+            "themeDayStart",
+            "themeNightStart",
         ] {
             assert!(json.contains(key), "missing {key} in {json}");
         }
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+    }
+
+    #[test]
+    fn schedule_defaults_sanitizes_and_round_trips() {
+        let old: Settings = serde_json::from_str(r#"{"appearance":"system"}"#).unwrap();
+        assert!(!old.theme_schedule);
+        assert_eq!(old.theme_day_start, THEME_DAY_START);
+        assert_eq!(old.theme_night_start, THEME_NIGHT_START);
+        for (day, night) in [("", "19:00"), ("24:00", "19:00"), ("07:00", "12:60"), ("7:00", "19:00"), ("07:00", "07:00"), ("07:00", "12:0０")] {
+            let mut settings = Settings { theme_day_start: day.into(), theme_night_start: night.into(), ..Settings::default() };
+            settings.sanitize();
+            assert_eq!(settings.theme_day_start, THEME_DAY_START);
+            assert_eq!(settings.theme_night_start, THEME_NIGHT_START);
+        }
+        let settings = Settings { appearance: Appearance::System, theme_schedule: true, theme_day_start: "20:00".into(), theme_night_start: "06:00".into(), ..Settings::default() };
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = crate::store::Store::open(temp.path().join("data.json")).unwrap();
+        assert_eq!(persist(&mut store, settings.clone()).unwrap(), settings);
+        assert_eq!(crate::store::Store::open(store.path.clone()).unwrap().data.settings, settings);
+        assert_eq!(serde_json::to_string(&settings.appearance).unwrap(), "\"system\"");
+    }
+
+    #[test]
+    fn scheduled_settings_remain_readable_with_legacy_appearance_values() {
+        #[derive(Debug, PartialEq, Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        enum LegacyAppearance { Light, Dark, System }
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct LegacySettings { appearance: LegacyAppearance, font_size: u16 }
+
+        for (appearance, legacy, key) in [
+            (Appearance::Light, LegacyAppearance::Light, "light"),
+            (Appearance::Dark, LegacyAppearance::Dark, "dark"),
+            (Appearance::System, LegacyAppearance::System, "system"),
+        ] {
+            let settings = Settings { appearance, theme_schedule: true, font_size: 20, ..Settings::default() };
+            let json = serde_json::to_string(&settings).unwrap();
+            let saved: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(saved["appearance"], key);
+            assert_ne!(saved["appearance"], "schedule");
+            assert_eq!(saved["themeSchedule"], true);
+            let old: LegacySettings = serde_json::from_str(&json).unwrap();
+            assert_eq!(old.appearance, legacy);
+            assert_eq!(old.font_size, 20);
+        }
+    }
+
+    #[test]
+    fn unknown_appearance_loads_as_light_and_preserves_other_settings() {
+        let expected = Settings { font_size: 20, theme_schedule: true, theme_day_start: "08:30".into(), theme_night_start: "20:15".into(), ..Settings::default() };
+        let mut data = serde_json::json!({ "version": 2, "hosts": [], "settings": expected });
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("data.json");
+        for value in ["sepia", "schedule"] {
+            data["settings"]["appearance"] = value.into();
+            std::fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+            let store = crate::store::Store::open(path.clone()).unwrap();
+            assert_eq!(store.data.settings.appearance, Appearance::Light);
+            assert_eq!(store.data.settings, expected);
+        }
+    }
+
+    #[test]
+    fn schedule_overrides_appearance_and_system_preference() {
+        use chrono::Timelike;
+        let now = chrono::Local::now();
+        let minutes = now.hour() * 60 + now.minute();
+        let day = (minutes + 1439) % 1440;
+        let night = (minutes + 1) % 1440;
+        for appearance in [Appearance::Light, Appearance::Dark, Appearance::System] {
+            for system_dark in [false, true] {
+                let mut settings = Settings { appearance, ..Settings::default() };
+                assert_eq!(settings.is_dark(system_dark), appearance.is_dark(system_dark));
+                settings.theme_schedule = true;
+                settings.theme_day_start = format!("{:02}:{:02}", day / 60, day % 60);
+                settings.theme_night_start = format!("{:02}:{:02}", night / 60, night % 60);
+                assert!(!settings.is_dark(system_dark));
+                std::mem::swap(&mut settings.theme_day_start, &mut settings.theme_night_start);
+                assert!(settings.is_dark(system_dark));
+            }
+        }
+    }
+
+    #[test]
+    fn schedule_uses_inclusive_day_and_exclusive_night_with_midnight_wrap() {
+        for (day, night, minutes, dark) in [
+            ("07:00", "19:00", 419, true), ("07:00", "19:00", 420, false),
+            ("07:00", "19:00", 1139, false), ("07:00", "19:00", 1140, true),
+            ("20:00", "06:00", 0, false), ("20:00", "06:00", 359, false),
+            ("20:00", "06:00", 360, true), ("20:00", "06:00", 1199, true),
+            ("20:00", "06:00", 1200, false), ("bad", "bad", 420, false),
+        ] {
+            assert_eq!(schedule_is_dark(day, night, minutes), dark);
+        }
     }
 
     #[test]

@@ -49,18 +49,22 @@ unsafe extern "system" {
     fn DestroyIcon(icon: *mut c_void) -> i32;
 }
 
-pub fn configure(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+pub fn configure(window: &tauri::WebviewWindow, settings: &opentermius::settings::Settings) -> tauri::Result<()> {
     // Tao's undecorated shadow reserves non-client insets outside the WebView.
     window.set_shadow(false)?;
     update_icons(&window.as_ref().window())?;
     if native_corners(&window.as_ref().window())? {
-        window.set_background_color(Some(tauri::window::Color(238, 241, 246, 255)))?;
+        window.set_background_color(Some(startup_background(settings.is_dark(opentermius::settings::system_dark()))))?;
     } else {
         // Blur paints square corners. Let the WebView composite its rounded
         // contour directly onto the desktop through a transparent native window.
         window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)))?;
     }
     update_shape(&window.as_ref().window())
+}
+
+fn startup_background(dark: bool) -> tauri::window::Color {
+    if dark { tauri::window::Color(24, 24, 27, 255) } else { tauri::window::Color(246, 246, 246, 255) }
 }
 
 pub fn update_icons(window: &tauri::Window) -> tauri::Result<()> {
@@ -154,6 +158,11 @@ pub fn update_shape(window: &tauri::Window) -> tauri::Result<()> {
         window.is_fullscreen()?,
     );
     if let Some(webview) = window.get_webview_window(window.label()) {
+        webview.eval(if native_corners {
+            "document.documentElement.dataset.windowBackground = 'opaque';"
+        } else {
+            "document.documentElement.dataset.windowBackground = 'transparent';"
+        })?;
         webview.eval(match shape {
             "round" => "document.documentElement.dataset.windowShape = 'round';",
             _ => "document.documentElement.dataset.windowShape = 'square';",
@@ -173,6 +182,12 @@ fn window_shape(native_corners: bool, maximized: bool, fullscreen: bool) -> &'st
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_background_matches_resolved_theme() {
+        assert_eq!(startup_background(false), tauri::window::Color(246, 246, 246, 255));
+        assert_eq!(startup_background(true), tauri::window::Color(24, 24, 27, 255));
+    }
 
     #[test]
     fn css_rounds_only_restored_windows_without_native_corners() {

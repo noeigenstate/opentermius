@@ -111,6 +111,15 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
     <fieldset className="settings-fields" disabled={saving || busy || recovery}>
       <Group title="Appearance" icon="settings">
         <label className="settings-row"><span>{t("Language")}</span><select aria-label={t("Language")} value={settings.language} onChange={e => change("language", e.target.value as Settings["language"])}><option value="en">{t("English")}</option><option value="zh-CN">{t("Simplified Chinese")}</option><option value="system">{t("System")}</option></select></label>
+        <label className="settings-row"><span>{t("Theme")}</span><select aria-label={t("Theme")} value={settings.themeSchedule ? "schedule" : settings.appearance} onChange={e => {
+          const value = e.target.value;
+          setError("");
+          void onChange({ ...settings, appearance: value === "schedule" ? settings.appearance : value as Settings["appearance"], themeSchedule: value === "schedule" }).catch(e => setError(String(e)));
+        }}><option value="light">{t("White background, black text")}</option><option value="dark">{t("Black background, white text")}</option><option value="system">{t("Follow system")}</option><option value="schedule">{t("Day/night by time")}</option></select></label>
+        {settings.themeSchedule && <>
+          <label className="settings-row"><span>{t("Light from")}</span><input type="time" aria-label={t("Light from")} value={settings.themeDayStart} onChange={e => change("themeDayStart", e.target.value)} /></label>
+          <label className="settings-row"><span>{t("Dark from")}</span><input type="time" aria-label={t("Dark from")} value={settings.themeNightStart} onChange={e => change("themeNightStart", e.target.value)} /></label>
+        </>}
       </Group>
       <Group title="Terminal" icon="terminal">
         <NumberSetting label="Font size" value={settings.fontSize} min={10} max={24} onChange={v => change("fontSize", v)} />

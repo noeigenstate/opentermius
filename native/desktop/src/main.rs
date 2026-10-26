@@ -48,7 +48,9 @@ fn main() {
             {
                 use tauri::Manager;
                 if let Some(window) = _app.get_webview_window("main") {
-                    window_frame::configure(&window)?;
+                    let state = _app.state::<AppState>();
+                    let store = state.store().map_err(std::io::Error::other)?;
+                    window_frame::configure(&window, &store.data.settings)?;
                 }
             }
             Ok(())

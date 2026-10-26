@@ -43,6 +43,7 @@ async function createApp() {
     export const PromptDialog = "PromptDialog", SurfaceEffects = "SurfaceEffects", Icon = "Icon";
     export function t(text) { return text; }
     export function setLanguage() {}
+    export function followTheme() { return () => {}; }
     export function useUpdates() { return {}; }
     export async function getSettings() { return { language: "en" }; }
     export async function saveSettings(next) { return next; }

@@ -11,6 +11,9 @@ export interface Settings {
   bell: "none" | "visual";
   colorScheme: "default" | "solarized-dark" | "monokai" | "light";
   appearance: "light" | "dark" | "system";
+  themeSchedule: boolean;
+  themeDayStart: string;
+  themeNightStart: string;
   gpuRendering: boolean;
   keepaliveSeconds: number;
   connectionTimeoutSeconds: number;

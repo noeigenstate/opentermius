@@ -278,7 +278,7 @@ fn malformed_recovery_errors_do_not_echo_payload_secrets() {
         ..Default::default()
     })
     .unwrap();
-    data["settings"]["appearance"] = serde_json::json!(secret);
+    data["settings"]["language"] = serde_json::json!(secret);
     let payload = serde_json::json!({"data": data, "keyFiles": {}, "emptySecrets": []});
     let mut compressed =
         miniz_oxide::deflate::compress_to_vec_zlib(&serde_json::to_vec(&payload).unwrap(), 6);
