@@ -25,7 +25,7 @@ function NavItem({ id, label, icon, active, onSelect }: { id: Section; label: st
 export function Sidebar({ section, onSelect }: { section: Section | null; onSelect: (s: Section) => void }) {
   return (
     <nav className="sidebar" aria-label={t("Navigation")}>
-      <div className="sidebar-brand"><span className="brand-mark"><Icon name="logo" size={27} /></span><span>{t("OpenTermius")}</span></div>
+      <div className="sidebar-brand"><span className="brand-mark"><Icon name="logo" size={34} /></span><span>{t("OpenTermius")}</span></div>
       <div className="nav-list" data-index={items.findIndex((item) => item.id === section)}>
         <span className="nav-indicator" aria-hidden="true" />
         {items.slice(0, 3).map((item) => (
