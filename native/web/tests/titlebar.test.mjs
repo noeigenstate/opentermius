@@ -57,3 +57,11 @@ test("session strip passes every existing tab handler through unchanged", () => 
   assert.deepEqual(child.props, tabs);
   assert.equal(Tabs(child.props).props.children[0].props.role, "tablist");
 });
+
+test("without tabs the bar keeps only its drag area and window controls", () => {
+  const bar = TitleBar({});
+  assert.equal(bar.props.children[0].props.className, "titlebar-tabs");
+  assert.equal(bar.props.children[0].props.children, undefined);
+  assert.equal(bar.props.children[1].props["data-tauri-drag-region"], true);
+  assert.equal(bar.props.children.slice(2).length, 3);
+});

@@ -139,6 +139,12 @@ export default function App() {
       setFailedHostIds((current) => { const next = new Set(current); next.delete(hostId); return next; });
     }, hostId);
   };
+  /** Shows the host's newest connected session; connects when it has none. */
+  const openHostSession = (hostId: string) => {
+    const session = sessions.filter((item) => item.hostId === hostId && !item.local && item.connected).at(-1);
+    if (session) setActiveSessionId(session.sessionId);
+    else connect(hostId);
+  };
 
   useEffect(() => {
     let active = true;
@@ -190,7 +196,8 @@ export default function App() {
       <div className="app-body">
         <Sidebar section={activeSessionId ? null : section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
         <div className="workspace-shell">
-          <TitleBar tabs={{ sessions, activeSessionId, onSelect: setActiveSessionId,
+          {/* Host management and terminals stay apart: the Hosts page enters sessions from its cards, not from tabs. */}
+          <TitleBar tabs={!activeSessionId && (section === "hosts" || section === "favorites") ? undefined : { sessions, activeSessionId, onSelect: setActiveSessionId,
             onNew: openLocal,
             onReconnect: reconnect,
             onDuplicate: (id) => { void run(id, async () => { await addSession(await duplicateSession(id)); }); },
@@ -199,7 +206,7 @@ export default function App() {
           <main className={`content${activeSessionId ? " session-content" : ""}`}>
             {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button className="icon-button icon-button-sm" aria-label={t("Dismiss")} onClick={() => setError("")}><Icon name="close" size={14} /></button></div>}
             <div id="hosts-panel" hidden={activeSessionId !== null}>
-              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} onLocalTerminal={openLocal} usageByHost={usageByHost} connectionStates={connectionStates} />
+              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onOpenSession={openHostSession} onSftp={(id) => connect(id, "sftp")} onLocalTerminal={openLocal} usageByHost={usageByHost} connectionStates={connectionStates} />
                 : section === "keychain" ? <KeychainPage />
                 : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
                 : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />

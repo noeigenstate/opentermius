@@ -301,3 +301,27 @@ test("host cards render all three connection labels and show usage only while co
     assert.deepEqual(byClass(card, "host-metrics")[0].props.children.map(ring => ring.props.value), connectionState === "connected" ? [10, 20, 30] : [null, null, null]);
   }
 });
+
+test("connected hosts enter their open session from the card; the menu keeps a new connection", async (context) => {
+  const { render, mock } = await createPage(context);
+  const calls = [];
+  const props = { hosts: [host("a"), host("b")], onConnect: (id) => calls.push(["connect", id]), onOpenSession: (id) => calls.push(["open", id]), connectionStates: new Map([["a", "connected"]]) };
+  const elements = () => byClass(render(props), "hosts-grid")[0].props.children;
+  const [online, offline] = elements().map((element) => element.type(element.props));
+  const button = (card) => byClass(card, "host-connect")[0];
+  assert.equal(button(online).props.children[1], "Open terminal");
+  assert.equal(button(offline).props.children[1], "Connect");
+  button(online).props.onClick({ stopPropagation() {} });
+  button(offline).props.onClick({ stopPropagation() {} });
+  online.props.onDoubleClick();
+  elements()[0].props.onSelect();
+  byClass(render(props), "hosts-grid")[0].props.onKeyDown({ key: "Enter", target: {}, preventDefault() {} });
+  assert.deepEqual(calls.splice(0), [["open", "a"], ["connect", "b"], ["open", "a"], ["open", "a"]]);
+  for (const [index, label, id] of [[0, "New session", "a"], [1, "Connect", "b"]]) {
+    elements()[index].props.onMenu(0, 0);
+    const item = findAll(render(props), (node) => node.type === mock.Menu)[0].props.items.find((entry) => entry.icon === "prompt");
+    assert.equal(item.label, label);
+    item.onSelect();
+    assert.deepEqual(calls.splice(0), [["connect", id]]);
+  }
+});

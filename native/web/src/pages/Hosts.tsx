@@ -118,7 +118,7 @@ function HostCard({ host, usage, connectionState, selected, busy, onSelect, onCo
         <UsageRing value={online ? usage.disk : null} label={t("Disk")} />
       </div>
       <div className="host-card-actions">
-        <button className="btn btn-l btn-tonal host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t("Connect")}</button>
+        <button className="btn btn-l btn-tonal host-connect" disabled={!onConnect} data-tooltip={t(online ? "Switch to the open SSH session" : "Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t(online ? "Open terminal" : "Connect")}</button>
       </div>
     </article>
   );
@@ -129,6 +129,8 @@ interface Props {
   favoritesOnly?: boolean;
   onHostsChange?: (hosts: Host[]) => void;
   onConnect?: (hostId: string) => void;
+  /** Shows a connected host's open session; the card's main action uses it instead of a second connection. */
+  onOpenSession?: (hostId: string) => void;
   onSftp?: (hostId: string) => void;
   onLocalTerminal?: () => void;
   onQuickConnect?: (draft: HostDraft) => void;
@@ -137,8 +139,9 @@ interface Props {
   connectionStates?: ReadonlyMap<string, "connected" | "lost">;
 }
 
-export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onSftp, onLocalTerminal, onQuickConnect, usageByHost = {}, connectionStates = new Map<string, "connected" | "lost">() }: Props) {
+export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onOpenSession, onSftp, onLocalTerminal, onQuickConnect, usageByHost = {}, connectionStates = new Map<string, "connected" | "lost">() }: Props) {
   const hosts = useMemo(() => filterFavorites(allHosts, favoritesOnly), [allHosts, favoritesOnly]);
+  const openHost = (hostId: string) => (connectionStates.get(hostId) === "connected" && onOpenSession ? onOpenSession : onConnect)?.(hostId);
   const viewKey = favoritesOnly ? "favorites-view" : "hosts-view";
   const [view, setView] = useState<"grid" | "list">(() => {
     try { return localStorage.getItem(viewKey) === "list" ? "list" : "grid"; }
@@ -360,7 +363,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
       }
       return;
     }
-    if (event.key === "Enter" && index >= 0) { event.preventDefault(); onConnect?.(selected); return; }
+    if (event.key === "Enter" && index >= 0) { event.preventDefault(); openHost(selected); return; }
     if (event.key === "Delete" && index >= 0) { event.preventDefault(); askDelete(visible[index]); return; }
     const columns = view === "list" || !grid.current ? 1 : getComputedStyle(grid.current).gridTemplateColumns.split(" ").length;
     const delta = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : event.key === "ArrowUp" ? -columns : event.key === "ArrowDown" ? columns : 0;
@@ -418,7 +421,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
       ) : (
         <div className={`hosts-${view}`} ref={grid} onKeyDown={moveSelection} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={dropDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag} onClickCapture={blockDragClick} onDoubleClickCapture={blockDragClick} onContextMenuCapture={blockDragClick}>
           {visible.map((h) => (
-            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} connectionState={connectionStates.get(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
+            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} connectionState={connectionStates.get(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => openHost(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
           ))}
         </div>
       )}
@@ -426,7 +429,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
         { label: t("Edit"), icon: "edit", onSelect: () => edit(menu.host.id) },
         { label: t("Duplicate"), icon: "copy", onSelect: () => duplicate(menu.host.id) },
         { label: t("Delete"), icon: "trash", danger: true, onSelect: () => askDelete(menu.host) },
-        { label: t("Connect"), icon: "prompt", disabled: !onConnect, onSelect: () => onConnect?.(menu.host.id) },
+        { label: t(connectionStates.get(menu.host.id) === "connected" ? "New session" : "Connect"), icon: "prompt", disabled: !onConnect, onSelect: () => onConnect?.(menu.host.id) },
         { label: t("Open SFTP"), icon: "folder", disabled: !onSftp, onSelect: () => onSftp?.(menu.host.id) },
       ]} />}
       {editor && <HostEditor initial={editor} groups={groups} onClose={() => setEditor(null)} onSaved={async (hostId) => { setSelected(hostId); await refresh(); }} onConnect={onConnect} />}

@@ -161,8 +161,11 @@ test("App clears a thrown failure when an existing ended tab is explicitly close
   find(app.render(), "HostsPage").props.onConnect("host-fixture");
   await flush();
   assert.equal(state(app), "lost");
+  // The Hosts page has no tab strip; close the tab from another page.
+  find(app.render(), "Sidebar").props.onSelect("logs");
   find(app.render(), "TitleBar").props.tabs.onClose("session-fixture");
   await flush();
+  find(app.render(), "Sidebar").props.onSelect("hosts");
   assert.equal(state(app), undefined);
 });
 
@@ -200,4 +203,26 @@ test("App replays early failures, keeps reconnecting at default, and retains dro
   find(app.render(), "TitleBar").props.tabs.onClose("session-fixture");
   await flush();
   assert.equal(state(app), undefined);
+});
+
+test("the Hosts page hides tabs and enters a connected host's open session", async () => {
+  const app = await createApp();
+  app.render();
+  await flush();
+  const hostsPage = () => find(app.render(), "HostsPage").props;
+  const tabs = () => find(app.render(), "TitleBar").props.tabs;
+  assert.equal(tabs(), undefined);
+  app.mock.setSessions([session()]);
+  hostsPage().onConnect("host-fixture");
+  await flush();
+  app.mock.emit({ type: "status", sessionId: "session-fixture", connected: true, ended: false, error: false, message: "" });
+  assert.equal(tabs().activeSessionId, "session-fixture");
+  find(app.render(), "Sidebar").props.onSelect("favorites");
+  assert.equal(tabs(), undefined);
+  find(app.render(), "Sidebar").props.onSelect("logs");
+  assert.equal(tabs().activeSessionId, null, "other pages keep the tab strip");
+  find(app.render(), "Sidebar").props.onSelect("hosts");
+  hostsPage().onOpenSession("host-fixture");
+  assert.equal(tabs().activeSessionId, "session-fixture");
+  assert.equal(tabs().sessions.length, 1, "entering a connected host must not open a second session");
 });
