@@ -78,7 +78,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             hosts::list_hosts, hosts::get_host, hosts::save_host, hosts::delete_host,
-            hosts::set_host_favorite, hosts::duplicate_host, hosts::rename_group, hosts::list_keychain_keys,
+            hosts::reorder_hosts, hosts::set_host_favorite, hosts::duplicate_host, hosts::rename_group, hosts::list_keychain_keys,
             hosts::parse_quick_connect,
             sessions::connect_host, sessions::open_local_terminal, sessions::reconnect_session,
             sessions::duplicate_session, sessions::session_input, sessions::session_resize,

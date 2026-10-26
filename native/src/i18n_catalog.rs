@@ -350,6 +350,7 @@ pub(super) const MESSAGES: &[(&str, &str)] = &[
     ("Host list is missing", "缺少主机列表"),
     ("Host list was not updated", "主机列表未更新"),
     ("Host not found", "主机不存在"),
+    ("Host order must include every saved host exactly once", "主机顺序必须包含每个已保存的主机，且不能重复"),
     ("Host saved", "主机已保存"),
     ("Host search failed", "主机搜索失败"),
     ("Import SSH private key", "导入 SSH 私钥"),

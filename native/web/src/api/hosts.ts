@@ -52,6 +52,7 @@ export const listHosts = () => invoke<Host[]>("list_hosts");
 export const getHost = (id: string) => invoke<HostDraft>("get_host", { id });
 export const saveHost = (draft: HostDraft) => invoke<string>("save_host", { draft });
 export const deleteHost = (id: string) => invoke<void>("delete_host", { id });
+export const reorderHosts = (ids: string[]) => invoke<void>("reorder_hosts", { ids });
 export const setHostFavorite = (id: string, favorite: boolean) => invoke<void>("set_host_favorite", { id, favorite });
 export const duplicateHost = (id: string) => invoke<string>("duplicate_host", { id });
 export const renameGroup = (old: string, next: string) => invoke<void>("rename_group", { old, new: next });

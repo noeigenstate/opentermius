@@ -163,6 +163,11 @@ pub fn delete_host(state: tauri::State<'_, AppState>, id: String) -> Result<(), 
 }
 
 #[tauri::command]
+pub fn reorder_hosts(state: tauri::State<'_, AppState>, ids: Vec<String>) -> Result<(), String> {
+    hosts::reorder_hosts(&mut *state.store()?, &ids).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn set_host_favorite(state: tauri::State<'_, AppState>, id: String, favorite: bool) -> Result<(), String> {
     hosts::set_favorite(&mut *state.store()?, &id, favorite).map_err(|error| error.to_string())
 }

@@ -328,6 +328,28 @@ pub fn update_os(store: &mut Store, id: &str, os: Option<&str>) -> Result<bool> 
     Ok(true)
 }
 
+/// Reorders all saved hosts, restoring the previous order if persistence fails.
+pub fn reorder_hosts(store: &mut Store, ids: &[String]) -> Result<()> {
+    let positions: BTreeMap<&str, usize> = ids
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (id.as_str(), index))
+        .collect();
+    ensure!(
+        ids.len() == store.data.hosts.len()
+            && positions.len() == ids.len()
+            && store.data.hosts.iter().all(|profile| positions.contains_key(profile.id.as_str())),
+        "{}", crate::i18n::t("Host order must include every saved host exactly once")
+    );
+    let previous = store.data.hosts.clone();
+    store.data.hosts.sort_by_key(|profile| positions[profile.id.as_str()]);
+    if let Err(error) = store.persist() {
+        store.data.hosts = previous;
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Sets the saved favorite flag, restoring it if persistence fails.
 pub fn set_favorite(store: &mut Store, id: &str, favorite: bool) -> Result<()> {
     let index = store.data.hosts.iter().position(|profile| profile.id == id)
@@ -545,6 +567,54 @@ mod tests {
         .normalized();
         assert_eq!((view.mode.as_str(), view.sort.as_str()), ("grid", "name"));
         assert_eq!(HostsView::default().view_mode(), ViewMode::Grid);
+    }
+
+    #[test]
+    fn reorder_hosts_valid_permutation_persists() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("data.json");
+        let mut store = Store::open(path.clone()).unwrap();
+        store.data.hosts = vec![profile("a", "A"), profile("b", "B"), profile("c", "C")];
+        let previous = store.data.hosts.clone();
+        reorder_hosts(&mut store, &["c".into(), "a".into(), "b".into()]).unwrap();
+        let reopened = Store::open(path).unwrap();
+        assert_eq!(
+            serde_json::to_value(&reopened.data.hosts).unwrap(),
+            serde_json::to_value([&previous[2], &previous[0], &previous[1]]).unwrap()
+        );
+    }
+
+    #[test]
+    fn reorder_hosts_invalid_input_leaves_store_unchanged() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = Store::open(temp.path().join("data.json")).unwrap();
+        store.data.hosts = vec![profile("a", "A"), profile("b", "B"), profile("c", "C")];
+        store.persist().unwrap();
+        let previous = serde_json::to_value(&store.data).unwrap();
+        let saved = std::fs::read(&store.path).unwrap();
+        for ids in [vec!["a", "b"], vec!["a", "b", "unknown"], vec!["a", "a", "c"], vec!["a", "b", "c", "extra"], vec![]] {
+            let ids: Vec<String> = ids.into_iter().map(String::from).collect();
+            let error = reorder_hosts(&mut store, &ids).unwrap_err();
+            assert_eq!(error.to_string(), crate::i18n::t("Host order must include every saved host exactly once"));
+            assert_eq!(serde_json::to_value(&store.data).unwrap(), previous);
+            assert_eq!(std::fs::read(&store.path).unwrap(), saved);
+        }
+    }
+
+    #[test]
+    fn reorder_hosts_save_failure_restores_previous_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut store = Store::open(temp.path().join("data.json")).unwrap();
+        store.data.hosts = vec![profile("a", "A"), profile("b", "B"), profile("c", "C")];
+        store.persist().unwrap();
+        let saved_path = store.path.clone();
+        let saved = std::fs::read(&saved_path).unwrap();
+        let previous = serde_json::to_value(&store.data).unwrap();
+        // A file cannot be the parent directory of the saved configuration.
+        store.path = saved_path.join("blocked.json");
+        assert!(reorder_hosts(&mut store, &["c".into(), "a".into(), "b".into()]).is_err());
+        assert_eq!(serde_json::to_value(&store.data).unwrap(), previous);
+        assert_eq!(std::fs::read(saved_path).unwrap(), saved);
     }
 
     #[test]
