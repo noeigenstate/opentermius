@@ -1,17 +1,18 @@
 /* Tokens, window shell, sidebar and the controls every page shares.
-   Only the neutral scale and the icon palette below hold raw colour. Every rule
-   elsewhere uses the semantic tokens, so the colour pass is a remap of this one :root block. */
+   Only the :root block (light) and the :root[data-theme="dark"] block below it hold raw colour: the neutral
+   scale, the icon palette, the tone tiles and the terminal palette. Every rule elsewhere uses the semantic
+   tokens, so a colour pass is a remap of those two blocks. No data-theme attribute means light. */
 :root {
   --g0: #ffffff; /* cards, raised surfaces, text on dark */
-  --g1: #fafafa; /* sidebar, table headers */
-  --g2: #f3f3f3; /* workspace, input fills */
+  --g1: #fbfbfb; /* sidebar, table headers */
+  --g2: #f6f6f6; /* workspace, input fills */
   --g3: #eaeaea; /* tonal fills, chips, inactive pills, tracks */
   --g4: #d9d9d9; /* hairlines, selected fills */
   --g5: #b3b3b3; /* disabled, strong borders */
-  --g6: #8a8a8a; /* muted icons, unknown values */
-  --g7: #5a5a5a; /* secondary text, resting icons */
-  --g8: #2c2c2c; /* primary text, solid fills */
-  --g9: #111111; /* strongest ink */
+  --g6: #696969; /* muted text and unknown values (4.5:1 on every surface and tonal fill) */
+  --g7: #4f4f4f; /* secondary text, resting icons */
+  --g8: #1a1a1a; /* primary text, solid fills */
+  --g9: #000000; /* strongest ink */
 
   --text: var(--g8);
   --ink: var(--g9);
@@ -23,6 +24,8 @@
   --card: var(--g0);
   --panel: var(--g1);
   --card-border: var(--g4);
+  --card-hover: var(--g2); /* a card-coloured control or row under the pointer */
+  --thumb: var(--g0); /* the sliding thumb of a segmented control */
   --border-strong: var(--g5);
   --divider: var(--g3);
   --hover: var(--g3);
@@ -72,12 +75,21 @@
   --tone-orange: var(--g3);
   --tone-pink: var(--g4);
   --tone-cyan: var(--g2);
+  --tile-ink: var(--icon-default); /* glyph on a tone tile that has no OS brand colour */
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .05), 0 6px 18px rgba(0, 0, 0, .04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .06), 0 6px 18px rgba(0, 0, 0, .05);
   --shadow-hover: 0 14px 30px rgba(0, 0, 0, .12), 0 2px 5px rgba(0, 0, 0, .05);
   --shadow-selected: 0 14px 30px rgba(0, 0, 0, .16);
   --shadow-menu: 0 16px 40px rgba(0, 0, 0, .2);
   --shadow-dialog: 0 28px 70px rgba(0, 0, 0, .35);
+
+  /* Terminal palette, read by TerminalView through getComputedStyle. */
+  --term-background: #ffffff; --term-foreground: #1d1d1f; --term-cursor: #007aff; --term-cursor-accent: #ffffff;
+  --term-selection-background: #cce4ff; --term-selection-foreground: #1d1d1f;
+  --term-black: #263238; --term-red: #b91c1c; --term-green: #166534; --term-yellow: #854d0e;
+  --term-blue: #1d4ed8; --term-magenta: #86198f; --term-cyan: #0e7490; --term-white: #cbd5e1;
+  --term-bright-black: #64748b; --term-bright-red: #dc2626; --term-bright-green: #15803d; --term-bright-yellow: #a16207;
+  --term-bright-blue: #2563eb; --term-bright-magenta: #a21caf; --term-bright-cyan: #0891b2; --term-bright-white: #f1f5f9;
 
   --strip-height: 44px;
   --duration-fast: 150ms;
@@ -90,6 +102,60 @@
   color: var(--text);
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Dark theme (黑底白字). The scale runs dark to light and keeps the roles above: cards sit above the workspace, so surfaces
+   rise as they get lighter. Every token that references the scale follows it; only values that cannot are redefined here.
+   Surface #18181b matches the native window background chosen for dark. */
+:root[data-theme="dark"] {
+  --g0: #202024;
+  --g1: #1b1b1f;
+  --g2: #18181b;
+  --g3: #2a2a30;
+  --g4: #3a3a41;
+  --g5: #55555e;
+  --g6: #9a9aa3;
+  --g7: #bdbdc5;
+  --g8: #ececf0;
+  --g9: #ffffff;
+
+  --card-hover: #27272c;
+  --thumb: var(--g4);
+  --scrim: rgba(0, 0, 0, .62);
+  --selection: var(--g5);
+
+  --icon-default: #aab3c5;
+  --icon-secondary: #8b95a9;
+  --icon-disabled: #6b7488;
+  --icon-active: #60a5fa;
+  --icon-hover: #93c5fd;
+  --icon-success: #4ade80;
+  --icon-warning: #fbbf24;
+  --icon-error: #f87171;
+
+  /* Official brand colours include black and navy, so host tiles become light plates: every logo keeps its own colour. */
+  --tone-blue: #e4e4e7;
+  --tone-purple: #d4d4d8;
+  --tone-green: #f4f4f5;
+  --tone-orange: #e4e4e7;
+  --tone-pink: #d4d4d8;
+  --tone-cyan: #f4f4f5;
+  --tile-ink: #475467;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .28);
+  --shadow-hover: 0 14px 30px rgba(0, 0, 0, .5), 0 2px 5px rgba(0, 0, 0, .3);
+  --shadow-selected: 0 0 0 1px var(--g6), 0 14px 30px rgba(0, 0, 0, .55);
+  --shadow-menu: 0 16px 40px rgba(0, 0, 0, .6);
+  --shadow-dialog: 0 28px 70px rgba(0, 0, 0, .7);
+
+  /* The terminal background equals --g0, so the card padding around it has no seam. */
+  --term-background: #202024; --term-foreground: #e4e4e7; --term-cursor: #60a5fa; --term-cursor-accent: #202024;
+  --term-selection-background: #33496b; --term-selection-foreground: #f4f4f5;
+  --term-black: #52525b; --term-red: #f87171; --term-green: #4ade80; --term-yellow: #facc15;
+  --term-blue: #60a5fa; --term-magenta: #d8a0f5; --term-cyan: #22d3ee; --term-white: #d4d4d8;
+  --term-bright-black: #8b8b95; --term-bright-red: #fca5a5; --term-bright-green: #86efac; --term-bright-yellow: #fde68a;
+  --term-bright-blue: #93c5fd; --term-bright-magenta: #e9c4fb; --term-bright-cyan: #67e8f9; --term-bright-white: #fafafa;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -167,7 +233,7 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .btn-danger { padding: 0 13px; color: var(--danger-fg); background: var(--danger-bg); border: 2px solid var(--danger-edge); box-shadow: none; }
 .btn-l.btn-danger { padding: 0 23px; }
 .btn-s.btn-danger { padding: 0 9px; border-width: 1.5px; }
-.btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+.btn:hover:not(:disabled) { background: var(--card-hover); border-color: var(--border-strong); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; box-shadow: 0 8px 18px rgba(0, 0, 0, .26); }
 .btn-tonal:hover:not(:disabled) { background: var(--accent-soft-hover); border-color: transparent; }
 .btn-ghost:hover:not(:disabled) { color: var(--ink); background: var(--hover); border-color: transparent; }
@@ -197,7 +263,7 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .icon-button-sm { --size: 22px; border-radius: 7px; }
 .icon-button-lg { --size: 42px; border-radius: 10px; }
 .icon-button-boxed { border: 1px solid var(--card-border); background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
-.icon-button-boxed:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+.icon-button-boxed:hover:not(:disabled) { background: var(--card-hover); border-color: var(--border-strong); }
 .icon-button-boxed:active:not(:disabled) { background: var(--hover); }
 .icon-button-boxed[aria-pressed="true"] { background: var(--selected); border-color: var(--selected-ring); box-shadow: inset 0 0 0 1px var(--selected-ring); }
 @media (hover: hover) and (pointer: fine) { .icon-button-boxed:hover:not(:disabled):not(:active) { transform: translateY(-1px); } }
@@ -216,7 +282,7 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .pill[aria-pressed="true"] .pill-count { color: var(--text); font-weight: 700; }
 
 .segmented { position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px; border-radius: 10px; background: var(--accent-soft); }
-.segmented::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 8px) / 2); border-radius: 7px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 1px 3px rgba(0, 0, 0, .15); transition: transform 180ms var(--ease-out); }
+.segmented::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 8px) / 2); border-radius: 7px; background: var(--thumb); box-shadow: 0 0 0 1px var(--card-border), 0 1px 3px rgba(0, 0, 0, .15); transition: transform 180ms var(--ease-out); }
 .segmented:has(> :nth-child(2)[aria-pressed="true"])::before { transform: translateX(calc(100% + 2px)); }
 .segmented > button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 29px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--secondary); }
 .segmented > button[aria-pressed="true"] { color: var(--ink); font-weight: 700; }
@@ -301,7 +367,7 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .terminal-notice { position: absolute; bottom: 19px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); padding: 9px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 8px 24px rgba(0, 0, 0, .18); transform: translateX(-50%); }
 .terminal-error { bottom: 67px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; box-shadow: inset 4px 0 0 var(--danger), 0 0 0 1.5px var(--danger), 0 8px 24px rgba(0, 0, 0, .18); }
 .terminal-error > svg { color: var(--icon-error); }
-.reconnect-hint:hover:not(:disabled) { background: var(--surface); }
+.reconnect-hint:hover:not(:disabled) { background: var(--card-hover); }
 .session-sftp { flex: 1; min-height: 0; overflow: auto; }
 
 /* --- Fields and switches --------------------------------------------------------- */
@@ -369,7 +435,7 @@ input[role="switch"]:disabled { opacity: .45; cursor: default; }
 }
 @media (forced-colors: active) {
   /* Icons fall back to system colours: statuses are told apart by their labels and the "!" badge, not hue. */
-  :root { --icon-default: CanvasText; --icon-secondary: CanvasText; --icon-disabled: GrayText; --icon-active: Highlight; --icon-hover: Highlight; --icon-success: CanvasText; --icon-warning: CanvasText; --icon-error: CanvasText; }
+  :root, :root[data-theme="dark"] { --icon-default: CanvasText; --icon-secondary: CanvasText; --icon-disabled: GrayText; --icon-active: Highlight; --icon-hover: Highlight; --icon-success: CanvasText; --icon-warning: CanvasText; --icon-error: CanvasText; }
   .nav-indicator, .tab-active, .pill[aria-pressed="true"] { outline: 1px solid Highlight; }
   .dot { border: 1px solid CanvasText; }
   .dot-online, .dot-busy { background: Highlight; }

@@ -32,7 +32,7 @@
 .log-table td { height: 50px; padding: 0 13px; white-space: nowrap; color: var(--secondary); border-bottom: 1px solid var(--divider); }
 .log-table tr:last-child td { border-bottom: 0; }
 .log-table td:nth-child(2) { font-weight: 600; color: var(--text); }
-.log-table tbody tr:hover td { background: var(--surface); }
+.log-table tbody tr:hover td { background: var(--card-hover); }
 .log-table td .feature-mono { margin: 0; font-size: 11px; }
 /* Long errors wrap inside their column instead of pushing Actions out of the card. */
 .log-table td.log-error { min-width: 168px; padding-top: 8px; padding-bottom: 8px; white-space: normal; line-height: 1.45; font-weight: 600; color: var(--ink); }
@@ -100,7 +100,7 @@
 .sftp-table th button { display: flex; align-items: center; gap: 4px; width: 100%; height: 30px; padding: 0 10px; text-align: left; }
 .sftp-table td { height: 34px; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary); border-bottom: 1px solid var(--surface); }
 .sftp-table td:first-child { padding: 0; font-weight: 500; color: var(--text); }
-.sftp-table tbody tr:hover td { background: var(--surface); }
+.sftp-table tbody tr:hover td { background: var(--card-hover); }
 .sftp-table tr.sftp-selected td { font-weight: 600; color: var(--ink); background: var(--selected); }
 .sftp-table tr.sftp-selected td:first-child { box-shadow: inset 3px 0 0 var(--selected-edge); }
 .sftp-file { display: flex; align-items: center; gap: 8px; width: 100%; height: 33px; padding: 0 10px; text-align: left; }

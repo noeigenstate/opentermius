@@ -16,21 +16,31 @@ const SPEC = {
   "--icon-error": "#b42318",
 };
 
+const declarations = (block, prefix) => Object.fromEntries([...block.matchAll(new RegExp(`(--${prefix}[a-z-]*):\s*([^;]+);`, "g"))].map(([, name, value]) => [name, value.trim().toLowerCase()]));
+const lightBlock = css["styles.css"].match(/^:root \{([^}]*)\}/m)?.[1] ?? "";
+const darkBlock = css["styles.css"].match(/^:root\[data-theme="dark"\] \{([^}]*)\}/m)?.[1] ?? "";
+
 test("the :root block defines exactly the eight icon colours of the spec", () => {
-  const root = css["styles.css"].match(/^:root \{([^}]*)\}/m)?.[1] ?? "";
-  const icons = Object.fromEntries([...root.matchAll(/(--icon-[a-z]+):\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim().toLowerCase()]));
-  assert.deepEqual(icons, SPEC);
+  assert.deepEqual(declarations(lightBlock, "icon-"), SPEC);
 });
 
-test("rules outside :root use colour tokens only, never raw colours", () => {
+test("rules outside the theme blocks use colour tokens only, never raw colours", () => {
   for (const [file, text] of Object.entries(css)) {
-    const rules = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^:root \{[^}]*\}/m, "");
-    assert.doesNotMatch(rules, /#[0-9a-f]{3,8}\b/i, `${file} holds a hex colour outside :root`);
-    assert.doesNotMatch(rules, /\b(?:rgb|hsl)a?\((?!\s*0,\s*0,\s*0\b)/i, `${file} holds a raw colour function outside :root`);
+    const rules = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^:root(?:\[data-theme="dark"\])? \{[^}]*\}/gm, "");
+    assert.doesNotMatch(rules, /#[0-9a-f]{3,8}\b/i, `${file} holds a hex colour outside the theme blocks`);
+    assert.doesNotMatch(rules, /\b(?:rgb|hsl)a?\((?!\s*0,\s*0,\s*0\b)/i, `${file} holds a raw colour function outside the theme blocks`);
   }
 });
 
-test("forced colours remap every icon token to a system colour", () => {
-  const block = css["styles.css"].match(/@media \(forced-colors: active\) \{\s*(?:\/\*[\s\S]*?\*\/\s*)?:root \{([^}]*)\}/)?.[1] ?? "";
+test("the dark theme redefines the icon palette and both themes define the same terminal palette", () => {
+  assert.deepEqual(Object.keys(declarations(darkBlock, "icon-")), Object.keys(SPEC));
+  const light = declarations(lightBlock, "term-");
+  assert.equal(Object.keys(light).length, 22);
+  assert.deepEqual(Object.keys(declarations(darkBlock, "term-")), Object.keys(light));
+  assert.match(darkBlock, /color-scheme:\s*dark;/);
+});
+
+test("forced colours remap every icon token to a system colour, in both themes", () => {
+  const block = css["styles.css"].match(/@media \(forced-colors: active\) \{\s*(?:\/\*[\s\S]*?\*\/\s*)?:root, :root\[data-theme="dark"\] \{([^}]*)\}/)?.[1] ?? "";
   for (const name of Object.keys(SPEC)) assert.match(block, new RegExp(`${name}: (?:CanvasText|GrayText|Highlight);`), `${name} keeps a raw colour in forced-colors mode`);
 });
