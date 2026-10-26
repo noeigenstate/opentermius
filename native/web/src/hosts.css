@@ -22,7 +22,8 @@
 .host-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .host-card-selected::after { box-shadow: var(--shadow-selected); opacity: 1; }
 @media (hover: hover) and (pointer: fine) {
-  .host-card:hover { z-index: 1; transform: translateY(-3px); border-color: var(--border-strong); }
+  /* 4px lands on whole device pixels at 100-200 % scaling; fractional lifts blur the border and corners. */
+  .host-card:hover { z-index: 1; transform: translateY(-4px); border-color: var(--border-strong); }
   .host-card:hover::after { opacity: 1; }
 }
 
@@ -91,7 +92,7 @@
 .hosts-list .icon-button-lg { --size: 35px; }
 .hosts-list .ring { gap: 1px; font-size: 10px; }
 .hosts-list .ring svg { width: 30px; height: 30px; }
-@media (hover: hover) and (pointer: fine) { .hosts-list .host-card:hover { transform: translateY(-2px); } }
+@media (hover: hover) and (pointer: fine) { .hosts-list .host-card:hover { transform: translateY(-4px); } }
 @media (max-width: 1160px) { .hosts-list .host-card-labels { display: none; } }
 @media (max-width: 1000px) {
   .hosts-list .host-card { grid-template-columns: 42px minmax(0, 176px) minmax(0, 1fr) 0 0 83px 26px; }
