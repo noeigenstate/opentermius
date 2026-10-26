@@ -15,15 +15,18 @@ OpenTermius keeps your hosts, keys and settings on your device, with no product 
 ### Features
 
 - **Hosts**: groups, tags, favorites and search, plus `ssh user@host` quick connect from the search box. Grid and list views. Reorder hosts by dragging a card (or with Alt+Arrow keys). Each card shows the detected operating system, the SSH state (connected, not connected, connection lost) and live CPU, memory and disk usage while connected.
-- **Terminals**: SSH and local PTY sessions in tabs, rendered with xterm.js. The Hosts page only manages hosts; open sessions live under **Terminals**. On a connected host, **Open terminal** returns to its running session, and the host menu's **New session** opens another one. Tabs can be reconnected, duplicated and closed.
+- **Terminals**: SSH and local PTY sessions in tabs, rendered with xterm.js. The Hosts page only manages hosts; open sessions and their tab strip live only under **Terminals**. On a connected host, **Open terminal** returns to its running session, and the host menu's **New session** opens another one. Tabs can be reconnected, duplicated and closed; closing the current tab moves to its neighbour. Terminal colours follow the app theme, and multi-line pastes always ask for confirmation.
 - **SFTP**: a two-pane file view for every SSH session with upload, download, rename, new folder and delete. Transfers queue up to eight tasks and can be cancelled. Overwrites ask for confirmation, and hidden files can be shown.
 - **Keychain**: generate keys or import existing private keys (with optional passphrase), copy or export public keys and see which hosts use each key.
 - **Snippets**: save frequently used commands and paste them into the active terminal.
 - **Logs**: connection history with filtering and **Connect again**.
-- **Settings**: English, Simplified Chinese or the system language; terminal font size, scrollback, cursor blink, copy on select, multi-line paste confirmation, bell and colour scheme; keepalive and connection timeout; automatic update checks.
+- **Themes**: white background with black text, black background with white text, follow the system, or switch by time of day (light from 07:00 and dark from 19:00 by default, both adjustable).
+- **Settings**: English, Simplified Chinese or the system language; keepalive and connection timeout; SFTP overwrite confirmation and hidden files; automatic update checks. The terminal font size, scrollback, cursor blink, copy-on-select, bell and colour-scheme preferences are saved but not yet applied by the terminal.
 - **Import and backup**: import hosts from JSON, Xshell sessions or WindTerm `user.sessions`; export hosts without credentials; encrypted backup and restore with a recovery code.
 
 Keyboard on the Hosts page: arrow keys move the selection, Enter connects (or opens the running terminal), Delete removes a host, Alt+Arrow moves it.
+
+<p align="center"><img src="docs/screenshots/readme-hosts-dark.png" width="860" alt="Hosts page in the black background, white text theme"></p>
 
 ### Security and privacy
 
@@ -99,7 +102,7 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` embeds `web/dist` into the executable; a plain release build does not. `native/installer/installer.nsi` packages `target/release/opentermius.exe` (honouring Cargo's configured target directory) into `native/releases/OpenTermius-<version>-windows-x64-setup.exe` and `checksums.json`. Tauri's own bundler stays disabled. See [packaging details](native/installer/README.md) for NSIS discovery, a cached bootstrapper and `-SkipBuild`.
 
-The canonical version is `native/desktop/tauri.conf.json` (currently `0.7.0`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the release workflow, which builds, verifies and publishes the installer and `checksums.json` in the format the updater reads. Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
+The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.0`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the release workflow, which builds, verifies and publishes the installer and `checksums.json` in the format the updater reads. Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
 
 `native/installer/verify-install.ps1` checks silent install, overwrite upgrade, shortcuts, registration, uninstall and configuration retention on a clean Windows account. It refuses to run over a real installation.
 
@@ -112,12 +115,13 @@ OpenTermius 是轻量、本地优先的 SSH/SFTP 桌面客户端。主机、密�
 ### 功能
 
 - **主机**：分组、标签、收藏和搜索，可在搜索框直接输入 `ssh user@host` 快速连接；支持网格和列表视图；拖动卡片（或 Alt+方向键）调整顺序。卡片显示自动识别的操作系统、SSH 状态（已连接、未连接、连接断开），连接后实时显示 CPU、内存和磁盘用量。
-- **终端管理**：SSH 和本地 PTY 会话以标签页展示，终端使用 xterm.js。主机页只管理主机，已打开的会话统一放在“终端管理”中。已连接的主机点击“进入终端”回到正在运行的会话；需要第二个会话时，在主机菜单中选择“创建新连接”。标签页支持重新连接、复制和关闭。
+- **终端管理**：SSH 和本地 PTY 会话以标签页展示，终端使用 xterm.js。主机页只管理主机，已打开的会话及其标签栏只在“终端管理”中显示。已连接的主机点击“进入终端”回到正在运行的会话；需要第二个会话时，在主机菜单中选择“创建新连接”。标签页支持重新连接、复制和关闭，关闭当前标签会切换到相邻标签。终端配色跟随应用主题，粘贴多行内容时总会先确认。
 - **SFTP**：每个 SSH 会话都有本地/远程双栏文件视图，支持上传、下载、重命名、新建文件夹和删除；传输队列最多 8 个任务，可取消；覆盖前确认，可显示隐藏文件。
 - **密钥管理**：生成密钥或导入已有私钥（可设口令），复制或导出公钥，并查看哪些主机在使用。
 - **代码片段**：保存常用命令，一键粘贴到当前终端。
 - **连接日志**：可筛选的连接历史，支持“重新连接”。
-- **设置**：英文、简体中文或跟随系统；终端字号、回滚行数、光标闪烁、选中即复制、多行粘贴确认、提示音和配色；保活间隔与连接超时；自动检查更新。
+- **主题**：白底黑字、黑底白字、跟随系统，或按昼夜自动切换（默认 07:00 浅色、19:00 深色，时间可调）。
+- **设置**：英文、简体中文或跟随系统；保活间隔与连接超时；SFTP 覆盖确认与显示隐藏文件；自动检查更新。终端字号、回滚行数、光标闪烁、选中即复制、提示音和配色等偏好会被保存，但终端暂未应用。
 - **导入与备份**：从 JSON、Xshell 会话目录或 WindTerm `user.sessions` 导入主机；导出主机（不含凭据）；使用恢复码加密备份与恢复。
 
 主机页快捷键：方向键移动选中，Enter 连接（已连接时进入终端），Delete 删除主机，Alt+方向键调整顺序。
@@ -196,6 +200,6 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` 会把 `web/dist` 内嵌进程序，普通 release 构建不会内嵌。`native/installer/installer.nsi` 将 `target/release/opentermius.exe`（遵循 Cargo 配置的目标目录）打包为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 与 `checksums.json`，不使用 Tauri 自带安装器。详细参数见 [安装程序说明](native/installer/README.md)。
 
-版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.7.0`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发发布流程：构建、验证并发布安装包和更新器读取的 `checksums.json`。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
+版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.0`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发发布流程：构建、验证并发布安装包和更新器读取的 `checksums.json`。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
 
 在干净的 Windows 账号运行 `native/installer/verify-install.ps1` 可验证静默安装、覆盖升级、快捷方式、注册项、卸载和配置保留；发现真实安装时脚本会拒绝运行。
