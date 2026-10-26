@@ -367,6 +367,18 @@ export async function verifyUi({ port = 9337, output }) {
       assert.equal(styles.primaryTransform, 'none', 'Idle primary buttons must release their transform.');
       return styles;
     });
+    await check('icon-colours-follow-the-spec', async () => {
+      const icons = await cdp.evaluate(`(() => {
+        const root = getComputedStyle(document.documentElement);
+        const tokens = Object.fromEntries(['default', 'secondary', 'disabled', 'active', 'hover', 'success', 'warning', 'error'].map(name => [name, root.getPropertyValue('--icon-' + name).trim().toLowerCase()]));
+        const colour = selector => getComputedStyle(document.querySelector(selector)).color;
+        return { tokens, active: colour('.nav-active .nav-icon svg'), resting: colour('.nav-item:not(.nav-active) .nav-icon svg') };
+      })()`);
+      assert.deepEqual(icons.tokens, { default: '#475467', secondary: '#667085', disabled: '#98a2b3', active: '#2563eb', hover: '#1d4ed8', success: '#15803d', warning: '#b45309', error: '#b42318' });
+      assert.equal(icons.active, 'rgb(37, 99, 235)', 'The current sidebar icon must use the active icon colour.');
+      assert.equal(icons.resting, 'rgb(71, 84, 103)', 'A resting sidebar icon must use the default icon colour.');
+      return icons;
+    });
     await check('no-perpetual-decorative-animation', async () => {
       const state = await animations();
       assert.equal(state.infinite, 0, 'Found an animation with infinite iterations.');

@@ -219,6 +219,7 @@ test("host cards render all three connection labels and show usage only while co
     assert.equal(status.props.children[1], label);
     assert.equal(status.props.className.includes("is-connected"), connectionState === "connected");
     assert.equal(byClass(card, "dot-online").length, connectionState === "connected" ? 1 : 0);
+    assert.equal(byClass(card, "dot-lost").length, connectionState === "lost" ? 1 : 0);
     assert.deepEqual(byClass(card, "host-metrics")[0].props.children.map(ring => ring.props.value), connectionState === "connected" ? [10, 20, 30] : [null, null, null]);
   }
 });

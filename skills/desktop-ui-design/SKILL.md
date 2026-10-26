@@ -19,6 +19,10 @@ configuration formats independent of visual changes.
   reference it. Rules elsewhere use semantic tokens only, with no hex or rgb
   colour literals (rgba shadows of pure black are fine), so a palette change is a
   token remap. Keep `--accent-fill` dark enough for small button labels.
+- Icon colour has its own tokens: eight `--icon-*` values (`default`, `secondary`,
+  `disabled`, `active`, `hover`, `success`, `warning`, `error`) colour every
+  standalone icon. Icons inside filled or inverting buttons inherit the label
+  colour, and forced colours remap the tokens to system colours.
 - State is never carried by hue alone: online is a filled dot with a bold label
   (offline is a hollow dot), usage rings thicken from 70 % and gain a badge from
   90 %, destructive actions use the outlined `btn-danger`. Unknown metrics

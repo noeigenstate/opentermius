@@ -1,6 +1,6 @@
 /* Tokens, window shell, sidebar and the controls every page shares.
-   Only the neutral scale below holds raw colour. Every rule elsewhere uses the
-   semantic tokens, so the colour pass is a remap of this one :root block. */
+   Only the neutral scale and the icon palette below hold raw colour. Every rule
+   elsewhere uses the semantic tokens, so the colour pass is a remap of this one :root block. */
 :root {
   --g0: #ffffff; /* cards, raised surfaces, text on dark */
   --g1: #fafafa; /* sidebar, table headers */
@@ -52,17 +52,27 @@
   --danger-bg-hover: var(--g9);
   --danger-fg-hover: var(--g0);
 
+  /* Icon palette: every icon takes its colour from these eight; text, surfaces and fills stay neutral. */
+  --icon-default: #475467;   /* resting icons, buttons, OS glyphs */
+  --icon-secondary: #667085; /* supporting glyphs: search, chevrons, empty states */
+  --icon-disabled: #98a2b3;  /* disabled controls, not-connected dots */
+  --icon-active: #2563eb;    /* current nav item, active tab, selected toggles, favourites */
+  --icon-hover: #1d4ed8;     /* resting icon buttons and nav items under pointer or keyboard focus */
+  --icon-success: #15803d;   /* connected, saved, success notices */
+  --icon-warning: #b45309;   /* warnings, ring above 70 % */
+  --icon-error: #b42318;     /* errors, lost connections, ring above 90 % */
+
   --ring-track: var(--g3);
   --ring-ok: var(--g8);
-  --ring-warn: var(--g8);
-  --ring-crit: var(--g9);
+  --ring-warn: var(--icon-warning);
+  --ring-crit: var(--icon-error);
 
-  --tone-blue: var(--g3);   --tone-blue-ink: var(--g8);
-  --tone-purple: var(--g4); --tone-purple-ink: var(--g8);
-  --tone-green: var(--g2);  --tone-green-ink: var(--g8);
-  --tone-orange: var(--g3); --tone-orange-ink: var(--g8);
-  --tone-pink: var(--g4);   --tone-pink-ink: var(--g8);
-  --tone-cyan: var(--g2);   --tone-cyan-ink: var(--g8);
+  --tone-blue: var(--g3);
+  --tone-purple: var(--g4);
+  --tone-green: var(--g2);
+  --tone-orange: var(--g3);
+  --tone-pink: var(--g4);
+  --tone-cyan: var(--g2);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, .05), 0 6px 18px rgba(0, 0, 0, .04);
   --shadow-hover: 0 14px 30px rgba(0, 0, 0, .12), 0 2px 5px rgba(0, 0, 0, .05);
@@ -110,7 +120,8 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .app[data-glass="false"] .sidebar { background: var(--panel); }
 .nav-list { position: relative; display: flex; flex-direction: column; gap: 8px; }
 .nav-item { position: relative; z-index: 1; display: flex; align-items: center; gap: 16px; height: 48px; padding: 0 21px 0 20px; border-radius: 11px; text-align: left; font-size: 14.5px; color: var(--secondary); transition: background-color var(--duration-fast), color var(--duration-fast), transform 70ms; }
-.nav-icon { display: grid; transition: color var(--duration-fast); }
+.nav-icon { display: grid; color: var(--icon-default); transition: color var(--duration-fast); }
+.nav-active .nav-icon { color: var(--icon-active); }
 .nav-item:hover { color: var(--ink); background: var(--hover); }
 .nav-item:active { background: var(--pressed); transform: scale(.98); }
 .nav-active, .nav-active:hover, .nav-active:active { color: var(--ink); font-weight: 700; background: transparent; }
@@ -129,9 +140,10 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 /* --- Session strip: tabs on the left, window controls flush right ------------ */
 .titlebar { height: var(--strip-height); flex: none; display: flex; align-items: center; padding-left: 16px; user-select: none; }
 .titlebar-spacer { flex: 1; min-width: 24px; height: 100%; }
-.chrome { display: grid; place-items: center; flex: none; width: 48px; height: var(--strip-height); color: var(--secondary); transition: background-color 120ms, color 120ms; }
+.chrome { display: grid; place-items: center; flex: none; width: 48px; height: var(--strip-height); color: var(--icon-default); transition: background-color 120ms, color 120ms; }
 .chrome svg { stroke-width: 1.4; }
-.chrome:hover { color: var(--ink); background: var(--hover); }
+.chrome:hover { background: var(--hover); }
+/* Close is a dark fill on hover, so its icon takes the on-accent label colour instead of the hover blue. */
 .chrome-close:hover { color: var(--on-accent); background: var(--accent-fill); }
 
 /* --- Page ------------------------------------------------------------------- */
@@ -168,18 +180,27 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .btn:disabled { color: var(--disabled); background: var(--hover); border-color: var(--hover); box-shadow: none; }
 .btn-ghost:disabled { background: transparent; border-color: transparent; }
 .btn-danger:disabled { background: transparent; border-color: var(--card-border); }
+/* Icons beside a label take the default icon colour; primary (filled) and danger (inverts on hover) keep the label colour. */
+.btn:not(.btn-primary, .btn-danger) svg { color: var(--icon-default); transition: color var(--duration-fast); }
+.btn:disabled svg { color: var(--icon-disabled); }
 @media (hover: hover) and (pointer: fine) { .btn:hover:not(:disabled):not(:active) { transform: translateY(-1px); } }
 
-.icon-button { --size: 32px; display: grid; place-items: center; flex: none; width: var(--size); height: var(--size); border-radius: 9px; color: var(--secondary); transition: transform 120ms var(--ease-out), background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
-.icon-button:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.icon-button { --size: 32px; display: grid; place-items: center; flex: none; width: var(--size); height: var(--size); border-radius: 9px; color: var(--icon-default); transition: transform 120ms var(--ease-out), background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
+.icon-button:hover:not(:disabled) { background: var(--hover); }
 .icon-button:active:not(:disabled) { background: var(--pressed); transform: scale(.94); transition-duration: 70ms; }
-.icon-button:disabled { color: var(--disabled); }
+.icon-button:disabled { color: var(--icon-disabled); }
+.icon-button[aria-pressed="true"] { color: var(--icon-active); }
+/* Pointer hover and keyboard focus lift a resting icon to the hover colour; active and disabled icons keep theirs. */
+.nav-item:focus-visible:not(.nav-active) .nav-icon, .chrome:focus-visible:not(.chrome-close), .icon-button:focus-visible:not(:disabled, [aria-pressed="true"]) { color: var(--icon-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover:not(.nav-active) .nav-icon, .chrome:hover:not(.chrome-close), .icon-button:hover:not(:disabled, [aria-pressed="true"]) { color: var(--icon-hover); }
+}
 .icon-button-sm { --size: 22px; border-radius: 7px; }
 .icon-button-lg { --size: 42px; border-radius: 10px; }
 .icon-button-boxed { border: 1px solid var(--card-border); background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
 .icon-button-boxed:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
 .icon-button-boxed:active:not(:disabled) { background: var(--hover); }
-.icon-button-boxed[aria-pressed="true"] { color: var(--ink); background: var(--selected); border-color: var(--selected-ring); box-shadow: inset 0 0 0 1px var(--selected-ring); }
+.icon-button-boxed[aria-pressed="true"] { background: var(--selected); border-color: var(--selected-ring); box-shadow: inset 0 0 0 1px var(--selected-ring); }
 @media (hover: hover) and (pointer: fine) { .icon-button-boxed:hover:not(:disabled):not(:active) { transform: translateY(-1px); } }
 
 .pills { display: flex; align-items: center; gap: 13px; min-width: 0; }
@@ -200,8 +221,10 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .segmented:has(> :nth-child(2)[aria-pressed="true"])::before { transform: translateX(calc(100% + 2px)); }
 .segmented > button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 29px; padding: 0 14px; border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--secondary); }
 .segmented > button[aria-pressed="true"] { color: var(--ink); font-weight: 700; }
+.segmented > button svg { color: var(--icon-default); }
+.segmented > button[aria-pressed="true"] svg { color: var(--icon-active); }
 
-.search { display: flex; align-items: center; gap: 10px; width: 306px; height: 40px; padding: 0 13px; border: 1px solid var(--card-border); border-radius: 10px; color: var(--secondary); background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .04); font-size: 14px; transition: border-color var(--duration-fast), box-shadow var(--duration-fast); }
+.search { display: flex; align-items: center; gap: 10px; width: 306px; height: 40px; padding: 0 13px; border: 1px solid var(--card-border); border-radius: 10px; color: var(--icon-secondary); background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .04); font-size: 14px; transition: border-color var(--duration-fast), box-shadow var(--duration-fast); }
 .search:hover { border-color: var(--border-strong); }
 .search:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px var(--card-border); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: inherit; }
@@ -209,18 +232,22 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 
 .chip { display: inline-flex; align-items: center; flex: none; height: 22px; max-width: 100px; padding: 0 10px; border-radius: 11px; font-size: 11px; font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--secondary); background: var(--accent-soft); }
 
-.dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--border-strong); }
-.dot-online { background: var(--success); box-shadow: none; }
-.dot-busy { background: conic-gradient(var(--success) 0 50%, var(--card-border) 0); box-shadow: none; }
+/* Status dots: filled green is connected, a hollow grey ring is not connected, a hollow red ring is a lost connection. */
+.dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--icon-disabled); }
+.dot-online { background: var(--icon-success); box-shadow: none; }
+.dot-lost { box-shadow: inset 0 0 0 2px var(--icon-error); }
+.dot-busy { background: conic-gradient(var(--icon-success) 0 50%, var(--icon-disabled) 0); box-shadow: none; }
 
 .banner { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 11px 14px; border-radius: 11px; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--card-border); }
 .banner > svg { flex: none; margin-top: 3px; }
 .banner > :is(span, div) { flex: 1; min-width: 0; }
 .banner-error { color: var(--ink); background: var(--card); box-shadow: inset 4px 0 0 var(--danger), 0 0 0 1.5px var(--danger); }
 .banner-ok { background: var(--accent-soft); box-shadow: none; }
+.banner-error > svg { color: var(--icon-error); }
+.banner-ok > svg { color: var(--icon-success); }
 
 .empty-state { display: flex; flex-direction: column; align-items: center; padding-top: 77px; text-align: center; }
-.empty-glyph { display: grid; place-items: center; width: 70px; height: 70px; margin-bottom: 21px; border-radius: 21px; color: var(--secondary); background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 6px 14px rgba(0, 0, 0, .06); }
+.empty-glyph { display: grid; place-items: center; width: 70px; height: 70px; margin-bottom: 21px; border-radius: 21px; color: var(--icon-secondary); background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 6px 14px rgba(0, 0, 0, .06); }
 .empty-state h2 { margin: 0; font-size: 21px; line-height: 27px; font-weight: 700; letter-spacing: -.3px; }
 .empty-state p { max-width: 368px; margin: 8px 0 22px; font-size: 14px; line-height: 1.6; color: var(--secondary); }
 
@@ -241,7 +268,8 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .tab-active, .tab-active:hover { color: var(--ink); font-weight: 700; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 3px 8px rgba(0, 0, 0, .08); }
 .session-tab-select { display: flex; align-items: center; flex: 1; gap: 6px; min-width: 0; height: 100%; text-align: left; }
 .session-tab-select:focus-visible { outline: none; }
-.tab-icon { display: grid; place-items: center; flex: none; width: 16px; height: 16px; }
+.tab-icon { display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--icon-default); }
+.tab-active .tab-icon { color: var(--icon-active); }
 .session-tab-title { overflow: hidden; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
 .tab-off .session-tab-title { color: var(--muted); }
 .tab-off.tab-active .session-tab-title { color: var(--secondary); }
@@ -257,8 +285,9 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .menu button:hover:not(:disabled), .menu button:focus-visible { color: var(--ink); background: var(--hover); }
 .menu button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus); }
 .menu button:disabled { color: var(--disabled); }
-.menu button svg { flex: none; color: var(--secondary); }
-.menu .menu-danger, .menu .menu-danger svg { color: var(--ink); }
+.menu button svg { flex: none; color: var(--icon-default); }
+.menu button:disabled svg { color: var(--icon-disabled); }
+.menu .menu-danger { color: var(--ink); }
 .menu-danger { font-weight: 700; }
 
 /* --- Session page ------------------------------------------------------------- */
@@ -272,6 +301,7 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .xterm-container .xterm { height: 100%; }
 .terminal-notice { position: absolute; bottom: 19px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); padding: 9px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 8px 24px rgba(0, 0, 0, .18); transform: translateX(-50%); }
 .terminal-error { bottom: 67px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; box-shadow: inset 4px 0 0 var(--danger), 0 0 0 1.5px var(--danger), 0 8px 24px rgba(0, 0, 0, .18); }
+.terminal-error > svg { color: var(--icon-error); }
 .reconnect-hint:hover:not(:disabled) { background: var(--surface); }
 .session-sftp { flex: 1; min-height: 0; overflow: auto; }
 
@@ -342,6 +372,8 @@ input[role="switch"]:disabled { opacity: .45; cursor: default; }
   .sidebar { background: var(--panel); }
 }
 @media (forced-colors: active) {
+  /* Icons fall back to system colours: statuses are told apart by shape (filled, hollow, "!"), not hue. */
+  :root { --icon-default: CanvasText; --icon-secondary: CanvasText; --icon-disabled: GrayText; --icon-active: Highlight; --icon-hover: Highlight; --icon-success: CanvasText; --icon-warning: CanvasText; --icon-error: CanvasText; }
   .nav-indicator, .tab-active, .pill[aria-pressed="true"] { outline: 1px solid Highlight; }
   .dot { border: 1px solid CanvasText; }
   .dot-online, .dot-busy { background: Highlight; }

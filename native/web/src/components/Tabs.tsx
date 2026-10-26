@@ -55,7 +55,7 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
           <div className={`session-tab${activeSessionId === session.sessionId ? " tab-active" : ""}${session.connected ? "" : " tab-off"}`} key={session.sessionId}>
             <button className="session-tab-select" role="tab" aria-selected={activeSessionId === session.sessionId}
               tabIndex={activeSessionId === session.sessionId || (activeSessionId === null && index === 0) ? 0 : -1} aria-controls={`session-panel-${session.sessionId}`} title={session.title} onClick={() => onSelect(session.sessionId)}>
-              <span className="tab-icon">{session.local ? <Icon name="prompt" size={14} /> : <span className={`dot${session.connected ? " dot-online" : ""}`} role="img" aria-label={t(session.connected ? "Connected" : "Disconnected")} />}</span>
+              <span className="tab-icon">{session.local ? <Icon name="prompt" size={14} /> : <span className={`dot${session.connected ? " dot-online" : session.ended ? " dot-lost" : ""}`} role="img" aria-label={t(session.connected ? "Connected" : session.ended ? "Connection lost" : "Disconnected")} />}</span>
               <span className="session-tab-title">{session.title}</span>
             </button>
             <button className="icon-button tab-action" data-tooltip={t("Session menu")} aria-label={t("Session menu")} aria-expanded={menu?.sessionId === session.sessionId} onClick={(event) => {

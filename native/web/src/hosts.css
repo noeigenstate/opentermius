@@ -27,13 +27,13 @@
 }
 
 .host-card-header { display: flex; align-items: flex-start; gap: 14px; }
-.host-server-glyph { display: grid; place-items: center; flex: none; width: 51px; height: 51px; border-radius: 13px; color: var(--tone-ink); background: var(--tone); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
-.host-server-glyph[data-tone="blue"] { --tone: var(--tone-blue); --tone-ink: var(--tone-blue-ink); }
-.host-server-glyph[data-tone="purple"] { --tone: var(--tone-purple); --tone-ink: var(--tone-purple-ink); }
-.host-server-glyph[data-tone="green"] { --tone: var(--tone-green); --tone-ink: var(--tone-green-ink); }
-.host-server-glyph[data-tone="orange"] { --tone: var(--tone-orange); --tone-ink: var(--tone-orange-ink); }
-.host-server-glyph[data-tone="pink"] { --tone: var(--tone-pink); --tone-ink: var(--tone-pink-ink); }
-.host-server-glyph[data-tone="cyan"] { --tone: var(--tone-cyan); --tone-ink: var(--tone-cyan-ink); }
+.host-server-glyph { display: grid; place-items: center; flex: none; width: 51px; height: 51px; border-radius: 13px; color: var(--icon-default); background: var(--tone); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
+.host-server-glyph[data-tone="blue"] { --tone: var(--tone-blue); }
+.host-server-glyph[data-tone="purple"] { --tone: var(--tone-purple); }
+.host-server-glyph[data-tone="green"] { --tone: var(--tone-green); }
+.host-server-glyph[data-tone="orange"] { --tone: var(--tone-orange); }
+.host-server-glyph[data-tone="pink"] { --tone: var(--tone-pink); }
+.host-server-glyph[data-tone="cyan"] { --tone: var(--tone-cyan); }
 .host-card-identity { flex: 1; min-width: 0; padding-right: 58px; }
 .host-card-identity h3 { margin: 0; overflow: hidden; font-size: 14.5px; line-height: 22px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .host-connection-state { display: flex; align-items: center; gap: 7px; margin-top: 3px; font-size: 13px; line-height: 18px; color: var(--muted); }
@@ -41,21 +41,22 @@
 .host-endpoint { display: flex; min-width: 0; margin: 5px 0 0; font-size: 13px; line-height: 18px; color: var(--secondary); font-variant-numeric: tabular-nums; }
 .host-endpoint > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .host-port-number { flex: none; }
-.host-favorite, .host-more { --size: 26px; position: absolute; top: 14px; color: var(--muted); }
+.host-favorite, .host-more { --size: 26px; position: absolute; top: 14px; }
 .host-favorite { right: 46px; transition: opacity 120ms linear, background-color var(--duration-fast), color var(--duration-fast), transform 120ms var(--ease-out); }
 .host-more { right: 19px; }
 .host-favorite[aria-pressed="false"] { opacity: 0; }
 .host-card:hover .host-favorite, .host-card:focus-within .host-favorite { opacity: 1; }
-.host-favorite[aria-pressed="true"] { color: var(--ink); }
 .host-favorite[aria-pressed="true"] svg { fill: currentColor; animation: star-pop 220ms var(--ease-out); }
 .host-card-labels { display: flex; align-items: center; gap: 8px; height: 22px; margin-top: 9px; overflow: hidden; }
 .host-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 22px; }
 .host-card-actions { display: flex; gap: 9px; margin-top: 12px; }
 .host-connect { flex: 1; }
-/* Pointing at a card (or reaching it by keyboard) promotes Connect to the accent fill; selection alone does not. */
+/* Pointing at a card (or reaching it by keyboard) promotes Connect to the accent fill; selection alone does not. Its icon then follows the label. */
 .host-card:focus-visible .host-connect:not(:disabled), .host-connect:focus-visible { color: var(--on-accent); background: var(--accent-fill); }
+.host-card:focus-visible .host-connect:not(:disabled) svg, .host-connect:focus-visible svg { color: inherit; }
 @media (hover: hover) and (pointer: fine) {
   .host-card:hover .host-connect:not(:disabled) { color: var(--on-accent); background: var(--accent-fill); box-shadow: 0 5px 13px rgba(0, 0, 0, .18); }
+  .host-card:hover .host-connect:not(:disabled) svg { color: inherit; }
   .host-card:hover .host-connect:hover:not(:disabled) { background: var(--accent-hover); }
 }
 

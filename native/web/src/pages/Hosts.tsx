@@ -69,7 +69,7 @@ function HostCard({ host, usage, connectionState, selected, busy, onSelect, onCo
         <span className="host-server-glyph" data-tone={hostTone(host.id)} role="img" aria-label={osLabel} data-tooltip={osLabel}><Icon name={osIcon.name} size={22} /></span>
         <div className="host-card-identity">
           <h3 title={host.name}>{host.name}</h3>
-          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : ""}`} />{online ? t("SSH connected") : connectionState === "lost" ? t("Connection lost") : t("SSH not connected")}</span>
+          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : connectionState === "lost" ? " dot-lost" : ""}`} />{online ? t("SSH connected") : connectionState === "lost" ? t("Connection lost") : t("SSH not connected")}</span>
           <p className="host-endpoint" title={`${host.username ? `${host.username}@` : ""}${host.host}:${host.port}`}>
             <span>{host.username && `${host.username}@`}{host.host}</span><span className="host-port-number">:{host.port}</span>
           </p>
