@@ -21,7 +21,6 @@
 
   --surface: var(--g2);
   --card: var(--g0);
-  --sidebar: color-mix(in srgb, var(--g1) 94%, transparent);
   --panel: var(--g1);
   --card-border: var(--g4);
   --border-strong: var(--g5);
@@ -114,10 +113,9 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .workspace-shell { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
 
 /* --- Sidebar ---------------------------------------------------------------- */
-.sidebar { width: 228px; flex: none; display: flex; flex-direction: column; padding: 0 15px 16px 18px; background: var(--sidebar); border-right: 1px solid var(--card-border); }
+.sidebar { width: 228px; flex: none; display: flex; flex-direction: column; padding: 0 15px 16px 18px; background: var(--panel); border-right: 1px solid var(--card-border); }
 .sidebar-brand { display: flex; align-items: center; gap: 14px; height: 45px; margin: 43px 0 40px 11px; font-size: 16px; font-weight: 700; letter-spacing: -.2px; }
 .brand-mark { display: grid; place-items: center; width: 45px; height: 45px; border-radius: 10px; color: var(--on-accent); background: var(--ink); box-shadow: 0 3px 8px rgba(0, 0, 0, .2); }
-.app[data-glass="false"] .sidebar { background: var(--panel); }
 .nav-list { position: relative; display: flex; flex-direction: column; gap: 8px; }
 .nav-item { position: relative; z-index: 1; display: flex; align-items: center; gap: 16px; height: 48px; padding: 0 21px 0 20px; border-radius: 11px; text-align: left; font-size: 14.5px; color: var(--secondary); transition: background-color var(--duration-fast), color var(--duration-fast), transform 70ms; }
 .nav-icon { display: grid; color: var(--icon-default); transition: color var(--duration-fast); }
@@ -367,9 +365,6 @@ input[role="switch"]:disabled { opacity: .45; cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .btn:hover, .btn:active, .icon-button:hover, .icon-button:active, .pill:active, .nav-item:active { transform: none !important; }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .sidebar { background: var(--panel); }
 }
 @media (forced-colors: active) {
   /* Icons fall back to system colours: statuses are told apart by their labels and the "!" badge, not hue. */

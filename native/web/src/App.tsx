@@ -185,7 +185,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app" data-glass={settings?.glassEffect ?? true}>
+    <div className="app">
       <SurfaceEffects />
       <div className="app-body">
         <Sidebar section={activeSessionId ? null : section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
