@@ -4,6 +4,9 @@ import { t } from "../i18n";
 import { Icon } from "../icons";
 import { Dialog } from "./Dialog";
 
+/** Prompt text that only repeats the dialog title ("Password", "Password:") adds nothing. */
+const repeats = (text: string, title: string) => text.trim().replace(/[:：]$/, "").toLowerCase() === title.trim().toLowerCase();
+
 export function PromptDialog({ prompt, onAnswered }: { prompt: SessionPrompt; onAnswered: (promptId: string) => void }) {
   const fields = prompt.kind === "hostKey" ? [] : prompt.kind === "keyboardInteractive" ? prompt.prompts ?? [] : [{
     prompt: t(prompt.kind === "username" ? "Username" : prompt.kind === "passphrase" ? "Passphrase" : "Password"),
@@ -31,15 +34,15 @@ export function PromptDialog({ prompt, onAnswered }: { prompt: SessionPrompt; on
   return (
     <Dialog title={prompt.title} busy={busy} onClose={() => { void answer(false); }}>
       <form onSubmit={(event) => { event.preventDefault(); void answer(true); }}>
-        <p className="prompt-message">{prompt.message}</p>
+        {prompt.message && !repeats(prompt.message, prompt.title) && <p className="prompt-message">{prompt.message}</p>}
         {prompt.kind === "hostKey" && <>
           <code className="dialog-code">{prompt.fingerprint}</code>
           <p>{t("Verify this fingerprint through a trusted channel before trusting it.")}</p>
         </>}
         {fields.map((field, index) => (
           <label className="field" key={index}>
-            <span>{field.prompt}</span>
-            <input autoFocus={index === 0} autoComplete="off" spellCheck={false} type={field.echo ? "text" : "password"}
+            {!(fields.length === 1 && repeats(field.prompt, prompt.title)) && <span>{field.prompt}</span>}
+            <input aria-label={field.prompt} autoFocus={index === 0} autoComplete="off" spellCheck={false} type={field.echo ? "text" : "password"}
               disabled={busy} required={prompt.kind === "username"} maxLength={8192} value={answers[index] ?? ""}
               onChange={(event) => setAnswers((current) => current.map((value, i) => i === index ? event.target.value : value))} />
           </label>
