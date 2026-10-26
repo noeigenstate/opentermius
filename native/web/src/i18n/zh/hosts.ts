@@ -23,6 +23,7 @@ export default {
   "Remove from favorites": "取消收藏",
   "Search hosts, IPs or tags…": "搜索主机、IP 或标签…",
   "Host view": "主机视图",
+  "Drag or press Alt+Arrow to reorder": "拖动或按 Alt+方向键调整顺序",
   "Grid view": "网格视图",
   "List view": "列表视图",
   "Open SFTP": "打开 SFTP",

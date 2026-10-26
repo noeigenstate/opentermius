@@ -36,6 +36,7 @@ async function createPage(context, storage = new Map()) {
     }
     export function useRef(initial) { return useState(() => ({ current: initial }))[0]; }
     export function useMemo(compute) { return compute(); }
+    export function useEffect() {}
     export function jsx(type, props) { return { type, props }; }
     export const jsxs = jsx;
     export function t(text) { return text; }
@@ -45,6 +46,9 @@ async function createPage(context, storage = new Map()) {
     export function HostModal() {}
     export function Menu() {}
     export async function setHostFavorite(id, favorite) { calls.push({ id, favorite }); }
+    export let reorderError;
+    export function failReorder(error) { reorderError = error; }
+    export async function reorderHosts(ids) { calls.push({ reorder: ids }); if (reorderError) throw reorderError; }
     export async function listHosts() { calls.push("list_hosts"); return hosts; }
     export async function getHost() {}
     export async function deleteHost() {}
@@ -70,6 +74,76 @@ function findAll(node, predicate) {
 const byClass = (tree, className) => findAll(tree, (node) => node.props?.className?.split(" ").includes(className));
 const host = (id, group = "", favorite = false) => ({ id, name: id, host: "example.invalid", port: 22, username: "fixture", group, tags: [], favorite, lastConnected: null });
 const flush = async () => { await new Promise((resolve) => setImmediate(resolve)); };
+
+test("visible subset moves beside its new neighbour and preserves hidden host order", async (context) => {
+  const { moveVisibleHost } = await createPage(context);
+  const hosts = [host("hidden-0"), host("a"), host("hidden-1"), host("b"), host("hidden-2"), host("c"), host("hidden-3")];
+  const ids = (items) => items.map((item) => item.id);
+  assert.deepEqual(ids(moveVisibleHost(hosts, ["a", "b", "c"], "a", 2)), ["hidden-0", "hidden-1", "b", "hidden-2", "c", "a", "hidden-3"]);
+  assert.deepEqual(ids(moveVisibleHost(hosts, ["a", "b", "c"], "c", 0)), ["hidden-0", "c", "a", "hidden-1", "b", "hidden-2", "hidden-3"]);
+  assert.deepEqual(ids(hosts), ["hidden-0", "a", "hidden-1", "b", "hidden-2", "c", "hidden-3"]);
+  assert.equal(moveVisibleHost(hosts, ["a", "b", "c"], "c", 0)[1], hosts[5]);
+});
+
+test("no-op drops and unavailable hosts return the original order", async (context) => {
+  const { moveVisibleHost } = await createPage(context);
+  const hosts = [host("a"), host("b")];
+  for (const [visible, id, target] of [[["a", "b"], "a", 0], [["a"], "a", 1], [[], "a", 0], [["a", "b"], "missing", 1], [["a", "missing"], "a", 1]]) {
+    assert.equal(moveVisibleHost(hosts, visible, id, target), hosts);
+  }
+});
+
+test("keyboard moves clamp at both ends and move one visible position", async (context) => {
+  const { moveVisibleHost } = await createPage(context);
+  const hosts = [host("a"), host("hidden"), host("b"), host("c")];
+  const visible = ["a", "b", "c"];
+  assert.equal(moveVisibleHost(hosts, visible, "a", -1), hosts);
+  assert.equal(moveVisibleHost(hosts, visible, "c", 3), hosts);
+  assert.deepEqual(moveVisibleHost(hosts, visible, "a", 1).map((item) => item.id), ["hidden", "b", "a", "c"]);
+  assert.deepEqual(moveVisibleHost(hosts, visible, "c", 1).map((item) => item.id), ["a", "hidden", "c", "b"]);
+});
+
+test("Alt+Arrow reorders optimistically, persists and refreshes without replacing card focus", async (context) => {
+  const { render, mock } = await createPage(context);
+  const hosts = [host("a"), host("b"), host("c")];
+  const updates = [];
+  const props = { hosts, onHostsChange: (next) => updates.push(next) };
+  let tree = render(props);
+  const grid = byClass(tree, "hosts-grid")[0];
+  const cards = hosts.map(() => ({}));
+  grid.props.ref.current = { children: cards };
+  grid.props.children[0].props.onSelect();
+  mock.setHosts([hosts[1], hosts[0], hosts[2]]);
+  tree = render(props);
+  let prevented = false;
+  byClass(tree, "hosts-grid")[0].props.onKeyDown({ key: "ArrowRight", altKey: true, target: cards[0], preventDefault: () => { prevented = true; } });
+  assert(prevented);
+  assert.deepEqual(updates[0].map((item) => item.id), ["b", "a", "c"]);
+  await flush();
+  assert.deepEqual(mock.calls, [{ reorder: ["b", "a", "c"] }, "list_hosts"]);
+  assert.equal(updates.at(-1), mock.hosts);
+  const moved = byClass(render({ ...props, hosts: mock.hosts }), "hosts-grid")[0].props.children[1];
+  assert(moved.props.selected);
+  assert.equal(moved.type(moved.props).props["aria-description"], "Drag or press Alt+Arrow to reorder");
+});
+
+test("failed reorder rolls back the full list and shows the existing error banner", async (context) => {
+  const { render, mock } = await createPage(context);
+  const hosts = [host("a", "", true), host("hidden"), host("b", "", true)];
+  const updates = [];
+  const props = { hosts, favoritesOnly: true, onHostsChange: (next) => updates.push(next) };
+  const grid = byClass(render(props), "hosts-grid")[0];
+  const card = {};
+  grid.props.ref.current = { children: [card, {}] };
+  grid.props.children[0].props.onSelect();
+  mock.failReorder("fixture save failure");
+  byClass(render(props), "hosts-grid")[0].props.onKeyDown({ key: "ArrowDown", altKey: true, target: card, preventDefault() {} });
+  await flush();
+  assert.deepEqual(updates[0].map((item) => item.id), ["hidden", "b", "a"]);
+  assert.equal(updates.at(-1), hosts);
+  assert.deepEqual(mock.calls, [{ reorder: ["hidden", "b", "a"] }]);
+  assert.equal(byClass(render(props), "banner-error")[0].props.children[1].props.children, "fixture save failure");
+});
 
 test("favorite filtering preserves source data and order, including legacy missing flags", async (context) => {
   const { filterFavorites } = await createPage(context);

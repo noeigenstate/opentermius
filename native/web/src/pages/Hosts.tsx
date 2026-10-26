@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
-import { deleteHost, duplicateHost, getHost, listHosts, newHostDraft, parseQuickConnect, renameGroup, setHostFavorite, type Host, type HostDraft, type Usage } from "../api/hosts";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { deleteHost, duplicateHost, getHost, listHosts, newHostDraft, parseQuickConnect, renameGroup, reorderHosts, setHostFavorite, type Host, type HostDraft, type Usage } from "../api/hosts";
 import { t } from "../i18n";
 import { Icon } from "../icons";
 import { UsageRing } from "../components/UsageRing";
@@ -11,6 +11,33 @@ import "../hosts.css";
 const NO_GROUP = "\u0001";
 export function filterFavorites(hosts: Host[], favoritesOnly: boolean): Host[] {
   return favoritesOnly ? hosts.filter((host) => host.favorite) : hosts;
+}
+
+/** Move beside the visible neighbour; hidden hosts keep their relative order. */
+export function moveVisibleHost(hosts: Host[], visibleIds: string[], id: string, target: number): Host[] {
+  const from = visibleIds.indexOf(id);
+  const to = Math.max(0, Math.min(visibleIds.length - 1, target));
+  if (from < 0 || from === to) return hosts;
+  const moving = hosts.find((host) => host.id === id);
+  const neighbour = visibleIds[to];
+  if (!moving || !hosts.some((host) => host.id === neighbour)) return hosts;
+  const next = hosts.filter((host) => host.id !== id);
+  const index = next.findIndex((host) => host.id === neighbour);
+  next.splice(index + (to > from ? 1 : 0), 0, moving);
+  return next;
+}
+
+interface HostDrag {
+  pointerId: number;
+  card: HTMLElement;
+  cards: HTMLElement[];
+  rects: DOMRect[];
+  ids: string[];
+  from: number;
+  to: number;
+  x: number;
+  y: number;
+  active: boolean;
 }
 
 export function groupCounts(hosts: Host[]): Map<string, number> {
@@ -51,6 +78,9 @@ export function hostOsIcon(os?: string | null) {
   return os && Object.hasOwn(OS_ICONS, os) ? OS_ICONS[os as keyof typeof OS_ICONS] : { name: "hosts", label: "Server" } as const;
 }
 
+/** `focusVisible` works in WebView2 (Chromium) but is not yet in the TypeScript DOM types. */
+const focusCard = (card: HTMLElement, visible: boolean) => card.focus({ preventScroll: true, focusVisible: visible } as FocusOptions);
+
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
 function HostCard({ host, usage, connectionState, selected, busy, onSelect, onConnect, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; connectionState?: "connected" | "lost"; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
@@ -65,7 +95,7 @@ function HostCard({ host, usage, connectionState, selected, busy, onSelect, onCo
     onMenu(rect.right - 172, rect.bottom + 4);
   };
   return (
-    <article className={`host-card${selected ? " host-card-selected" : ""}`} data-online={online} data-selected={selected} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
+    <article className={`host-card${selected ? " host-card-selected" : ""}`} data-host-id={host.id} data-online={online} data-selected={selected} tabIndex={0} aria-label={host.name} aria-description={t("Drag or press Alt+Arrow to reorder")} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
       <header className="host-card-header">
         <span className="host-server-glyph" data-tone={hostTone(host.id)} style={"color" in osIcon ? { "--brand": osIcon.color } as CSSProperties : undefined} role="img" aria-label={osLabel} data-tooltip={osLabel}><Icon name={osIcon.name} size={22} /></span>
         <div className="host-card-identity">
@@ -130,6 +160,12 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
   const [dialogError, setDialogError] = useState("");
   const grid = useRef<HTMLDivElement>(null);
   const pending = useRef(false);
+  const reorderFocus = useRef("");
+  // Keyboard moves keep the focus ring; pointer drags restore focus without it.
+  const reorderFocusVisible = useRef(false);
+  const drag = useRef<HostDrag | null>(null);
+  const suppressClick = useRef(false);
+  const suppressDoubleClickUntil = useRef(0);
 
   const counts = useMemo(() => groupCounts(hosts), [hosts]);
   const groups = useMemo(() => [...counts.keys()].filter(Boolean).sort(), [counts]);
@@ -158,6 +194,134 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
   const askDelete = (host: Host) => { setDialogError(""); setDeleting(host); };
   const duplicate = (hostId: string) => void run(async () => { setSelected(await duplicateHost(hostId)); await refresh(); });
   const toggleFavorite = (host: Host) => void run(async () => { await setHostFavorite(host.id, !host.favorite); await refresh(); });
+  const reorder = (id: string, ids: string[], target: number, keyboard = false) => {
+    if (pending.current) return;
+    reorderFocusVisible.current = keyboard;
+    const next = moveVisibleHost(allHosts, ids, id, target);
+    if (next === allHosts) return;
+    void run(async () => {
+      reorderFocus.current = id;
+      onHostsChange?.(next);
+      try {
+        await reorderHosts(next.map((host) => host.id));
+        reorderFocus.current = id;
+        onHostsChange?.(await listHosts());
+      } catch (reason) {
+        reorderFocus.current = id;
+        onHostsChange?.(allHosts);
+        throw reason;
+      }
+    });
+  };
+
+  const cancelDrag = () => {
+    const current = drag.current;
+    if (!current) return;
+    drag.current = null;
+    for (const card of current.cards) {
+      card.style.removeProperty("transform");
+      delete card.dataset.dragging;
+    }
+    delete grid.current?.dataset.reordering;
+    if (current.card.hasPointerCapture(current.pointerId)) current.card.releasePointerCapture(current.pointerId);
+  };
+  useEffect(() => {
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape" && drag.current) { event.preventDefault(); cancelDrag(); }
+    };
+    const hidden = () => { if (document.hidden) cancelDrag(); };
+    window.addEventListener("keydown", escape, true);
+    window.addEventListener("blur", cancelDrag);
+    window.addEventListener("resize", cancelDrag);
+    // Frozen card rects stop being valid when their container scrolls.
+    window.addEventListener("scroll", cancelDrag, true);
+    document.addEventListener("visibilitychange", hidden);
+    return () => {
+      cancelDrag();
+      window.removeEventListener("keydown", escape, true);
+      window.removeEventListener("blur", cancelDrag);
+      window.removeEventListener("resize", cancelDrag);
+      window.removeEventListener("scroll", cancelDrag, true);
+      document.removeEventListener("visibilitychange", hidden);
+    };
+  }, []);
+  useEffect(() => { cancelDrag(); }, [allHosts, activeGroup, query, view, favoritesOnly]);
+  useEffect(() => {
+    const card = Array.from(grid.current?.children ?? []).find((item) => (item as HTMLElement).dataset.hostId === reorderFocus.current);
+    if (card) focusCard(card as HTMLElement, reorderFocusVisible.current);
+    reorderFocus.current = "";
+  }, [allHosts]);
+
+  const startDrag = (event: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) suppressClick.current = false;
+    if (event.button !== 0 || !event.isPrimary || pending.current || drag.current || editor || menu || deleting || renaming) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, select, textarea, [role='button'], [role='menu'], [contenteditable='true']")) return;
+    const card = target.closest<HTMLElement>(".host-card");
+    if (!card || !grid.current) return;
+    const cards = Array.from(grid.current.children) as HTMLElement[];
+    const from = cards.indexOf(card);
+    suppressClick.current = false;
+    card.setPointerCapture(event.pointerId);
+    drag.current = {
+      pointerId: event.pointerId, card, cards, rects: [], ids: visible.map((host) => host.id),
+      from, to: from, x: event.clientX, y: event.clientY, active: false,
+    };
+  };
+  const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (!(event.buttons & 1)) { cancelDrag(); return; }
+    const dx = view === "list" ? 0 : event.clientX - current.x;
+    const dy = event.clientY - current.y;
+    if (!current.active) {
+      if (Math.hypot(event.clientX - current.x, dy) <= 5) return;
+      current.active = true;
+      suppressClick.current = true;
+      suppressDoubleClickUntil.current = Date.now() + 600;
+      grid.current!.dataset.reordering = "true";
+      // Read geometry once, after disabling hover lifts and entrance animation.
+      current.cards.forEach((card) => { card.style.transition = "none"; });
+      current.rects = current.cards.map((card) => card.getBoundingClientRect());
+      current.cards.forEach((card) => { card.style.removeProperty("transition"); });
+      current.card.dataset.dragging = "true";
+    }
+    event.preventDefault();
+    const origin = current.rects[current.from];
+    const x = origin.left + origin.width / 2 + dx;
+    const y = origin.top + origin.height / 2 + dy;
+    let to = current.from;
+    let distance = Infinity;
+    current.rects.forEach((rect, index) => {
+      const candidate = Math.hypot(x - rect.left - rect.width / 2, y - rect.top - rect.height / 2);
+      if (candidate < distance) { distance = candidate; to = index; }
+    });
+    if (to !== current.to) {
+      current.to = to;
+      const order = current.cards.filter((card) => card !== current.card);
+      order.splice(to, 0, current.card);
+      order.forEach((card, index) => {
+        if (card === current.card) return;
+        const before = current.rects[current.cards.indexOf(card)];
+        const after = current.rects[index];
+        card.style.transform = `translate(${after.left - before.left}px, ${after.top - before.top}px)`;
+      });
+    }
+    current.card.style.transform = `translate(${dx}px, ${dy}px)`;
+  };
+  const dropDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    cancelDrag();
+    if (current.active) {
+      suppressDoubleClickUntil.current = Date.now() + 600;
+      event.preventDefault();
+      reorder(current.ids[current.from], current.ids, current.to);
+    }
+  };
+  const blockDragClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (suppressClick.current || (event.type === "dblclick" && Date.now() < suppressDoubleClickUntil.current)) { event.preventDefault(); event.stopPropagation(); }
+  };
   const quickConnect = () => void run(async () => {
     const draft = await parseQuickConnect(search);
     setSearch("");
@@ -189,6 +353,13 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
   const moveSelection = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target instanceof HTMLButtonElement || editor || menu || deleting || renaming) return;
     const index = visible.findIndex((host) => host.id === selected);
+    if (event.altKey && ["ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"].includes(event.key)) {
+      event.preventDefault();
+      if (index >= 0 && event.target === grid.current?.children[index] && !drag.current) {
+        reorder(selected, visible.map((host) => host.id), index + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1), true);
+      }
+      return;
+    }
     if (event.key === "Enter" && index >= 0) { event.preventDefault(); onConnect?.(selected); return; }
     if (event.key === "Delete" && index >= 0) { event.preventDefault(); askDelete(visible[index]); return; }
     const columns = view === "list" || !grid.current ? 1 : getComputedStyle(grid.current).gridTemplateColumns.split(" ").length;
@@ -245,7 +416,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
           {(!favoritesOnly || hosts.length > 0) && <button className={`btn btn-l${hosts.length === 0 ? " btn-primary" : ""}`} disabled={busy} onClick={hosts.length === 0 ? addHost : () => { setSearch(""); setGroup(""); }}><Icon name={hosts.length === 0 ? "plus" : "close"} size={16} />{hosts.length === 0 ? t("New host") : t("Clear filters")}</button>}
         </div>
       ) : (
-        <div className={`hosts-${view}`} ref={grid} onKeyDown={moveSelection}>
+        <div className={`hosts-${view}`} ref={grid} onKeyDown={moveSelection} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={dropDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag} onClickCapture={blockDragClick} onDoubleClickCapture={blockDragClick} onContextMenuCapture={blockDragClick}>
           {visible.map((h) => (
             <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} connectionState={connectionStates.get(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
           ))}
