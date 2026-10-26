@@ -64,7 +64,6 @@ function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, on
       <div className="host-card-actions">
         <button className="btn btn-l btn-tonal host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t("Connect")}</button>
         <button className="icon-button icon-button-lg icon-button-boxed host-sftp" disabled={!onSftp} aria-label={t("Open SFTP")} data-tooltip={t("Open SFTP")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onSftp?.(); }}><Icon name="external" size={20} /></button>
-        <button className="icon-button icon-button-lg icon-button-boxed host-action-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={openMenu}><Icon name="more" size={20} /></button>
       </div>
     </article>
   );
