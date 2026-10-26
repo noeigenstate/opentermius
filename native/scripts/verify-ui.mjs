@@ -248,17 +248,20 @@ export async function verifyUi({ port = 9337, output }) {
           contentTop: content.top, viewportHeight: innerHeight, inset,
           sessionTabs: document.querySelectorAll('.session-tabs').length,
           dragRegion: !!document.querySelector('.workspace-shell .titlebar [data-tauri-drag-region]'),
-          newTerminal: !!document.querySelector('.titlebar-tabs > .new-terminal') };
+          newTerminal: !!document.querySelector('.new-terminal'),
+          localTerminal: !!document.querySelector('.page-actions > .host-local-terminal') };
       })()`);
       assert(Math.abs(shell.sidebarTop - shell.inset) < 1 && Math.abs(shell.sidebarBottom - shell.viewportHeight + shell.inset) < 1, 'Sidebar does not span the window height inside its outline.');
       assert(Math.abs(shell.titlebarTop - shell.inset) < 1 && Math.abs(shell.titlebarLeft - shell.sidebarRight) < 1, 'Title strip does not start to the right of the sidebar.');
       assert(Math.abs(shell.contentTop - shell.titlebarBottom) < 1, 'Content does not follow the title strip.');
       assert.equal(shell.sessionTabs, 0, 'Session tabs must be absent before a session is opened.');
-      assert(shell.dragRegion && shell.newTerminal, 'Empty strip lost dragging or the new-terminal action.');
+      assert(shell.dragRegion, 'Empty strip lost its drag region.');
+      assert(!shell.newTerminal, 'The empty strip must not show the new-terminal action.');
+      assert(shell.localTerminal, 'The Hosts header lost the local-terminal action.');
       return shell;
     });
     await check('single-native-frame-and-aligned-tab-action', async () => {
-      await click('.new-terminal');
+      await click('.host-local-terminal');
       await waitFor(`document.querySelectorAll('.session-tab').length === 1`, 'New terminal did not create a session tab.');
       await click('.sidebar .nav-item', { index: 0 });
       await waitFor(`!document.querySelector('#hosts-panel').hidden`, 'Hosts navigation did not restore the hosts page.');

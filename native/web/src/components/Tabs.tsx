@@ -67,7 +67,7 @@ export function Tabs({ sessions, activeSessionId, onSelect, onNew, onReconnect, 
           </div>
         ))}
       </div>}
-      <button className="icon-button new-terminal" data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}><Icon name="plus" size={16} /></button>
+      {sessions.length > 0 && <button className="icon-button new-terminal" data-tooltip={t("Open local terminal")} onClick={onNew} aria-label={t("Open local terminal")}><Icon name="plus" size={16} /></button>}
       {menu && selected && createPortal(
         <div ref={menuRef} className="menu" role="menu" style={{ left: menu.left, top: menu.top }} aria-label={t("Session menu")}>
           <button role="menuitem" onClick={() => { setMenu(null); onReconnect(selected.sessionId); }}><Icon name="refresh" size={16} />{t("Reconnect")}</button>

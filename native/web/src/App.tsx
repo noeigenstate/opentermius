@@ -110,6 +110,11 @@ export default function App() {
       setActiveSessionId(target);
     });
   };
+  const openLocal = () => {
+    void run("local", async () => {
+      await addSession(await openLocalTerminal());
+    });
+  };
   const connect = (hostId: string, initialView: "terminal" | "sftp" = "terminal") => {
     void run(`host:${hostId}`, async () => {
       await addSession(await connectHost(hostId), initialView);
@@ -158,9 +163,7 @@ export default function App() {
         <Sidebar section={activeSessionId ? null : section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
         <div className="workspace-shell">
           <TitleBar tabs={{ sessions, activeSessionId, onSelect: setActiveSessionId,
-            onNew: () => { void run("local", async () => {
-              await addSession(await openLocalTerminal());
-            }); },
+            onNew: openLocal,
             onReconnect: reconnect,
             onDuplicate: (id) => { void run(id, async () => { await addSession(await duplicateSession(id)); }); },
             onClose: (id) => { void run(id, async () => { await closeSession(id); removeSession(id); }); },
@@ -168,7 +171,7 @@ export default function App() {
           <main className={`content${activeSessionId ? " session-content" : ""}`}>
             {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button className="icon-button icon-button-sm" aria-label={t("Dismiss")} onClick={() => setError("")}><Icon name="close" size={14} /></button></div>}
             <div id="hosts-panel" hidden={activeSessionId !== null}>
-              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
+              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} onLocalTerminal={openLocal} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
                 : section === "keychain" ? <KeychainPage />
                 : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
                 : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />

@@ -62,7 +62,7 @@ function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, on
         <UsageRing value={usage.disk} label={t("Disk")} />
       </div>
       <div className="host-card-actions">
-        <button className={`btn btn-l host-connect ${selected ? "btn-primary" : "btn-tonal"}`} disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t("Connect")}</button>
+        <button className="btn btn-l btn-tonal host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t("Connect")}</button>
         <button className="icon-button icon-button-lg icon-button-boxed host-sftp" disabled={!onSftp} aria-label={t("Open SFTP")} data-tooltip={t("Open SFTP")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onSftp?.(); }}><Icon name="external" size={20} /></button>
         <button className="icon-button icon-button-lg icon-button-boxed host-action-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={openMenu}><Icon name="more" size={20} /></button>
       </div>
@@ -76,13 +76,14 @@ interface Props {
   onHostsChange?: (hosts: Host[]) => void;
   onConnect?: (hostId: string) => void;
   onSftp?: (hostId: string) => void;
+  onLocalTerminal?: () => void;
   onQuickConnect?: (draft: HostDraft) => void;
   /** Live usage and connection state from open sessions, by host id. */
   usageByHost?: Record<string, Usage>;
   onlineHostIds?: ReadonlySet<string>;
 }
 
-export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onSftp, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
+export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onSftp, onLocalTerminal, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
   const hosts = useMemo(() => filterFavorites(allHosts, favoritesOnly), [allHosts, favoritesOnly]);
   const viewKey = favoritesOnly ? "favorites-view" : "hosts-view";
   const [view, setView] = useState<"grid" | "list">(() => {
@@ -188,7 +189,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
           <h1>{t(favoritesOnly ? "Favorites" : "Hosts")}</h1>
           <p>{t(favoritesOnly ? "Hosts you starred" : "Manage saved connections and open SSH sessions.")}</p>
         </div>
-        <div className="page-actions"><button className="btn btn-primary btn-l" disabled={busy} onClick={addHost}><Icon name="plus" size={16} />{t("New host")}</button></div>
+        <div className="page-actions">{!favoritesOnly && onLocalTerminal && <button className="btn btn-l host-local-terminal" onClick={onLocalTerminal}><Icon name="prompt" size={16} />{t("Local Terminal")}</button>}<button className="btn btn-primary btn-l" disabled={busy} onClick={addHost}><Icon name="plus" size={16} />{t("New host")}</button></div>
       </header>
       <div className="page-controls">
         <div className="pills hosts-groups" role="group" aria-label={t("Filter by group")}>

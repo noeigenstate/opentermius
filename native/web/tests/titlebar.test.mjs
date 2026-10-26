@@ -30,19 +30,24 @@ const tabsCompiled = ts.transpileModule(tabsSource, {
 const { Tabs } = await import(moduleUrl(tabsCompiled));
 const mock = await import(mockUrl);
 
-test("empty session strip retains dragging, new terminal and all window controls", () => {
-  let opened = 0;
-  const bar = TitleBar({ tabs: { sessions: [], onNew: () => opened++ } });
+test("empty session strip retains dragging and all window controls but no new-terminal action", () => {
+  const bar = TitleBar({ tabs: { sessions: [], onNew() {} } });
   const tabs = Tabs(bar.props.children[0].props.children.props);
   assert.equal(tabs.props.children[0], false);
+  assert.equal(tabs.props.children[1], false);
+  assert.equal(bar.props.children[1].props["data-tauri-drag-region"], true);
+  bar.props.children.slice(2).forEach((button) => button.props.onClick());
+  assert.deepEqual(mock.calls, ["minimize", "maximize", "close"]);
+});
+
+test("open sessions show the new-terminal action after the tabs", () => {
+  let opened = 0;
+  const tabs = Tabs({ sessions: [{ sessionId: "fixture" }], activeSessionId: "fixture", onSelect() {}, onNew: () => opened++, onReconnect() {}, onDuplicate() {}, onClose() {} });
   const action = tabs.props.children[1];
   assert.equal(action.type, "button");
   assert.equal(action.props["aria-label"], "Open local terminal");
   action.props.onClick();
   assert.equal(opened, 1);
-  assert.equal(bar.props.children[1].props["data-tauri-drag-region"], true);
-  bar.props.children.slice(2).forEach((button) => button.props.onClick());
-  assert.deepEqual(mock.calls, ["minimize", "maximize", "close"]);
 });
 
 test("session strip passes every existing tab handler through unchanged", () => {

@@ -137,7 +137,7 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 /* --- Page ------------------------------------------------------------------- */
 .content { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--surface); }
 .session-content { display: flex; flex-direction: column; overflow: hidden; }
-.page { padding: 21px 26px 30px 30px; animation: page-in 220ms var(--ease-out); }
+.page { padding: 4px 26px 30px 30px; animation: page-in 220ms var(--ease-out); }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; min-height: 67px; }
 .page-header h1 { margin: 0; font-size: 32px; line-height: 38px; font-weight: 700; letter-spacing: -.4px; }
 .page-header p { margin: 5px 0 0; font-size: 14px; line-height: 22px; color: var(--secondary); }
@@ -250,7 +250,6 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .session-tab:hover .tab-action, .session-tab:focus-within .tab-action, .tab-active .tab-action { opacity: 1; }
 .tab-action:hover:not(:disabled) { background: var(--pressed); }
 .new-terminal { --size: 32px; position: relative; border-radius: 10px; }
-.new-terminal:first-child::before { content: ""; position: absolute; inset: 0; border: 1.5px dashed var(--muted); border-radius: inherit; pointer-events: none; }
 
 /* --- Menus -------------------------------------------------------------------- */
 .menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 173px; padding: 5px; border-radius: 11px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), var(--shadow-menu); animation: popover-in 140ms var(--ease-out); }
@@ -333,7 +332,7 @@ input[role="switch"]:disabled { opacity: .45; cursor: default; }
 @media (max-width: 1020px) {
   .sidebar { width: 200px; padding-left: 12px; padding-right: 12px; }
   .nav-indicator::before { left: -12px; }
-  .page { padding: 18px 22px 26px; }
+  .page { padding: 4px 22px 26px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
