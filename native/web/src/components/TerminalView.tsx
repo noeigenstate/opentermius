@@ -60,8 +60,18 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         if (disposed || !current.current.visible || !element.clientWidth || !element.clientHeight) return;
+        const atBottom = xterm.buffer.active.viewportY === xterm.buffer.active.baseY;
+        // A same-size resize remeasures characters if open() ran under display:none.
+        xterm.resize(xterm.cols, xterm.rows);
+        const dimensions = fit.proposeDimensions();
+        // FitAddon clamps tiny containers to 2x1; do not reflow or send that geometry.
+        if (!dimensions || !Number.isFinite(dimensions.cols) || !Number.isFinite(dimensions.rows)
+          || dimensions.cols <= 2 || dimensions.rows <= 1) return;
         fit.fit();
         syncSize();
+        if (atBottom) xterm.scrollToBottom();
+        // fit() does not repaint when the geometry is unchanged after being hidden.
+        xterm.refresh(0, xterm.rows - 1);
         if (!current.current.blocked) xterm.focus();
       });
     };
