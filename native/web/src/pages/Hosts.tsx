@@ -52,7 +52,6 @@ function HostCard({ host, usage, connectionState, selected, busy, onSelect, onCo
         <button className="icon-button icon-button-sm host-more" aria-label={t("More")} data-tooltip={t("More")} aria-haspopup="menu" onDoubleClick={(event) => event.stopPropagation()} onClick={openMenu}><Icon name="more" size={16} /></button>
       </header>
       <div className="host-card-labels">
-        <span className="chip">{t("SSH")}</span>
         {host.group && <span className="chip" title={host.group}>{host.group}</span>}
         {host.tags.slice(0, 2).map((tag) => <span key={tag} className="chip" title={tag}>{tag}</span>)}
         {host.tags.length > 2 && <span className="chip" data-tooltip={host.tags.slice(2).join(", ")}>+{host.tags.length - 2}</span>}

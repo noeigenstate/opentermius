@@ -34,7 +34,6 @@ export default {
   "Clear filters": "清除筛选",
   "{label}: not available": "{label}：暂无数据",
   "{label}: {value}%": "{label}：{value}%",
-  SSH: "SSH",
   "Edit host": "编辑主机",
   Address: "地址",
   "Host address": "主机地址",
