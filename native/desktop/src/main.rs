@@ -62,10 +62,16 @@ fn main() {
         })
         .on_window_event(|window, event| {
             #[cfg(windows)]
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::ScaleFactorChanged { .. }) {
+                let _ = window_frame::update_icons(window);
+            }
+            #[cfg(windows)]
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
                 let _ = window_frame::update_shape(window);
             }
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                #[cfg(windows)]
+                window_frame::release_icons();
                 use tauri::Manager;
                 window.state::<AppState>().sessions.shutdown();
             }
