@@ -28,7 +28,8 @@ export function hostTone(id: string) {
 
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
-function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
+function HostCard({ host, usage, connectionState, selected, busy, onSelect, onConnect, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; connectionState?: "connected" | "lost"; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
+  const online = connectionState === "connected";
   const favoriteLabel = t(host.favorite ? "Remove from favorites" : "Add to favorites");
   const openMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -42,7 +43,7 @@ function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, on
         <span className="host-server-glyph" data-tone={hostTone(host.id)}><Icon name="hosts" size={22} /></span>
         <div className="host-card-identity">
           <h3 title={host.name}>{host.name}</h3>
-          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : ""}`} />{online ? t("SSH connected") : t("SSH not connected")}</span>
+          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : ""}`} />{online ? t("SSH connected") : connectionState === "lost" ? t("Connection lost") : t("SSH not connected")}</span>
           <p className="host-endpoint" title={`${host.username ? `${host.username}@` : ""}${host.host}:${host.port}`}>
             <span>{host.username && `${host.username}@`}{host.host}</span><span className="host-port-number">:{host.port}</span>
           </p>
@@ -57,9 +58,9 @@ function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, on
         {host.tags.length > 2 && <span className="chip" data-tooltip={host.tags.slice(2).join(", ")}>+{host.tags.length - 2}</span>}
       </div>
       <div className="host-metrics">
-        <UsageRing value={usage.cpu} label={t("CPU")} />
-        <UsageRing value={usage.memory} label={t("Memory")} />
-        <UsageRing value={usage.disk} label={t("Disk")} />
+        <UsageRing value={online ? usage.cpu : null} label={t("CPU")} />
+        <UsageRing value={online ? usage.memory : null} label={t("Memory")} />
+        <UsageRing value={online ? usage.disk : null} label={t("Disk")} />
       </div>
       <div className="host-card-actions">
         <button className="btn btn-l btn-tonal host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t("Connect")}</button>
@@ -78,10 +79,10 @@ interface Props {
   onQuickConnect?: (draft: HostDraft) => void;
   /** Live usage and connection state from open sessions, by host id. */
   usageByHost?: Record<string, Usage>;
-  onlineHostIds?: ReadonlySet<string>;
+  connectionStates?: ReadonlyMap<string, "connected" | "lost">;
 }
 
-export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onSftp, onLocalTerminal, onQuickConnect, usageByHost = {}, onlineHostIds = new Set<string>() }: Props) {
+export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChange, onConnect, onSftp, onLocalTerminal, onQuickConnect, usageByHost = {}, connectionStates = new Map<string, "connected" | "lost">() }: Props) {
   const hosts = useMemo(() => filterFavorites(allHosts, favoritesOnly), [allHosts, favoritesOnly]);
   const viewKey = favoritesOnly ? "favorites-view" : "hosts-view";
   const [view, setView] = useState<"grid" | "list">(() => {
@@ -221,7 +222,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
       ) : (
         <div className={`hosts-${view}`} ref={grid} onKeyDown={moveSelection}>
           {visible.map((h) => (
-            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
+            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} connectionState={connectionStates.get(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
           ))}
         </div>
       )}

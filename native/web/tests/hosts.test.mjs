@@ -154,7 +154,7 @@ test("favorite action persists the inverse flag and refreshes the host collectio
 
 test("card exposes status, tone and favorite, with SFTP only in the host menu", async (context) => {
   const { render } = await createPage(context);
-  const element = byClass(render({ hosts: [host("a", "", true)], onConnect() {}, onSftp() {}, onlineHostIds: new Set(["a"]) }), "hosts-grid")[0].props.children[0];
+  const element = byClass(render({ hosts: [host("a", "", true)], onConnect() {}, onSftp() {}, connectionStates: new Map([["a", "connected"]]) }), "hosts-grid")[0].props.children[0];
   const card = element.type(element.props);
   assert.equal(card.props["data-online"], true);
   assert.equal(byClass(card, "host-server-glyph")[0].props["data-tone"], "purple");
@@ -176,4 +176,17 @@ test("search retains ssh quick connect with the new placeholder", async (context
   await flush();
   assert.equal(draft.host, "example.invalid");
   assert.deepEqual(mock.calls, [{ quickConnect: "ssh fixture@example.invalid" }]);
+});
+
+test("host cards render all three connection labels and show usage only while connected", async (context) => {
+  const { render } = await createPage(context);
+  for (const [connectionState, label] of [[undefined, "SSH not connected"], ["connected", "SSH connected"], ["lost", "Connection lost"]]) {
+    const element = byClass(render({ hosts: [host("a")], connectionStates: new Map([["a", connectionState]]), usageByHost: { a: { cpu: 10, memory: 20, disk: 30 } } }), "hosts-grid")[0].props.children[0];
+    const card = element.type(element.props);
+    const status = byClass(card, "host-connection-state")[0];
+    assert.equal(status.props.children[1], label);
+    assert.equal(status.props.className.includes("is-connected"), connectionState === "connected");
+    assert.equal(byClass(card, "dot-online").length, connectionState === "connected" ? 1 : 0);
+    assert.deepEqual(byClass(card, "host-metrics")[0].props.children.map(ring => ring.props.value), connectionState === "connected" ? [10, 20, 30] : [null, null, null]);
+  }
 });

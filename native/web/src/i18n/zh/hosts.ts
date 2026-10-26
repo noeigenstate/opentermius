@@ -9,6 +9,7 @@ export default {
   "Open SFTP": "打开 SFTP",
   "SSH connected": "SSH 已连接",
   "SSH not connected": "SSH 未连接",
+  "Connection lost": "连接断开",
   Memory: "内存",
   Disk: "磁盘",
   "--": "--",

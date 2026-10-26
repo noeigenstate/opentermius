@@ -26,11 +26,24 @@ const titles: Record<Section, string> = {
   settings: "Settings",
 };
 
+export function hostConnectionStates(sessions: readonly SessionInfo[], failedHostIds: ReadonlySet<string>): Map<string, "connected" | "lost"> {
+  const states = new Map<string, "connected" | "lost">();
+  for (const hostId of failedHostIds) states.set(hostId, "lost");
+  for (const session of sessions) {
+    if (!session.hostId || session.local) continue;
+    if (session.connected) states.set(session.hostId, "connected");
+    // Native failures and transport closure set ended; false/false is still connecting.
+    else if (session.ended && states.get(session.hostId) !== "connected") states.set(session.hostId, "lost");
+  }
+  return states;
+}
+
 export default function App() {
   const [section, setSection] = useState<Section>("hosts");
   const [hosts, setHosts] = useState<Host[]>([]);
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [failedHostIds, setFailedHostIds] = useState(new Set<string>());
   const [initialSessionViews, setInitialSessionViews] = useState<Record<string, "terminal" | "sftp">>({});
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [prompts, setPrompts] = useState<SessionPrompt[]>([]);
@@ -66,6 +79,8 @@ export default function App() {
   }, []);
 
   function removeSession(sessionId: string) {
+    const hostId = sessions.find((session) => session.sessionId === sessionId)?.hostId;
+    setFailedHostIds((current) => { const next = new Set(current); if (hostId) next.delete(hostId); return next; });
     forgetSession(sessionId);
     setSessions((current) => current.filter((session) => session.sessionId !== sessionId));
     setActiveSessionId((current) => current === sessionId ? null : current);
@@ -84,11 +99,14 @@ export default function App() {
     setActiveSessionId(session.sessionId);
   }
 
-  async function run(key: string, action: () => Promise<void>) {
+  async function run(key: string, action: () => Promise<void>, hostId?: string) {
     if (pending.current.has(key)) return;
     pending.current.add(key);
     setError("");
-    try { await action(); } catch (reason) { setError(String(reason)); }
+    try { await action(); } catch (reason) {
+      if (hostId) setFailedHostIds((current) => new Set(current).add(hostId));
+      setError(String(reason));
+    }
     finally { pending.current.delete(key); }
   }
 
@@ -118,7 +136,8 @@ export default function App() {
   const connect = (hostId: string, initialView: "terminal" | "sftp" = "terminal") => {
     void run(`host:${hostId}`, async () => {
       await addSession(await connectHost(hostId), initialView);
-    });
+      setFailedHostIds((current) => { const next = new Set(current); next.delete(hostId); return next; });
+    }, hostId);
   };
 
   useEffect(() => {
@@ -150,7 +169,15 @@ export default function App() {
     return () => { active = false; unsubscribe(); };
   }, []);
 
-  const onlineHostIds = new Set(sessions.filter((session) => session.connected && session.hostId).map((session) => session.hostId!));
+  const connectionStates = hostConnectionStates(sessions, failedHostIds);
+
+  useEffect(() => {
+    setFailedHostIds((current) => {
+      const next = new Set(current);
+      for (const session of sessions) if (session.connected) next.delete(session.hostId);
+      return next.size === current.size ? current : next;
+    });
+  }, [sessions]);
 
   useEffect(() => {
     listHosts().then(setHosts).catch((e) => setError(String(e)));
@@ -171,7 +198,7 @@ export default function App() {
           <main className={`content${activeSessionId ? " session-content" : ""}`}>
             {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button className="icon-button icon-button-sm" aria-label={t("Dismiss")} onClick={() => setError("")}><Icon name="close" size={14} /></button></div>}
             <div id="hosts-panel" hidden={activeSessionId !== null}>
-              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} onLocalTerminal={openLocal} usageByHost={usageByHost} onlineHostIds={onlineHostIds} />
+              {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onSftp={(id) => connect(id, "sftp")} onLocalTerminal={openLocal} usageByHost={usageByHost} connectionStates={connectionStates} />
                 : section === "keychain" ? <KeychainPage />
                 : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
                 : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
