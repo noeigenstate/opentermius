@@ -2,11 +2,11 @@
 .hosts-groups { max-width: 60%; margin: -5px; padding: 5px; overflow-x: auto; scrollbar-width: none; }
 .hosts-groups::-webkit-scrollbar { display: none; }
 .hosts-view-toggle { display: flex; gap: 8px; }
-.hosts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); align-items: start; gap: 19px 16px; margin-top: 25px; }
+.hosts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); align-items: stretch; gap: 19px 16px; margin-top: 25px; }
 .hosts-list { display: flex; flex-direction: column; gap: 10px; margin-top: 25px; }
 
 /* The ::after shadow is a pre-rendered layer: selection and hover only fade its opacity. */
-.host-card { position: relative; min-width: 0; padding: 15px 15px 11px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-sm); cursor: default; transition: transform 200ms var(--ease-out), border-color var(--duration-fast); animation: card-in 280ms var(--ease-out) backwards; }
+.host-card { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 15px 15px 11px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-sm); cursor: default; transition: transform 200ms var(--ease-out), border-color var(--duration-fast); animation: card-in 280ms var(--ease-out) backwards; }
 .host-card::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease-out; }
 .host-card::after { box-shadow: var(--shadow-hover); transition-duration: 200ms; }
 .host-card:nth-child(2) { animation-delay: 30ms; }
@@ -48,8 +48,10 @@
 .host-card:hover .host-favorite, .host-card:focus-within .host-favorite { opacity: 1; }
 .host-favorite[aria-pressed="true"] svg { fill: currentColor; animation: star-pop 220ms var(--ease-out); }
 .host-card-labels { display: flex; align-items: center; gap: 8px; height: 22px; margin-top: 9px; overflow: hidden; }
-.host-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 22px; }
-.host-card-actions { display: flex; gap: 9px; margin-top: 12px; }
+/* Hosts without tags drop the row instead of leaving a gap; Connect stays at the card bottom so a grid row lines up. */
+.host-card-labels:empty { display: none; }
+.host-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 16px 0 12px; }
+.host-card-actions { display: flex; gap: 9px; margin-top: auto; }
 .host-connect { flex: 1; }
 /* Pointing at a card (or reaching it by keyboard) promotes Connect to the accent fill; selection alone does not. Its icon then follows the label. */
 .host-card:focus-visible .host-connect:not(:disabled), .host-connect:focus-visible { color: var(--on-accent); background: var(--accent-fill); }
