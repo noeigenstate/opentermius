@@ -5,9 +5,10 @@
 .hosts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); align-items: stretch; gap: 19px 16px; margin-top: 25px; }
 .hosts-list { display: flex; flex-direction: column; gap: 10px; margin-top: 25px; }
 
-/* The ::after shadow is a pre-rendered layer: selection and hover only fade its opacity. */
-.host-card { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 15px 15px 11px; border: 1px solid var(--card-border); border-radius: 14px; background: var(--card); box-shadow: var(--shadow-sm); cursor: default; transition: transform 200ms var(--ease-out), border-color var(--duration-fast); animation: card-in 280ms var(--ease-out) backwards; }
-.host-card::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease-out; }
+/* The edge is a ring inside the card's own shadow, not a border, so the two cannot drift apart at fractional positions.
+   The ::after shadow is a pre-rendered layer: selection and hover only fade its opacity. */
+.host-card { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 16px 16px 12px; border-radius: 14px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), var(--shadow-sm); cursor: default; transition: transform 200ms var(--ease-out); animation: card-in 280ms var(--ease-out) backwards; }
+.host-card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) ease-out; }
 .host-card::after { box-shadow: var(--shadow-hover); transition-duration: 200ms; }
 .host-card:nth-child(2) { animation-delay: 30ms; }
 .host-card:nth-child(3) { animation-delay: 60ms; }
@@ -23,7 +24,7 @@
 .host-card-selected::after { box-shadow: var(--shadow-selected); opacity: 1; }
 @media (hover: hover) and (pointer: fine) {
   /* 4px lands on whole device pixels at 100-200 % scaling; fractional lifts blur the border and corners. */
-  .host-card:hover { z-index: 1; transform: translateY(-4px); border-color: var(--border-strong); }
+  .host-card:hover { z-index: 1; transform: translateY(-4px); box-shadow: 0 0 0 1px var(--border-strong), var(--shadow-sm); }
   .host-card:hover::after { opacity: 1; }
 }
 
@@ -77,7 +78,7 @@
 .usage-ring-progress { transition: stroke-dasharray 400ms ease-out; }
 
 /* List rows reuse the card markup: the header and identity dissolve into grid cells. */
-.hosts-list .host-card { display: grid; grid-template-columns: 42px 176px 152px minmax(0, 1fr) 141px 83px 26px; grid-template-rows: auto auto; align-items: center; column-gap: 13px; min-height: 70px; padding: 0 16px; border-radius: 13px; }
+.hosts-list .host-card { display: grid; grid-template-columns: 42px 176px 152px minmax(0, 1fr) 141px 83px 26px; grid-template-rows: auto auto; align-items: center; column-gap: 13px; min-height: 70px; padding: 0 17px; border-radius: 13px; }
 .hosts-list .host-card-header, .hosts-list .host-card-identity { display: contents; }
 .hosts-list .host-server-glyph { grid-area: 1 / 1 / span 2; width: 42px; height: 42px; border-radius: 11px; }
 .hosts-list .host-card-identity h3 { grid-area: 1 / 2; align-self: end; padding-right: 28px; }
@@ -107,7 +108,7 @@
   .usage-ring-progress { transition: none; }
 }
 @media (forced-colors: active) {
-  .host-card { border-color: CanvasText; }
+  .host-card { outline: 1px solid CanvasText; }
   .host-card-selected { outline: 2px solid Highlight; }
   .ring-track { stroke: GrayText; }
   .ring-arc { stroke: Highlight; }
