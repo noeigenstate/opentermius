@@ -99,6 +99,38 @@ test("host tones are stable, bounded, and cover all six tones", async (context) 
   assert.deepEqual(new Set(Array.from({ length: 100 }, (_, index) => hostTone(`fixture-${index}`))), new Set(tones));
 });
 
+test("OS icons cover every normalized id and unknown or missing values keep the server glyph", async (context) => {
+  const { hostOsIcon } = await createPage(context);
+  const icons = {
+    ubuntu: ["osUbuntu", "Ubuntu"], debian: ["osDebian", "Debian"], centos: ["osCentos", "CentOS"],
+    rhel: ["osRhel", "Red Hat Enterprise Linux"], fedora: ["osFedora", "Fedora"], rocky: ["osRocky", "Rocky Linux"],
+    almalinux: ["osAlmalinux", "AlmaLinux"], alpine: ["osAlpine", "Alpine Linux"], arch: ["osArch", "Arch Linux"],
+    opensuse: ["osOpensuse", "openSUSE"], amazon: ["osAmazon", "Amazon Linux"], kali: ["osKali", "Kali Linux"],
+    raspbian: ["osRaspbian", "Raspbian"], linux: ["osLinux", "Linux"], freebsd: ["osFreebsd", "FreeBSD"],
+    macos: ["osMacos", "macOS"], windows: ["osWindows", "Windows"],
+  };
+  for (const [id, [name, label]] of Object.entries(icons)) assert.deepEqual(hostOsIcon(id), { name, label });
+  for (const id of [undefined, null, "", "unknown", "constructor", "__proto__"]) {
+    assert.deepEqual(hostOsIcon(id), { name: "hosts", label: "Server" });
+  }
+});
+
+test("grid and list tiles expose the OS label and preserve size and tone", async (context) => {
+  for (const mode of ["grid", "list"]) {
+    const { render } = await createPage(context, new Map([["hosts-view", mode]]));
+    for (const [os, label, name] of [["ubuntu", "Ubuntu", "osUbuntu"], ["windows", "Windows", "osWindows"], [undefined, "Server", "hosts"], ["unknown", "Server", "hosts"]]) {
+      const element = byClass(render({ hosts: [{ ...host("a"), os }] }), `hosts-${mode}`)[0].props.children[0];
+      const tile = byClass(element.type(element.props), "host-server-glyph")[0];
+      assert.equal(tile.props.role, "img");
+      assert.equal(tile.props["aria-label"], label);
+      assert.equal(tile.props["data-tooltip"], label);
+      assert.equal(tile.props["data-tone"], "purple");
+      assert.equal(tile.props.children.props.name, name);
+      assert.equal(tile.props.children.props.size, 22);
+    }
+  }
+});
+
 test("page pills show counts and favorites have their own heading and empty state", async (context) => {
   const { render } = await createPage(context);
   const hosts = [host("a", "Work", true), host("b", "Work"), host("c")];

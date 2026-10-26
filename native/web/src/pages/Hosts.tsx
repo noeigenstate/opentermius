@@ -26,10 +26,36 @@ export function hostTone(id: string) {
   return tones[hash % tones.length];
 }
 
+const OS_ICONS = {
+  ubuntu: { name: "osUbuntu", label: "Ubuntu" },
+  debian: { name: "osDebian", label: "Debian" },
+  centos: { name: "osCentos", label: "CentOS" },
+  rhel: { name: "osRhel", label: "Red Hat Enterprise Linux" },
+  fedora: { name: "osFedora", label: "Fedora" },
+  rocky: { name: "osRocky", label: "Rocky Linux" },
+  almalinux: { name: "osAlmalinux", label: "AlmaLinux" },
+  alpine: { name: "osAlpine", label: "Alpine Linux" },
+  arch: { name: "osArch", label: "Arch Linux" },
+  opensuse: { name: "osOpensuse", label: "openSUSE" },
+  amazon: { name: "osAmazon", label: "Amazon Linux" },
+  kali: { name: "osKali", label: "Kali Linux" },
+  raspbian: { name: "osRaspbian", label: "Raspbian" },
+  linux: { name: "osLinux", label: "Linux" },
+  freebsd: { name: "osFreebsd", label: "FreeBSD" },
+  macos: { name: "osMacos", label: "macOS" },
+  windows: { name: "osWindows", label: "Windows" },
+} as const;
+
+export function hostOsIcon(os?: string | null) {
+  return os && Object.hasOwn(OS_ICONS, os) ? OS_ICONS[os as keyof typeof OS_ICONS] : { name: "hosts", label: "Server" } as const;
+}
+
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
 function HostCard({ host, usage, connectionState, selected, busy, onSelect, onConnect, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; connectionState?: "connected" | "lost"; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
   const online = connectionState === "connected";
+  const osIcon = hostOsIcon(host.os);
+  const osLabel = t(osIcon.label);
   const favoriteLabel = t(host.favorite ? "Remove from favorites" : "Add to favorites");
   const openMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -40,7 +66,7 @@ function HostCard({ host, usage, connectionState, selected, busy, onSelect, onCo
   return (
     <article className={`host-card${selected ? " host-card-selected" : ""}`} data-online={online} data-selected={selected} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
       <header className="host-card-header">
-        <span className="host-server-glyph" data-tone={hostTone(host.id)}><Icon name="hosts" size={22} /></span>
+        <span className="host-server-glyph" data-tone={hostTone(host.id)} role="img" aria-label={osLabel} data-tooltip={osLabel}><Icon name={osIcon.name} size={22} /></span>
         <div className="host-card-identity">
           <h3 title={host.name}>{host.name}</h3>
           <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : ""}`} />{online ? t("SSH connected") : connectionState === "lost" ? t("Connection lost") : t("SSH not connected")}</span>
