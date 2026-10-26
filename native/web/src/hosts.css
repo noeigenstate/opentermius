@@ -27,7 +27,7 @@
 }
 
 .host-card-header { display: flex; align-items: flex-start; gap: 14px; }
-.host-server-glyph { display: grid; place-items: center; flex: none; width: 51px; height: 51px; border-radius: 13px; color: var(--icon-default); background: var(--tone); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
+.host-server-glyph { display: grid; place-items: center; flex: none; width: 51px; height: 51px; border-radius: 13px; color: var(--brand, var(--icon-default)); background: var(--tone); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .05); }
 .host-server-glyph[data-tone="blue"] { --tone: var(--tone-blue); }
 .host-server-glyph[data-tone="purple"] { --tone: var(--tone-purple); }
 .host-server-glyph[data-tone="green"] { --tone: var(--tone-green); }

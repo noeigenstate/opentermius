@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import { deleteHost, duplicateHost, getHost, listHosts, newHostDraft, parseQuickConnect, renameGroup, setHostFavorite, type Host, type HostDraft, type Usage } from "../api/hosts";
 import { t } from "../i18n";
 import { Icon } from "../icons";
@@ -26,24 +26,25 @@ export function hostTone(id: string) {
   return tones[hash % tones.length];
 }
 
+// Official brand colours, from the same Simple Icons data as the glyphs.
 const OS_ICONS = {
-  ubuntu: { name: "osUbuntu", label: "Ubuntu" },
-  debian: { name: "osDebian", label: "Debian" },
-  centos: { name: "osCentos", label: "CentOS" },
-  rhel: { name: "osRhel", label: "Red Hat Enterprise Linux" },
-  fedora: { name: "osFedora", label: "Fedora" },
-  rocky: { name: "osRocky", label: "Rocky Linux" },
-  almalinux: { name: "osAlmalinux", label: "AlmaLinux" },
-  alpine: { name: "osAlpine", label: "Alpine Linux" },
-  arch: { name: "osArch", label: "Arch Linux" },
-  opensuse: { name: "osOpensuse", label: "openSUSE" },
-  amazon: { name: "osAmazon", label: "Amazon Linux" },
-  kali: { name: "osKali", label: "Kali Linux" },
-  raspbian: { name: "osRaspbian", label: "Raspbian" },
-  linux: { name: "osLinux", label: "Linux" },
-  freebsd: { name: "osFreebsd", label: "FreeBSD" },
-  macos: { name: "osMacos", label: "macOS" },
-  windows: { name: "osWindows", label: "Windows" },
+  ubuntu: { name: "osUbuntu", label: "Ubuntu", color: "#E95420" },
+  debian: { name: "osDebian", label: "Debian", color: "#A81D33" },
+  centos: { name: "osCentos", label: "CentOS", color: "#262577" },
+  rhel: { name: "osRhel", label: "Red Hat Enterprise Linux", color: "#EE0000" },
+  fedora: { name: "osFedora", label: "Fedora", color: "#51A2DA" },
+  rocky: { name: "osRocky", label: "Rocky Linux", color: "#10B981" },
+  almalinux: { name: "osAlmalinux", label: "AlmaLinux", color: "#000000" },
+  alpine: { name: "osAlpine", label: "Alpine Linux", color: "#0D597F" },
+  arch: { name: "osArch", label: "Arch Linux", color: "#1793D1" },
+  opensuse: { name: "osOpensuse", label: "openSUSE", color: "#73BA25" },
+  amazon: { name: "osAmazon", label: "Amazon Linux", color: "#FF9900" },
+  kali: { name: "osKali", label: "Kali Linux", color: "#557C94" },
+  raspbian: { name: "osRaspbian", label: "Raspbian", color: "#A22846" },
+  linux: { name: "osLinux", label: "Linux", color: "#FCC624" },
+  freebsd: { name: "osFreebsd", label: "FreeBSD", color: "#AB2B28" },
+  macos: { name: "osMacos", label: "macOS", color: "#000000" },
+  windows: { name: "osWindows", label: "Windows", color: "#0078D4" },
 } as const;
 
 export function hostOsIcon(os?: string | null) {
@@ -66,7 +67,7 @@ function HostCard({ host, usage, connectionState, selected, busy, onSelect, onCo
   return (
     <article className={`host-card${selected ? " host-card-selected" : ""}`} data-online={online} data-selected={selected} tabIndex={0} aria-label={host.name} aria-current={selected ? "true" : undefined} onFocus={onSelect} onClick={onSelect} onDoubleClick={onConnect ?? onEdit} onContextMenu={(event) => { event.preventDefault(); onSelect(); onMenu(event.clientX, event.clientY); }}>
       <header className="host-card-header">
-        <span className="host-server-glyph" data-tone={hostTone(host.id)} role="img" aria-label={osLabel} data-tooltip={osLabel}><Icon name={osIcon.name} size={22} /></span>
+        <span className="host-server-glyph" data-tone={hostTone(host.id)} style={"color" in osIcon ? { "--brand": osIcon.color } as CSSProperties : undefined} role="img" aria-label={osLabel} data-tooltip={osLabel}><Icon name={osIcon.name} size={22} /></span>
         <div className="host-card-identity">
           <h3 title={host.name}>{host.name}</h3>
           <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : connectionState === "lost" ? " dot-lost" : ""}`} />{online ? t("SSH connected") : connectionState === "lost" ? t("Connection lost") : t("SSH not connected")}</span>

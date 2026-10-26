@@ -109,7 +109,11 @@ test("OS icons cover every normalized id and unknown or missing values keep the 
     raspbian: ["osRaspbian", "Raspbian"], linux: ["osLinux", "Linux"], freebsd: ["osFreebsd", "FreeBSD"],
     macos: ["osMacos", "macOS"], windows: ["osWindows", "Windows"],
   };
-  for (const [id, [name, label]] of Object.entries(icons)) assert.deepEqual(hostOsIcon(id), { name, label });
+  for (const [id, [name, label]] of Object.entries(icons)) {
+    const icon = hostOsIcon(id);
+    assert.deepEqual({ name: icon.name, label: icon.label }, { name, label });
+    assert.match(icon.color, /^#[0-9A-F]{6}$/, `${id} lacks its official brand colour`);
+  }
   for (const id of [undefined, null, "", "unknown", "constructor", "__proto__"]) {
     assert.deepEqual(hostOsIcon(id), { name: "hosts", label: "Server" });
   }
