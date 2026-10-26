@@ -42,6 +42,14 @@ keep outputs, caches and temporary files on E:.
    failure must exit nonzero before modifying app files. Do not remove the
    host machine's shared runtime to simulate this branch.
 
+5. To release, bump `X.Y.Z` in `native/desktop/tauri.conf.json`, both Cargo
+   manifests, the `opentermius`/`opentermius-desktop` entries of `Cargo.lock`
+   and `web/package.json` plus both `web/package-lock.json` fields, then run
+   step 1. Commit, tag `vX.Y.Z` on that commit and push `main` and the tag; the
+   `Windows installer` workflow publishes the GitHub release.
+   README images use synthetic fixture data only (192.0.2.0/24 addresses) and
+   new file names; existing `docs/screenshots/` files are historical records.
+
 Keep GUI evidence under ignored `native/test-output/` and identify the platform
 and executable tested. Old screenshots/tests are not Tauri evidence. The shell
 must wire `--apply-update` before updater end-to-end verification. Windows
