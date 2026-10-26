@@ -144,6 +144,7 @@ export default function App() {
     let active = true;
     const unsubscribe = subscribeSessions((event) => {
       if (event.type === "status") {
+        if (event.hostsChanged) void listHosts().then((items) => { if (active) setHosts(items); }).catch((reason) => { if (active) setError(String(reason)); });
         setSessions((current) => current.map((session) => session.sessionId === event.sessionId ? { ...session, connected: event.connected, ended: event.ended } : session));
         if (event.error && event.message) setError(event.message);
         if (event.ended) setPrompts((current) => current.filter((prompt) => prompt.sessionId !== event.sessionId));

@@ -392,6 +392,7 @@ fn profile(port: u16) -> Profile {
         group: String::new(),
         encrypted_secret: None,
         tags: Vec::new(),
+        os: None,
         last_connected: None,
         favorite: false,
         created_at: None,

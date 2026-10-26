@@ -650,6 +650,7 @@ mod tests {
             key_id,
             group: String::new(),
             tags: Vec::new(),
+            os: None,
             last_connected: None,
             favorite: false,
             created_at: None,

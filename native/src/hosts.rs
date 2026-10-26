@@ -309,6 +309,25 @@ pub fn mark_connected(store: &mut Store, id: &str, now: &str) -> Result<bool> {
     Ok(true)
 }
 
+/// Saves a recognized OS only when changed; failed discovery leaves metadata alone.
+pub fn update_os(store: &mut Store, id: &str, os: Option<&str>) -> Result<bool> {
+    let Some(os) = os.and_then(crate::host_os::normalize_id) else {
+        return Ok(false);
+    };
+    let Some(index) = store.data.hosts.iter().position(|profile| profile.id == id) else {
+        return Ok(false);
+    };
+    if store.data.hosts[index].os.as_deref() == Some(os) {
+        return Ok(false);
+    }
+    let previous = store.data.hosts[index].os.replace(os.to_string());
+    if let Err(error) = store.persist() {
+        store.data.hosts[index].os = previous;
+        return Err(error);
+    }
+    Ok(true)
+}
+
 /// Sets the saved favorite flag, restoring it if persistence fails.
 pub fn set_favorite(store: &mut Store, id: &str, favorite: bool) -> Result<()> {
     let index = store.data.hosts.iter().position(|profile| profile.id == id)
@@ -396,6 +415,7 @@ mod tests {
             key_id: String::new(),
             group: String::new(),
             tags: Vec::new(),
+            os: None,
             last_connected: None,
             favorite: false,
             created_at: None,

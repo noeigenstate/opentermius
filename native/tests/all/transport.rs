@@ -31,6 +31,8 @@ struct State {
     terminal_queries: Arc<AtomicUsize>,
     received_responses: Arc<Mutex<Vec<u8>>>,
     stats_calls: Arc<AtomicUsize>,
+    os_calls: Arc<Mutex<Vec<String>>>,
+    os_outputs: Arc<Mutex<HashMap<String, String>>>,
 }
 #[derive(Clone)]
 struct Server(State);
@@ -187,6 +189,20 @@ impl server::Handler for Peer {
         command: &[u8],
         s: &mut server::Session,
     ) -> Result<(), Self::Error> {
+        if [opentermius::host_os::COMMAND.as_bytes(), opentermius::host_os::WINDOWS_COMMAND.as_bytes()].contains(&command) {
+            let command = String::from_utf8_lossy(command).into_owned();
+            self.state.os_calls.lock().unwrap().push(command.clone());
+            let output = self.state.os_outputs.lock().unwrap().get(&command).cloned();
+            if let Some(output) = output {
+                s.channel_success(id)?;
+                s.data(id, output.into_bytes())?;
+            } else {
+                s.channel_failure(id)?;
+            }
+            s.eof(id)?;
+            s.close(id)?;
+            return Ok(());
+        }
         if command != opentermius::server_stats::COMMAND.as_bytes() {
             s.channel_failure(id)?;
             return Ok(());
@@ -393,6 +409,7 @@ fn profile(port: u16) -> Profile {
         group: String::new(),
         encrypted_secret: None,
         tags: Vec::new(),
+        os: None,
         last_connected: None,
         favorite: false,
         created_at: None,
@@ -418,6 +435,67 @@ async fn connected(rx: &mut mpsc::Receiver<Event>) {
             _ => {}
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn os_discovery_uses_a_separate_channel_and_windows_fallback_once() {
+    for (command, output, expected) in [
+        (opentermius::host_os::COMMAND, "ID=ubuntu\nID_LIKE=debian\nLinux\n", "ubuntu"),
+        (opentermius::host_os::WINDOWS_COMMAND, "Microsoft Windows [Version 10.0.20348.0]\r\n", "windows"),
+    ] {
+        let (port, key, state, server) = fixture(false).await;
+        state.os_outputs.lock().unwrap().insert(command.into(), output.into());
+        let (tx, mut rx) = mpsc::channel(128);
+        let session = ssh::spawn(&tokio::runtime::Handle::current(), "test".into(), profile(port), "test-password".into(), Some(key), tx);
+        connected(&mut rx).await;
+        let detected = timeout(Duration::from_secs(8), async {
+            loop {
+                if let Event::OsDetected { os, .. } = next(&mut rx).await { break os; }
+            }
+        }).await.unwrap();
+        assert_eq!(detected, expected);
+        session.commands.send(Command::Input(b"probe-completed".to_vec())).await.unwrap();
+        loop {
+            match next(&mut rx).await {
+                Event::Output { data, .. } if data.windows(15).any(|part| part == b"probe-completed") => break,
+                Event::OsDetected { .. } => panic!("OS was probed more than once"),
+                _ => {}
+            }
+        }
+        let expected_calls = if expected == "windows" {
+            vec![opentermius::host_os::COMMAND, opentermius::host_os::WINDOWS_COMMAND]
+        } else {
+            vec![opentermius::host_os::COMMAND]
+        };
+        assert_eq!(*state.os_calls.lock().unwrap(), expected_calls);
+        server.abort();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn failed_os_discovery_leaves_the_terminal_and_stats_working() {
+    let (port, key, state, server) = fixture(false).await;
+    let (tx, mut rx) = mpsc::channel(128);
+    let session = ssh::spawn(&tokio::runtime::Handle::current(), "test".into(), profile(port), "test-password".into(), Some(key), tx);
+    connected(&mut rx).await;
+    // Both probe commands are rejected; stats still arrive on their own channel.
+    loop {
+        match next(&mut rx).await {
+            Event::Stats { .. } => break,
+            Event::OsDetected { .. } => panic!("failed discovery produced an OS"),
+            _ => {}
+        }
+    }
+    assert_eq!(state.os_calls.lock().unwrap().len(), 2);
+    session.commands.send(Command::Input(b"still-ready".to_vec())).await.unwrap();
+    loop {
+        match next(&mut rx).await {
+            Event::Output { data, .. } if data.windows(11).any(|part| part == b"still-ready") => break,
+            Event::OsDetected { .. } => panic!("failed discovery produced an OS"),
+            _ => {}
+        }
+    }
+    server.abort();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

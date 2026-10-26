@@ -27,6 +27,7 @@ fn data() -> Data {
             group: "Work".into(),
             encrypted_secret: None,
             tags: vec!["work".into()],
+            os: None,
             last_connected: Some("2026-01-02T03:04:05Z".into()),
             favorite: true,
             created_at: Some("2026-01-01T00:00:00Z".into()),

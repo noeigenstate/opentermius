@@ -410,6 +410,18 @@ impl SessionManager {
             return;
         }
         match event {
+            ssh::Event::OsDetected { os, .. } => {
+                let entry = &table.entries[id];
+                if state.store().and_then(|mut store| {
+                    hosts::update_os(&mut store, &entry.info.host_id, Some(&os)).map_err(translated)
+                }).unwrap_or(false) {
+                    let _ = app.emit("session://status", json!({
+                        "sessionId": id, "connected": entry.info.connected,
+                        "ended": entry.info.ended, "error": false, "message": "",
+                        "hostsChanged": true,
+                    }));
+                }
+            }
             ssh::Event::Output { data, .. } => {
                 let _ = app.emit(
                     "session://output",

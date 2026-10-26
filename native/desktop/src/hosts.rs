@@ -19,6 +19,7 @@ pub struct HostCard {
     group: String,
     tags: Vec<String>,
     favorite: bool,
+    os: Option<String>,
     last_connected: Option<String>,
 }
 
@@ -84,6 +85,7 @@ impl HostDraft {
             key_id: self.key_id,
             encrypted_secret: None,
             created_at: None,
+            os: None,
             last_connected: None,
             favorite: false,
         };
@@ -129,6 +131,7 @@ pub fn list_hosts(state: tauri::State<'_, AppState>) -> Result<Vec<HostCard>, St
             group: profile.group.clone(),
             tags: profile.tags.clone(),
             favorite: profile.favorite,
+            os: profile.os.clone(),
             last_connected: profile.last_connected.clone(),
         })
         .collect())
@@ -314,6 +317,7 @@ mod tests {
             "first-test-only-input"
         );
         hosts::set_favorite(&mut store, &id, true).unwrap();
+        hosts::update_os(&mut store, &id, Some("ubuntu")).unwrap();
         let created = store.data.hosts[0].created_at.clone();
         hosts::mark_connected(&mut store, &id, "2024-01-01T00:00:00Z").unwrap();
         let mut edit = HostDraft::from(&store.data.hosts[0]);
@@ -333,6 +337,7 @@ mod tests {
         save_draft(&mut store, edit).unwrap();
         let reopened = Store::open(store.path.clone()).unwrap();
         assert!(reopened.data.hosts[0].favorite);
+        assert_eq!(reopened.data.hosts[0].os.as_deref(), Some("ubuntu"));
         assert_eq!(
             opentermius::store::unprotect(
                 reopened.data.hosts[0].encrypted_secret.as_ref().unwrap()

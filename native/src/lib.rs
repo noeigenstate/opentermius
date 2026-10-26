@@ -1,3 +1,4 @@
+pub mod host_os;
 pub mod hosts;
 pub mod i18n;
 pub mod import_windterm;

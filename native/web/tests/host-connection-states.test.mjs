@@ -44,7 +44,9 @@ async function createApp() {
     export async function getSettings() { return { language: "en" }; }
     export async function saveSettings(next) { return next; }
     export async function onSettingsChanged() { return () => {}; }
-    export async function listHosts() { return []; }
+    let hosts = [];
+    export function setHosts(next) { hosts = next; }
+    export async function listHosts() { return hosts; }
     export async function startSessionEvents() {}
     export function subscribeSessions(listener) { listeners.add(listener); return () => listeners.delete(listener); }
     export function emit(event) {
@@ -79,6 +81,17 @@ function find(node, type) {
 const session = (values = {}) => ({ sessionId: "session-fixture", hostId: "host-fixture", title: "Fixture", local: false, connected: false, ended: false, ...values });
 const flush = async () => { await new Promise(resolve => setImmediate(resolve)); };
 const state = (app) => find(app.render(), "HostsPage").props.connectionStates.get("host-fixture");
+
+test("App refreshes host metadata through the existing session status event", async () => {
+  const app = await createApp();
+  app.render();
+  await flush();
+  const updated = [{ id: "host-fixture", os: "ubuntu" }];
+  app.mock.setHosts(updated);
+  app.mock.emit({ type: "status", sessionId: "session-fixture", connected: true, ended: false, error: false, message: "", hostsChanged: true });
+  await flush();
+  assert.equal(find(app.render(), "HostsPage").props.hosts, updated);
+});
 
 test("no session means not connected; local terminals do not set host state", async () => {
   const { hostConnectionStates } = await createApp();

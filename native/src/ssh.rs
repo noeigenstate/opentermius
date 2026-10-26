@@ -133,6 +133,10 @@ pub struct TreeSummary {
     pub bytes: u64,
 }
 pub enum Event {
+    OsDetected {
+        id: String,
+        os: String,
+    },
     /// Live CPU/memory/disk usage of a connected server.
     Stats {
         id: String,
@@ -528,6 +532,23 @@ async fn poll_stats(ssh: Arc<client::Handle<Client>>, events: mpsc::Sender<Event
     }
 }
 
+/// Discovery is best effort and shares one deadline across both platform probes.
+async fn detect_os(ssh: Arc<client::Handle<Client>>, events: mpsc::Sender<Event>, id: String) {
+    let detected = timeout(Duration::from_secs(5), async {
+        for command in [crate::host_os::COMMAND, crate::host_os::WINDOWS_COMMAND] {
+            if let Ok(output) = exec_output(&ssh, command).await {
+                if let Some(os) = crate::host_os::parse(&output) {
+                    return Some(os);
+                }
+            }
+        }
+        None
+    }).await;
+    if let Ok(Some(os)) = detected {
+        let _ = events.send(Event::OsDetected { id, os: os.to_string() }).await;
+    }
+}
+
 async fn exec_output(ssh: &client::Handle<Client>, command: &str) -> Result<String> {
     let mut channel = ssh.channel_open_session().await?;
     channel.exec(true, command).await?;
@@ -539,6 +560,7 @@ async fn exec_output(ssh: &client::Handle<Client>, command: &str) -> Result<Stri
                 ensure!(output.len() <= 64 * 1024, "{}", crate::i18n::t("Server output is too large"));
             }
             ChannelMsg::Close => break,
+            ChannelMsg::Failure => bail!("{}", crate::i18n::t("Server rejected terminal request")),
             _ => {}
         }
     }
@@ -642,6 +664,7 @@ async fn run(
     let mut connected = false;
     // Stops with the session: dropping it aborts the poller.
     let mut _stats_poller: Option<AbortOnDrop> = None;
+    let mut _os_detector: Option<AbortOnDrop> = None;
     let mut setup_timeout = Box::pin(tokio::time::sleep(Duration::from_secs(30)));
     let mut frame = interval(Duration::from_millis(10));
     frame.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -689,7 +712,8 @@ async fn run(
                 Some(ChannelMsg::Success) if !connected=>{
                     if stage==0 {stage=1;pending_control=Some(Write::Shell);setup_timeout.as_mut().reset(tokio::time::Instant::now()+Duration::from_secs(30));}
                     else {connected=true;events.send(Event::Status{id:id.into(),connected:true,message:crate::i18n::t("Connected").into(),error:false}).await.context(crate::i18n::t("Window closed"))?;
-                        _stats_poller=Some(AbortOnDrop(tokio::spawn(poll_stats(ssh.clone(),events.clone(),id.to_string()))));}
+                        _stats_poller=Some(AbortOnDrop(tokio::spawn(poll_stats(ssh.clone(),events.clone(),id.to_string()))));
+                        _os_detector=Some(AbortOnDrop(tokio::spawn(detect_os(ssh.clone(),events.clone(),id.to_string()))));}
                 },
                 None|Some(ChannelMsg::Close)=>break,
                 Some(ChannelMsg::Failure)=>bail!("{}", crate::i18n::t("Server rejected terminal request")),

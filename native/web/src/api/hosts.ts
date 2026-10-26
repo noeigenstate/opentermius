@@ -10,6 +10,7 @@ export interface Host {
   group: string;
   tags: string[];
   favorite: boolean;
+  os?: string | null;
   lastConnected: string | null;
 }
 

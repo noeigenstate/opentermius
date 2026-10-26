@@ -13,6 +13,7 @@ export interface SessionInfo {
 }
 
 export interface SessionStatus {
+  hostsChanged?: boolean;
   sessionId: string;
   connected: boolean;
   ended: boolean;

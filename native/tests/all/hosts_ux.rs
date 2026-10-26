@@ -16,6 +16,7 @@ fn profile(id: &str, name: &str) -> Profile {
         group: String::new(),
         encrypted_secret: None,
         tags: Vec::new(),
+        os: None,
         last_connected: None,
         favorite: false,
         created_at: None,
@@ -33,9 +34,59 @@ fn legacy_config_gets_defaults_for_host_metadata() {
     assert!(data.hosts[0].last_connected.is_none());
     assert!(data.hosts[0].created_at.is_none());
     assert!(!data.hosts[0].favorite);
+    assert!(data.hosts[0].os.is_none());
     assert_eq!(data.hosts_view, HostsView::default());
     assert_eq!(data.hosts_view.view_mode(), ViewMode::Grid);
     assert_eq!(data.hosts_view.sort_mode(), SortMode::Name);
+}
+
+#[test]
+fn detected_os_survives_edit_duplicate_export_and_recovery() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(temp.path().join("data.json")).unwrap();
+    store.save(profile("a", "Alpha"), None, false).unwrap();
+    assert!(hosts::update_os(&mut store, "a", Some("ubuntu")).unwrap());
+    let mut edited = store.data.hosts[0].clone();
+    edited.os = None;
+    store.save(edited, None, false).unwrap();
+    assert_eq!(Store::open(store.path.clone()).unwrap().data.hosts[0].os.as_deref(), Some("ubuntu"));
+    let copy = hosts::duplicate_profile(&mut store, "a").unwrap();
+    assert_eq!(store.data.hosts.iter().find(|host| host.id == copy).unwrap().os.as_deref(), Some("ubuntu"));
+    let export = temp.path().join("export.json");
+    store.export(&export).unwrap();
+    let mut imported = Store::open(temp.path().join("import.json")).unwrap();
+    assert_eq!(imported.import(&export).unwrap(), 2);
+    assert!(imported.data.hosts.iter().all(|host| host.os.as_deref() == Some("ubuntu")));
+    let code = opentermius::recovery::generate(&store.data, None, false).unwrap();
+    let mut restored = Store::open(temp.path().join("restored.json")).unwrap();
+    opentermius::recovery::restore(&mut restored, &code, None, opentermius::recovery::RestoreMode::Replace).unwrap();
+    assert!(Store::open(restored.path).unwrap().data.hosts.iter().all(|host| host.os.as_deref() == Some("ubuntu")));
+}
+
+#[test]
+fn failed_or_unchanged_os_detection_does_not_write_and_failed_save_rolls_back() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(temp.path().join("data.json")).unwrap();
+    store.save(profile("a", "Alpha"), None, false).unwrap();
+    let unknown = serde_json::to_value(&store.data).unwrap();
+    assert!(!hosts::update_os(&mut store, "a", opentermius::host_os::parse("unknown")).unwrap());
+    assert_eq!(serde_json::to_value(&store.data).unwrap(), unknown);
+    assert!(hosts::update_os(&mut store, "a", Some("ubuntu")).unwrap());
+    assert!(hosts::update_os(&mut store, "a", Some("debian")).unwrap());
+    let previous = serde_json::to_value(&store.data).unwrap();
+    let disk = std::fs::read(&store.path).unwrap();
+    for os in [None, Some("unknown"), Some("debian")] {
+        assert!(!hosts::update_os(&mut store, "a", os).unwrap());
+        assert_eq!(serde_json::to_value(&store.data).unwrap(), previous);
+        assert_eq!(std::fs::read(&store.path).unwrap(), disk);
+    }
+    let blocker = temp.path().join("blocked");
+    std::fs::write(&blocker, "blocked").unwrap();
+    store.path = blocker.join("data.json");
+    assert!(!hosts::update_os(&mut store, "a", Some("debian")).unwrap());
+    assert!(!hosts::update_os(&mut store, "missing", Some("ubuntu")).unwrap());
+    assert!(hosts::update_os(&mut store, "a", Some("ubuntu")).is_err());
+    assert_eq!(serde_json::to_value(&store.data).unwrap(), previous);
 }
 
 #[test]

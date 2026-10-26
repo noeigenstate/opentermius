@@ -66,6 +66,7 @@ fn draft(session: &Value, home: &Path) -> Result<HostDraft> {
         group: text("session.group").split('>').map(str::trim).filter(|s| !s.is_empty()).collect::<Vec<_>>().join("/"),
         encrypted_secret: None,
         tags: Vec::new(),
+        os: None,
         last_connected: None,
         favorite: false,
         created_at: None,

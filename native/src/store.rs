@@ -40,6 +40,8 @@ pub struct Profile {
     pub tags: Vec<String>,
     #[serde(default)]
     pub favorite: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
     #[serde(default)]
     pub last_connected: Option<String>,
     #[serde(default)]
@@ -175,6 +177,7 @@ impl Store {
         let previous = self.data.hosts.iter().find(|p| p.id == profile.id);
         let previous_created = previous.and_then(|p| p.created_at.clone());
         let previous_connected = previous.and_then(|p| p.last_connected.clone());
+        let previous_os = previous.and_then(|p| p.os.clone());
         profile.encrypted_secret = if remember {
             if let Some(value) = secret.filter(|s| !s.is_empty()) {
                 Some(protect(value)?)
@@ -192,6 +195,9 @@ impl Store {
             .or_else(|| Some(crate::hosts::now_rfc3339()));
         if profile.last_connected.is_none() {
             profile.last_connected = previous_connected;
+        }
+        if profile.os.is_none() {
+            profile.os = previous_os;
         }
         match self.data.hosts.iter_mut().find(|p| p.id == profile.id) {
             Some(p) => *p = profile,
@@ -370,6 +376,7 @@ pub fn parse_quick_connect(value: &str) -> Result<Profile> {
         group: String::new(),
         encrypted_secret: None,
         tags: Vec::new(),
+        os: None,
         last_connected: None,
         favorite: false,
         created_at: None,
@@ -537,6 +544,7 @@ mod tests {
             group: String::new(),
             encrypted_secret: None,
             tags: Vec::new(),
+            os: None,
             last_connected: None,
             favorite: false,
             created_at: None,
@@ -601,6 +609,7 @@ mod core_regression_tests {
             group: String::new(),
             encrypted_secret: None,
             tags: Vec::new(),
+            os: None,
             last_connected: None,
             favorite: false,
             created_at: None,
