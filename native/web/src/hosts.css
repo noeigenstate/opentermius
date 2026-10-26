@@ -73,7 +73,7 @@
 .usage-ring-progress { transition: stroke-dasharray 400ms ease-out; }
 
 /* List rows reuse the card markup: the header and identity dissolve into grid cells. */
-.hosts-list .host-card { display: grid; grid-template-columns: 42px 176px 152px minmax(0, 1fr) 141px 125px 26px; grid-template-rows: auto auto; align-items: center; column-gap: 13px; min-height: 70px; padding: 0 16px; border-radius: 13px; }
+.hosts-list .host-card { display: grid; grid-template-columns: 42px 176px 152px minmax(0, 1fr) 141px 83px 26px; grid-template-rows: auto auto; align-items: center; column-gap: 13px; min-height: 70px; padding: 0 16px; border-radius: 13px; }
 .hosts-list .host-card-header, .hosts-list .host-card-identity { display: contents; }
 .hosts-list .host-server-glyph { grid-area: 1 / 1 / span 2; width: 42px; height: 42px; border-radius: 11px; }
 .hosts-list .host-card-identity h3 { grid-area: 1 / 2; align-self: end; padding-right: 28px; }
@@ -91,7 +91,7 @@
 @media (hover: hover) and (pointer: fine) { .hosts-list .host-card:hover { transform: translateY(-2px); } }
 @media (max-width: 1160px) { .hosts-list .host-card-labels { display: none; } }
 @media (max-width: 1000px) {
-  .hosts-list .host-card { grid-template-columns: 42px minmax(0, 176px) minmax(0, 1fr) 0 0 125px 26px; }
+  .hosts-list .host-card { grid-template-columns: 42px minmax(0, 176px) minmax(0, 1fr) 0 0 83px 26px; }
   .hosts-list .host-metrics { display: none; }
   .hosts-groups { max-width: 100%; }
   .page-controls { flex-wrap: wrap; }

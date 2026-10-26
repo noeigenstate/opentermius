@@ -152,20 +152,15 @@ test("favorite action persists the inverse flag and refreshes the host collectio
   assert.equal(received, updated);
 });
 
-test("card exposes status, tone, favorite and SFTP actions without bubbling a connection", async (context) => {
+test("card exposes status, tone and favorite, with SFTP only in the host menu", async (context) => {
   const { render } = await createPage(context);
-  let connections = 0;
-  let sftp = 0;
-  const element = byClass(render({ hosts: [host("a", "", true)], onConnect: () => connections++, onSftp: () => sftp++, onlineHostIds: new Set(["a"]) }), "hosts-grid")[0].props.children[0];
+  const element = byClass(render({ hosts: [host("a", "", true)], onConnect() {}, onSftp() {}, onlineHostIds: new Set(["a"]) }), "hosts-grid")[0].props.children[0];
   const card = element.type(element.props);
   assert.equal(card.props["data-online"], true);
   assert.equal(byClass(card, "host-server-glyph")[0].props["data-tone"], "purple");
   assert.equal(byClass(card, "host-favorite")[0].props["aria-pressed"], true);
-  let stopped = false;
-  byClass(card, "host-sftp")[0].props.onClick({ stopPropagation: () => { stopped = true; } });
-  assert(stopped);
-  assert.equal(sftp, 1);
-  assert.equal(connections, 0);
+  assert.equal(byClass(card, "host-sftp").length, 0);
+  assert.equal(byClass(card, "host-more").length, 1);
   assert.equal(byClass(card, "host-card-footer").length, 0);
   assert.equal(byClass(card, "host-usage-note").length, 0);
 });

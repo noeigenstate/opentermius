@@ -28,7 +28,7 @@ export function hostTone(id: string) {
 
 const UNKNOWN: Usage = { cpu: null, memory: null, disk: null };
 
-function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, onSftp, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onSftp?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
+function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, onFavorite, onEdit, onMenu }: { host: Host; usage: Usage; online: boolean; selected: boolean; busy: boolean; onSelect: () => void; onConnect?: () => void; onFavorite: () => void; onEdit: () => void; onMenu: (x: number, y: number) => void }) {
   const favoriteLabel = t(host.favorite ? "Remove from favorites" : "Add to favorites");
   const openMenu = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -63,7 +63,6 @@ function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, on
       </div>
       <div className="host-card-actions">
         <button className="btn btn-l btn-tonal host-connect" disabled={!onConnect} data-tooltip={t("Open an SSH connection")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onConnect?.(); }}><Icon name="prompt" size={18} />{t("Connect")}</button>
-        <button className="icon-button icon-button-lg icon-button-boxed host-sftp" disabled={!onSftp} aria-label={t("Open SFTP")} data-tooltip={t("Open SFTP")} onDoubleClick={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onSftp?.(); }}><Icon name="external" size={20} /></button>
       </div>
     </article>
   );
@@ -222,7 +221,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
       ) : (
         <div className={`hosts-${view}`} ref={grid} onKeyDown={moveSelection}>
           {visible.map((h) => (
-            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onSftp={onSftp ? () => onSftp(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
+            <HostCard key={h.id} host={h} usage={usageByHost[h.id] ?? UNKNOWN} online={onlineHostIds.has(h.id)} selected={selected === h.id} busy={busy} onSelect={() => setSelected(h.id)} onConnect={onConnect ? () => onConnect(h.id) : undefined} onFavorite={() => toggleFavorite(h)} onEdit={() => edit(h.id)} onMenu={(x, y) => setMenu({ host: h, x, y })} />
           ))}
         </div>
       )}
@@ -231,6 +230,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
         { label: t("Duplicate"), icon: "copy", onSelect: () => duplicate(menu.host.id) },
         { label: t("Delete"), icon: "trash", danger: true, onSelect: () => askDelete(menu.host) },
         { label: t("Connect"), icon: "prompt", disabled: !onConnect, onSelect: () => onConnect?.(menu.host.id) },
+        { label: t("Open SFTP"), icon: "folder", disabled: !onSftp, onSelect: () => onSftp?.(menu.host.id) },
       ]} />}
       {editor && <HostEditor initial={editor} groups={groups} onClose={() => setEditor(null)} onSaved={async (hostId) => { setSelected(hostId); await refresh(); }} onConnect={onConnect} />}
       {deleting && <HostModal titleId="host-delete-title" onClose={() => { if (!busy) setDeleting(null); }}>
