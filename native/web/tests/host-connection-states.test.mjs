@@ -166,8 +166,8 @@ test("App clears a thrown failure when an existing ended tab is explicitly close
   find(app.render(), "HostsPage").props.onConnect("host-fixture");
   await flush();
   assert.equal(state(app), "lost");
-  // The Hosts page has no tab strip; close the tab from another page.
-  find(app.render(), "Sidebar").props.onSelect("logs");
+  // Only Terminals shows the tab strip; close the tab there.
+  find(app.render(), "Sidebar").props.onSelect("terminals");
   find(app.render(), "TitleBar").props.tabs.onClose("session-fixture");
   await flush();
   find(app.render(), "Sidebar").props.onSelect("hosts");
@@ -227,7 +227,7 @@ test("the Hosts page hides tabs and enters a connected host's open session", asy
   find(app.render(), "Sidebar").props.onSelect("favorites");
   assert.equal(tabs(), undefined);
   find(app.render(), "Sidebar").props.onSelect("logs");
-  assert.equal(tabs().activeSessionId, null, "other pages keep the tab strip");
+  assert.equal(tabs(), undefined, "only Terminals shows the tab strip");
   find(app.render(), "Sidebar").props.onSelect("hosts");
   hostsPage().onOpenSession("host-fixture");
   assert.equal(tabs().activeSessionId, "session-fixture");
@@ -251,27 +251,10 @@ test("Terminals opens the newest session initially and restores the last viewed 
   sidebar().onSelect("terminals");
   assert.equal(tabs().activeSessionId, "first-fixture");
   sidebar().onSelect("logs");
-  assert.equal(tabs().activeSessionId, null, "sidebar navigation leaves the session view");
+  assert.equal(tabs(), undefined, "sidebar navigation leaves the session view");
+  assert.equal(sidebar().section, "logs");
   sidebar().onSelect("terminals");
   assert.equal(tabs().activeSessionId, "first-fixture");
-});
-
-test("closing the remembered tab in the background keeps the page and Terminals falls back to newest", async () => {
-  const app = await createApp();
-  app.mock.setSessions([session({ sessionId: "first-fixture" }), session({ sessionId: "newest-fixture" })]);
-  app.render();
-  await flush();
-  const sidebar = () => find(app.render(), "Sidebar").props;
-  const tabs = () => find(app.render(), "TitleBar").props.tabs;
-  sidebar().onSelect("terminals");
-  tabs().onSelect("first-fixture");
-  sidebar().onSelect("keychain");
-  tabs().onClose("first-fixture");
-  await flush();
-  assert.equal(sidebar().section, "keychain");
-  assert.equal(tabs().activeSessionId, null);
-  sidebar().onSelect("terminals");
-  assert.equal(tabs().activeSessionId, "newest-fixture");
 });
 
 test("closing the active tab selects its right neighbour, then its left, and finally the Terminals page", async () => {
@@ -325,7 +308,12 @@ test("a pending close preserves a later sidebar or tab selection", async () => {
     app.mock.finishClose();
     await flush();
     assert.equal(sidebar().section, destination === "keychain" ? "keychain" : "terminals");
-    assert.equal(tabs().activeSessionId, destination === "keychain" ? null : destination);
+    if (destination === "keychain") {
+      assert.equal(tabs(), undefined);
+      // The remembered tab is gone, so Terminals falls back to the newest session.
+      sidebar().onSelect("terminals");
+    }
+    assert.equal(tabs().activeSessionId, "newest-fixture");
     assert.deepEqual(tabs().sessions.map(item => item.sessionId), ["newest-fixture"]);
   }
 });
@@ -338,7 +326,7 @@ test("empty Terminals keeps the strip, returns to Hosts and opens a local termin
   const tabs = () => find(app.render(), "TitleBar").props.tabs;
   for (const section of ["hosts", "favorites", "terminals", "keychain", "snippets", "logs", "settings"]) {
     sidebar().onSelect(section);
-    if (section === "hosts" || section === "favorites") assert.equal(tabs(), undefined);
+    if (section !== "terminals") assert.equal(tabs(), undefined);
     else {
       assert.deepEqual(tabs().sessions, []);
       assert.equal(tabs().activeSessionId, null);

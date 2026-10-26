@@ -206,8 +206,8 @@ export default function App() {
       <div className="app-body">
         <Sidebar section={activeSessionId ? "terminals" : section} onSelect={(next) => { setSection(next); setActiveSessionId(next === "terminals" ? sessions.find((session) => session.sessionId === lastSessionId.current)?.sessionId ?? sessions.at(-1)?.sessionId ?? null : null); }} />
         <div className="workspace-shell">
-          {/* Host management and terminals stay apart: the Hosts page enters sessions from its cards, not from tabs. */}
-          <TitleBar tabs={!activeSessionId && (section === "hosts" || section === "favorites") ? undefined : { sessions, activeSessionId, onSelect: setActiveSessionId,
+          {/* The tab strip belongs to Terminals; other pages enter sessions from their own actions. */}
+          <TitleBar tabs={!activeSessionId && section !== "terminals" ? undefined : { sessions, activeSessionId, onSelect: setActiveSessionId,
             onNew: openLocal,
             onReconnect: reconnect,
             onDuplicate: (id) => { void run(id, async () => { await addSession(await duplicateSession(id)); }); },
