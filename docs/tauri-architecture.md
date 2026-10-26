@@ -14,7 +14,7 @@ native/
     src/pages/<Page>.tsx   one page per sidebar section
     src/components/        shared UI (TitleBar, Sidebar, UsageRing, Dialog, …)
     src/i18n.ts            `t("English text")`; Chinese strings in src/i18n/zh/<feature>.ts
-    src/styles.css         glass theme tokens (CSS variables) and shared classes
+    src/styles.css         theme tokens (CSS variables) and shared classes
     src/hosts.css          host workspace, metrics and interaction states
     src/workspaces.css     auxiliary pages, grouped settings and SFTP surfaces
 ```
@@ -44,8 +44,10 @@ native/
   PTY (`session_resize`) and forwards input (`session_input`).
 - **Strings**: every user-visible string in TS goes through `t("…")` with a Chinese entry
   in your feature's own `src/i18n/zh/<feature>.ts` (default-exported map); Rust messages go through `opentermius::i18n` (catalog tests).
-- **Style**: reuse the CSS variables in `styles.css`; cards solid white, chrome
-  translucent (`.glass`); no new UI libraries without need.
+- **Style**: reuse the CSS variables in `styles.css`; cards and sidebar are opaque.
+  Windows 11 uses an opaque native background with DWM corners; Windows 10 keeps
+  a transparent native background for the CSS rounded contour. No new UI libraries
+  without need.
 - **Motion**: use finite CSS feedback, leave resting controls untransformed and
   respect reduced motion. `SurfaceEffects` delegates tooltips and suppresses
   decorative animation while the window is inactive. Logs pause polling when

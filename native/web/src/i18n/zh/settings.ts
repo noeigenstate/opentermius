@@ -5,8 +5,6 @@ export default {
   "English": "English",
   "Simplified Chinese": "简体中文",
   "System": "跟随系统",
-  "Glass effect": "毛玻璃效果",
-  "Takes effect after restart": "重启后生效",
   "Font size": "字体大小",
   "Scrollback lines": "回滚行数",
   "Cursor blink": "光标闪烁",

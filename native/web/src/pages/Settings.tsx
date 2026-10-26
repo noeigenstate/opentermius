@@ -11,8 +11,8 @@ function Group({ title, icon, children }: { title: string; icon: IconName; child
   return <section className="settings-group" aria-label={t(title)}><h2><Icon name={icon} />{t(title)}</h2><div className="settings-card">{children}</div></section>;
 }
 
-function Toggle({ label, value, onChange, hint }: { label: string; value: boolean; onChange: (value: boolean) => void; hint?: string }) {
-  return <label className="settings-row"><span>{t(label)}{hint && <small>{t(hint)}</small>}</span><input type="checkbox" role="switch" checked={value} onChange={e => onChange(e.target.checked)} /></label>;
+function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+  return <label className="settings-row"><span>{t(label)}</span><input type="checkbox" role="switch" checked={value} onChange={e => onChange(e.target.checked)} /></label>;
 }
 
 function NumberSetting({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void }) {
@@ -111,7 +111,6 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
     <fieldset className="settings-fields" disabled={saving || busy || recovery}>
       <Group title="Appearance" icon="settings">
         <label className="settings-row"><span>{t("Language")}</span><select aria-label={t("Language")} value={settings.language} onChange={e => change("language", e.target.value as Settings["language"])}><option value="en">{t("English")}</option><option value="zh-CN">{t("Simplified Chinese")}</option><option value="system">{t("System")}</option></select></label>
-        <Toggle label="Glass effect" hint="Takes effect after restart" value={settings.glassEffect} onChange={v => change("glassEffect", v)} />
       </Group>
       <Group title="Terminal" icon="terminal">
         <NumberSetting label="Font size" value={settings.fontSize} min={10} max={24} onChange={v => change("fontSize", v)} />

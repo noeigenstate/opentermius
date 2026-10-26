@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn command_settings_round_trip_normalizes_without_changing_other_preferences() {
-        let source = r#"{"language":"zh-CN","fontSize":30,"scrollbackLines":0,"keepaliveSeconds":0,"connectionTimeoutSeconds":0,"glassEffect":false,"autoUpdate":false,"colorScheme":"monokai"}"#;
+        let source = r#"{"language":"zh-CN","fontSize":30,"scrollbackLines":0,"keepaliveSeconds":0,"connectionTimeoutSeconds":0,"autoUpdate":false,"colorScheme":"monokai"}"#;
         let settings = serde_json::from_str::<Settings>(source)
             .unwrap()
             .normalized();
@@ -84,7 +84,6 @@ mod tests {
         assert_eq!(settings.scrollback_lines, 1000);
         assert_eq!(settings.connection_timeout_seconds, 1);
         assert_eq!(settings.keepalive_seconds, 0);
-        assert!(!settings.glass_effect);
         assert!(!settings.auto_update);
         let json = serde_json::to_string(&settings).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);

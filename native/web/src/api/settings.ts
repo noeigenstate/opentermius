@@ -12,7 +12,6 @@ export interface Settings {
   colorScheme: "default" | "solarized-dark" | "monokai" | "light";
   appearance: "light" | "dark" | "system";
   gpuRendering: boolean;
-  glassEffect: boolean;
   keepaliveSeconds: number;
   connectionTimeoutSeconds: number;
   confirmOverwrite: boolean;

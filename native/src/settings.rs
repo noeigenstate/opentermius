@@ -281,8 +281,6 @@ pub struct Settings {
     pub color_scheme: ColorScheme,
     pub appearance: Appearance,
     pub gpu_rendering: bool,
-    /// Frosted-glass window (GPU renderer + OS blur-behind); off draws an opaque window.
-    pub glass_effect: bool,
     pub keepalive_seconds: u32,
     pub connection_timeout_seconds: u32,
     pub confirm_overwrite: bool,
@@ -304,7 +302,6 @@ impl Default for Settings {
             color_scheme: ColorScheme::Default,
             appearance: Appearance::default(),
             gpu_rendering: false,
-            glass_effect: true,
             keepalive_seconds: KEEPALIVE_DEFAULT,
             connection_timeout_seconds: CONNECTION_TIMEOUT_DEFAULT,
             confirm_overwrite: true,
@@ -415,6 +412,68 @@ mod tests {
         let data: crate::store::Data = serde_json::from_str(r#"{"version":2,"hosts":[]}"#).unwrap();
         assert_eq!(data.settings, Settings::default());
         assert_eq!(data.settings.scrollback_lines, 3000);
+    }
+
+    #[test]
+    fn old_config_with_glass_effect_preserves_other_settings() {
+        let source = r#"{
+            "version": 2,
+            "hosts": [],
+            "settings": {
+                "language": "zh-CN",
+                "fontSize": 20,
+                "scrollbackLines": 20000,
+                "cursorBlink": false,
+                "copyOnSelect": true,
+                "confirmMultilinePaste": false,
+                "bell": "none",
+                "colorScheme": "monokai",
+                "appearance": "dark",
+                "gpuRendering": true,
+                "glassEffect": false,
+                "keepaliveSeconds": 0,
+                "connectionTimeoutSeconds": 45,
+                "confirmOverwrite": false,
+                "showHiddenFiles": false,
+                "autoUpdate": false
+            }
+        }"#;
+        let expected = Settings {
+            language: crate::i18n::Language::Chinese,
+            font_size: 20,
+            scrollback_lines: 20_000,
+            cursor_blink: false,
+            copy_on_select: true,
+            confirm_multiline_paste: false,
+            bell: BellMode::None,
+            color_scheme: ColorScheme::Monokai,
+            appearance: Appearance::Dark,
+            gpu_rendering: true,
+            keepalive_seconds: 0,
+            connection_timeout_seconds: 45,
+            confirm_overwrite: false,
+            show_hidden_files: false,
+            auto_update: false,
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("data.json");
+        let mut legacy: serde_json::Value = serde_json::from_str(source).unwrap();
+        for glass in [false, true] {
+            legacy["settings"]["glassEffect"] = glass.into();
+            std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+            let mut store = crate::store::Store::open(path.clone()).unwrap();
+            assert_eq!(store.data.settings, expected);
+            assert_eq!(persist(&mut store, expected.clone()).unwrap(), expected);
+            let saved: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let mut remaining = legacy["settings"].clone();
+            remaining.as_object_mut().unwrap().remove("glassEffect");
+            assert_eq!(saved["settings"], remaining);
+            assert_eq!(
+                crate::store::Store::open(path.clone()).unwrap().data.settings,
+                expected
+            );
+        }
     }
 
     #[test]

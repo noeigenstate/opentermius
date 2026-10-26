@@ -49,16 +49,12 @@ unsafe extern "system" {
     fn DestroyIcon(icon: *mut c_void) -> i32;
 }
 
-pub fn configure(window: &tauri::WebviewWindow, glass: bool) -> tauri::Result<()> {
+pub fn configure(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     // Tao's undecorated shadow reserves non-client insets outside the WebView.
     window.set_shadow(false)?;
     update_icons(&window.as_ref().window())?;
     if native_corners(&window.as_ref().window())? {
-        if glass {
-            let _ = window_vibrancy::apply_blur(window, Some((238, 241, 246, 90)));
-        } else {
-            window.set_background_color(Some(tauri::window::Color(238, 241, 246, 255)))?;
-        }
+        window.set_background_color(Some(tauri::window::Color(238, 241, 246, 255)))?;
     } else {
         // Blur paints square corners. Let the WebView composite its rounded
         // contour directly onto the desktop through a transparent native window.

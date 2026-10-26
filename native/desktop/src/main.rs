@@ -47,9 +47,8 @@ fn main() {
             #[cfg(windows)]
             {
                 use tauri::Manager;
-                let glass = _app.state::<AppState>().store()?.data.settings.glass_effect;
                 if let Some(window) = _app.get_webview_window("main") {
-                    window_frame::configure(&window, glass)?;
+                    window_frame::configure(&window)?;
                 }
             }
             Ok(())
