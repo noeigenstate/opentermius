@@ -1,10 +1,11 @@
 import { t } from "../i18n";
 import { Icon, type IconName } from "../icons";
 
-export type Section = "hosts" | "keychain" | "snippets" | "logs" | "favorites" | "settings";
+export type Section = "hosts" | "terminals" | "keychain" | "snippets" | "logs" | "favorites" | "settings";
 
 const items: { id: Section; label: string; icon: IconName }[] = [
   { id: "hosts", label: "Hosts", icon: "hosts" },
+  { id: "terminals", label: "Terminals", icon: "prompt" },
   { id: "keychain", label: "Keychain", icon: "keychain" },
   { id: "snippets", label: "Snippets", icon: "snippets" },
   { id: "logs", label: "Logs", icon: "logs" },
@@ -21,18 +22,18 @@ function NavItem({ id, label, icon, active, onSelect }: { id: Section; label: st
   );
 }
 
-/** `section` is null while a session is in front: the content is then no section's page. */
+/** `section` is terminals while a session is in front. */
 export function Sidebar({ section, onSelect }: { section: Section | null; onSelect: (s: Section) => void }) {
   return (
     <nav className="sidebar" aria-label={t("Navigation")}>
       <div className="sidebar-brand"><span className="brand-mark"><Icon name="logo" size={34} /></span><span>{t("OpenTermius")}</span></div>
       <div className="nav-list" data-index={items.findIndex((item) => item.id === section)}>
         <span className="nav-indicator" aria-hidden="true" />
-        {items.slice(0, 3).map((item) => (
+        {items.slice(0, 4).map((item) => (
           <NavItem key={item.id} {...item} active={section === item.id} onSelect={onSelect} />
         ))}
         <hr className="sidebar-divider" />
-        {items.slice(3).map((item) => (
+        {items.slice(4).map((item) => (
           <NavItem key={item.id} {...item} active={section === item.id} onSelect={onSelect} />
         ))}
       </div>

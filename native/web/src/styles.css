@@ -124,16 +124,17 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .nav-item:active { background: var(--pressed); transform: scale(.98); }
 .nav-active, .nav-active:hover, .nav-active:active { color: var(--ink); font-weight: 700; background: transparent; }
 .sidebar-divider { height: 1px; margin: 8px 11px; border: 0; background: var(--card-border); }
-/* One indicator (pill, edge bar and dot) slides between rows; rows are 48px + 8px gap, and the divider adds 25px. */
+/* One indicator (pill, edge bar and dot) slides between seven rows; rows are 48px + 8px gap, and the divider after row four adds 25px. */
 .nav-indicator { position: absolute; z-index: 0; inset: 0 0 auto; height: 48px; border-radius: 11px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 3px 10px rgba(0, 0, 0, .08); opacity: 0; transition: transform 200ms var(--ease-out), opacity var(--duration-fast); }
 .nav-indicator::before { content: ""; position: absolute; left: -18px; top: 0; bottom: 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--selected-edge); }
 .nav-indicator::after { content: ""; position: absolute; right: 21px; top: 19px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
 .nav-list:not([data-index="-1"]) .nav-indicator { opacity: 1; }
 .nav-list[data-index="1"] .nav-indicator { transform: translateY(56px); }
 .nav-list[data-index="2"] .nav-indicator { transform: translateY(112px); }
-.nav-list[data-index="3"] .nav-indicator { transform: translateY(193px); }
+.nav-list[data-index="3"] .nav-indicator { transform: translateY(168px); }
 .nav-list[data-index="4"] .nav-indicator { transform: translateY(249px); }
 .nav-list[data-index="5"] .nav-indicator { transform: translateY(305px); }
+.nav-list[data-index="6"] .nav-indicator { transform: translateY(361px); }
 
 /* --- Session strip: tabs on the left, window controls flush right ------------ */
 .titlebar { height: var(--strip-height); flex: none; display: flex; align-items: center; padding-left: 16px; user-select: none; }

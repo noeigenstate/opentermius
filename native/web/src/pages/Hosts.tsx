@@ -385,7 +385,7 @@ export function HostsPage({ hosts: allHosts, favoritesOnly = false, onHostsChang
       <header className="page-header">
         <div>
           <h1>{t(favoritesOnly ? "Favorites" : "Hosts")}</h1>
-          <p>{t(favoritesOnly ? "Hosts you starred" : "Manage saved connections and open SSH sessions.")}</p>
+          <p>{t(favoritesOnly ? "Hosts you starred" : "Manage your saved hosts.")}</p>
         </div>
         <div className="page-actions">{!favoritesOnly && onLocalTerminal && <button className="btn btn-l host-local-terminal" onClick={onLocalTerminal}><Icon name="prompt" size={16} />{t("Local Terminal")}</button>}<button className="btn btn-primary btn-l" disabled={busy} onClick={addHost}><Icon name="plus" size={16} />{t("New host")}</button></div>
       </header>

@@ -501,9 +501,9 @@ export async function verifyUi({ port = 9337, output }) {
       return layout;
     });
 
-    await check('keychain-page', () => navigate(1, 'main .page-header h1', 'keychain.png'));
-    await check('snippets-page', () => navigate(2, 'main .page-header h1', 'snippets.png'));
-    await check('settings-page', () => navigate(5, 'main .page-header h1', 'settings.png'));
+    await check('keychain-page', () => navigate(2, 'main .page-header h1', 'keychain.png'));
+    await check('snippets-page', () => navigate(3, 'main .page-header h1', 'snippets.png'));
+    await check('settings-page', () => navigate(6, 'main .page-header h1', 'settings.png'));
 
     await check('reduced-motion-preference', async () => {
       await navigate(0, 'main .page-header h1');

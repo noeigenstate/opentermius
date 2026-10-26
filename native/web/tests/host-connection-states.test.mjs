@@ -18,6 +18,9 @@ async function createApp() {
     const statuses = new Map();
     let sessions = [];
     let connectError;
+    let closeGate;
+    export function deferClose() { let resolve; const promise = new Promise(done => { resolve = done; }); closeGate = { promise, resolve }; }
+    export function finishClose() { closeGate?.resolve(); }
     export function begin() { cursor = 0; }
     export function useState(initial) {
       const index = cursor++;
@@ -35,7 +38,7 @@ async function createApp() {
     export const jsxs = jsx;
     export const lazy = () => "SessionPage";
     export const Suspense = "Suspense";
-    export const HostsPage = "HostsPage", TitleBar = "TitleBar", Sidebar = "Sidebar";
+    export const HostsPage = "HostsPage", TerminalsPage = "TerminalsPage", TitleBar = "TitleBar", Sidebar = "Sidebar";
     export const SettingsPage = "SettingsPage", KeychainPage = "KeychainPage", SnippetsPage = "SnippetsPage", LogsPage = "LogsPage";
     export const PromptDialog = "PromptDialog", SurfaceEffects = "SurfaceEffects", Icon = "Icon";
     export function t(text) { return text; }
@@ -59,10 +62,10 @@ async function createApp() {
     export function failConnect(error) { connectError = error; }
     export async function listSessions() { return sessions; }
     export async function connectHost() { if (connectError) throw connectError; return sessions.at(-1)?.sessionId; }
-    export async function closeSession(id) { sessions = sessions.filter(session => session.sessionId !== id); }
+    export async function closeSession(id) { if (closeGate) await closeGate.promise; sessions = sessions.filter(session => session.sessionId !== id); }
     export async function reconnectSession() {}
     export async function duplicateSession() {}
-    export async function openLocalTerminal() {}
+    export async function openLocalTerminal() { return sessions.at(-1)?.sessionId; }
     export async function sessionInput() {}
   `);
   const compiled = ts.transpileModule(source, {
@@ -149,6 +152,8 @@ test("App tracks thrown connect failures per host and clears them after success 
   assert.equal(state(app), undefined, "a successful connection must clear the prior failure");
   find(app.render(), "TitleBar").props.tabs.onClose("session-fixture");
   await flush();
+  assert(find(app.render(), "TerminalsPage"));
+  find(app.render(), "Sidebar").props.onSelect("hosts");
   assert.equal(state(app), undefined);
 });
 
@@ -202,6 +207,7 @@ test("App replays early failures, keeps reconnecting at default, and retains dro
   assert.equal(find(app.render(), "TitleBar").props.tabs.sessions.length, 1);
   find(app.render(), "TitleBar").props.tabs.onClose("session-fixture");
   await flush();
+  find(app.render(), "Sidebar").props.onSelect("hosts");
   assert.equal(state(app), undefined);
 });
 
@@ -217,6 +223,7 @@ test("the Hosts page hides tabs and enters a connected host's open session", asy
   await flush();
   app.mock.emit({ type: "status", sessionId: "session-fixture", connected: true, ended: false, error: false, message: "" });
   assert.equal(tabs().activeSessionId, "session-fixture");
+  assert.equal(find(app.render(), "Sidebar").props.section, "terminals");
   find(app.render(), "Sidebar").props.onSelect("favorites");
   assert.equal(tabs(), undefined);
   find(app.render(), "Sidebar").props.onSelect("logs");
@@ -225,4 +232,149 @@ test("the Hosts page hides tabs and enters a connected host's open session", asy
   hostsPage().onOpenSession("host-fixture");
   assert.equal(tabs().activeSessionId, "session-fixture");
   assert.equal(tabs().sessions.length, 1, "entering a connected host must not open a second session");
+  assert.equal(find(app.render(), "Sidebar").props.section, "terminals");
+});
+
+test("Terminals opens the newest session initially and restores the last viewed tab", async () => {
+  const app = await createApp();
+  app.mock.setSessions([session({ sessionId: "first-fixture" }), session({ sessionId: "newest-fixture" })]);
+  app.render();
+  await flush();
+  const sidebar = () => find(app.render(), "Sidebar").props;
+  const tabs = () => find(app.render(), "TitleBar").props.tabs;
+  sidebar().onSelect("terminals");
+  assert.equal(tabs().activeSessionId, "newest-fixture");
+  tabs().onSelect("first-fixture");
+  assert.equal(sidebar().section, "terminals");
+  sidebar().onSelect("hosts");
+  assert.equal(tabs(), undefined);
+  sidebar().onSelect("terminals");
+  assert.equal(tabs().activeSessionId, "first-fixture");
+  sidebar().onSelect("logs");
+  assert.equal(tabs().activeSessionId, null, "sidebar navigation leaves the session view");
+  sidebar().onSelect("terminals");
+  assert.equal(tabs().activeSessionId, "first-fixture");
+});
+
+test("closing the remembered tab in the background keeps the page and Terminals falls back to newest", async () => {
+  const app = await createApp();
+  app.mock.setSessions([session({ sessionId: "first-fixture" }), session({ sessionId: "newest-fixture" })]);
+  app.render();
+  await flush();
+  const sidebar = () => find(app.render(), "Sidebar").props;
+  const tabs = () => find(app.render(), "TitleBar").props.tabs;
+  sidebar().onSelect("terminals");
+  tabs().onSelect("first-fixture");
+  sidebar().onSelect("keychain");
+  tabs().onClose("first-fixture");
+  await flush();
+  assert.equal(sidebar().section, "keychain");
+  assert.equal(tabs().activeSessionId, null);
+  sidebar().onSelect("terminals");
+  assert.equal(tabs().activeSessionId, "newest-fixture");
+});
+
+test("closing the active tab selects its right neighbour, then its left, and finally the Terminals page", async () => {
+  const app = await createApp();
+  app.mock.setSessions(["first-fixture", "middle-fixture", "last-fixture"].map(sessionId => session({ sessionId })));
+  app.render();
+  await flush();
+  const sidebar = () => find(app.render(), "Sidebar").props;
+  const tabs = () => find(app.render(), "TitleBar").props.tabs;
+  sidebar().onSelect("terminals");
+  tabs().onSelect("middle-fixture");
+  for (const [closing, next] of [["middle-fixture", "last-fixture"], ["last-fixture", "first-fixture"], ["first-fixture", null]]) {
+    tabs().onClose(closing);
+    await flush();
+    assert.equal(tabs().activeSessionId, next);
+    assert.equal(sidebar().section, "terminals");
+  }
+  assert.deepEqual(tabs().sessions, []);
+  assert(find(app.render(), "TerminalsPage"));
+  assert.equal(find(app.render(), "HostsPage"), undefined);
+});
+
+test("closing a background tab leaves the active terminal in front", async () => {
+  const app = await createApp();
+  app.mock.setSessions([session({ sessionId: "first-fixture" }), session({ sessionId: "newest-fixture" })]);
+  app.render();
+  await flush();
+  find(app.render(), "Sidebar").props.onSelect("terminals");
+  find(app.render(), "TitleBar").props.tabs.onClose("first-fixture");
+  await flush();
+  const tree = app.render();
+  assert.equal(find(tree, "TitleBar").props.tabs.activeSessionId, "newest-fixture");
+  assert.equal(find(tree, "Sidebar").props.section, "terminals");
+});
+
+test("a pending close preserves a later sidebar or tab selection", async () => {
+  for (const destination of ["keychain", "newest-fixture"]) {
+    const app = await createApp();
+    app.mock.setSessions([session({ sessionId: "first-fixture" }), session({ sessionId: "newest-fixture" })]);
+    app.render();
+    await flush();
+    const sidebar = () => find(app.render(), "Sidebar").props;
+    const tabs = () => find(app.render(), "TitleBar").props.tabs;
+    sidebar().onSelect("terminals");
+    tabs().onSelect("first-fixture");
+    app.mock.deferClose();
+    tabs().onClose("first-fixture");
+    if (destination === "keychain") sidebar().onSelect(destination);
+    else tabs().onSelect(destination);
+    app.render();
+    app.mock.finishClose();
+    await flush();
+    assert.equal(sidebar().section, destination === "keychain" ? "keychain" : "terminals");
+    assert.equal(tabs().activeSessionId, destination === "keychain" ? null : destination);
+    assert.deepEqual(tabs().sessions.map(item => item.sessionId), ["newest-fixture"]);
+  }
+});
+
+test("empty Terminals keeps the strip, returns to Hosts and opens a local terminal", async () => {
+  const app = await createApp();
+  app.render();
+  await flush();
+  const sidebar = () => find(app.render(), "Sidebar").props;
+  const tabs = () => find(app.render(), "TitleBar").props.tabs;
+  for (const section of ["hosts", "favorites", "terminals", "keychain", "snippets", "logs", "settings"]) {
+    sidebar().onSelect(section);
+    if (section === "hosts" || section === "favorites") assert.equal(tabs(), undefined);
+    else {
+      assert.deepEqual(tabs().sessions, []);
+      assert.equal(tabs().activeSessionId, null);
+    }
+  }
+  sidebar().onSelect("terminals");
+  find(app.render(), "TerminalsPage").props.onHosts();
+  assert.equal(sidebar().section, "hosts");
+  assert.equal(tabs(), undefined);
+  sidebar().onSelect("terminals");
+  app.mock.setSessions([session({ local: true })]);
+  find(app.render(), "TerminalsPage").props.onLocalTerminal();
+  await flush();
+  assert.equal(tabs().activeSessionId, "session-fixture");
+  assert.equal(sidebar().section, "terminals");
+  assert.equal(tabs().sessions[0].local, true);
+});
+
+test("Logs reconnect and snippet run show sessions with Terminals highlighted and remember them", async () => {
+  const app = await createApp();
+  app.render();
+  await flush();
+  const sidebar = () => find(app.render(), "Sidebar").props;
+  const tabs = () => find(app.render(), "TitleBar").props.tabs;
+  sidebar().onSelect("logs");
+  app.mock.setSessions([session()]);
+  find(app.render(), "LogsPage").props.onConnect("host-fixture");
+  await flush();
+  assert.equal(tabs().activeSessionId, "session-fixture");
+  assert.equal(sidebar().section, "terminals");
+  sidebar().onSelect("snippets");
+  find(app.render(), "SnippetsPage").props.onRun("fixture");
+  await flush();
+  assert.equal(tabs().activeSessionId, "session-fixture");
+  assert.equal(sidebar().section, "terminals");
+  sidebar().onSelect("hosts");
+  sidebar().onSelect("terminals");
+  assert.equal(tabs().activeSessionId, "session-fixture");
 });

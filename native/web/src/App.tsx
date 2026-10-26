@@ -9,6 +9,7 @@ import { SettingsPage } from "./pages/Settings";
 import { Sidebar, type Section } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { HostsPage } from "./pages/Hosts";
+import { TerminalsPage } from "./pages/Terminals";
 import { PromptDialog } from "./components/PromptDialog";
 import { SurfaceEffects } from "./components/SurfaceEffects";
 
@@ -19,6 +20,7 @@ import { LogsPage } from "./pages/Logs";
 
 const titles: Record<Section, string> = {
   hosts: "Hosts",
+  terminals: "Terminals",
   keychain: "Keychain",
   snippets: "Snippets",
   favorites: "Favorites",
@@ -46,12 +48,16 @@ export default function App() {
   const [failedHostIds, setFailedHostIds] = useState(new Set<string>());
   const [initialSessionViews, setInitialSessionViews] = useState<Record<string, "terminal" | "sftp">>({});
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const lastSessionId = useRef<string | null>(null);
+  const sessionState = useRef({ sessions, activeSessionId });
   const [prompts, setPrompts] = useState<SessionPrompt[]>([]);
   const [usageByHost, setUsageByHost] = useState<Record<string, Usage>>({});
   const pending = useRef(new Set<string>());
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const updates = useUpdates(settings?.autoUpdate ?? false);
+
+  useEffect(() => { sessionState.current = { sessions, activeSessionId }; if (activeSessionId) lastSessionId.current = activeSessionId; }, [sessions, activeSessionId]);
 
   function applySettings(next: Settings) {
     setLanguage(next.language);
@@ -79,11 +85,15 @@ export default function App() {
   }, []);
 
   function removeSession(sessionId: string) {
-    const hostId = sessions.find((session) => session.sessionId === sessionId)?.hostId;
+    const { sessions, activeSessionId } = sessionState.current;
+    const index = sessions.findIndex((session) => session.sessionId === sessionId);
+    const nextSessionId = sessions[index + 1]?.sessionId ?? sessions[index - 1]?.sessionId ?? null;
+    const hostId = sessions[index]?.hostId;
     setFailedHostIds((current) => { const next = new Set(current); if (hostId) next.delete(hostId); return next; });
     forgetSession(sessionId);
     setSessions((current) => current.filter((session) => session.sessionId !== sessionId));
-    setActiveSessionId((current) => current === sessionId ? null : current);
+    setActiveSessionId((current) => current === sessionId ? nextSessionId : current);
+    if (activeSessionId === sessionId) setSection("terminals");
     setPrompts((current) => current.filter((prompt) => prompt.sessionId !== sessionId));
     setInitialSessionViews((current) => { const next = { ...current }; delete next[sessionId]; return next; });
   }
@@ -194,7 +204,7 @@ export default function App() {
     <div className="app">
       <SurfaceEffects />
       <div className="app-body">
-        <Sidebar section={activeSessionId ? null : section} onSelect={(next) => { setSection(next); setActiveSessionId(null); }} />
+        <Sidebar section={activeSessionId ? "terminals" : section} onSelect={(next) => { setSection(next); setActiveSessionId(next === "terminals" ? sessions.find((session) => session.sessionId === lastSessionId.current)?.sessionId ?? sessions.at(-1)?.sessionId ?? null : null); }} />
         <div className="workspace-shell">
           {/* Host management and terminals stay apart: the Hosts page enters sessions from its cards, not from tabs. */}
           <TitleBar tabs={!activeSessionId && (section === "hosts" || section === "favorites") ? undefined : { sessions, activeSessionId, onSelect: setActiveSessionId,
@@ -207,6 +217,7 @@ export default function App() {
             {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span><button className="icon-button icon-button-sm" aria-label={t("Dismiss")} onClick={() => setError("")}><Icon name="close" size={14} /></button></div>}
             <div id="hosts-panel" hidden={activeSessionId !== null}>
               {(section === "hosts" || section === "favorites") ? <HostsPage key={section} favoritesOnly={section === "favorites"} hosts={hosts} onHostsChange={setHosts} onConnect={connect} onOpenSession={openHostSession} onSftp={(id) => connect(id, "sftp")} onLocalTerminal={openLocal} usageByHost={usageByHost} connectionStates={connectionStates} />
+                : section === "terminals" ? <TerminalsPage onLocalTerminal={openLocal} onHosts={() => setSection("hosts")} />
                 : section === "keychain" ? <KeychainPage />
                 : section === "snippets" ? <SnippetsPage onRun={runSnippet} />
                 : section === "logs" ? <LogsPage visible={activeSessionId === null} onConnect={connect} />
