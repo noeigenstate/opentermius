@@ -11,14 +11,17 @@ configuration formats independent of visual changes.
 
 ## Material and colour
 
-- Keep the workspace opaque (`--surface`) so the desktop wallpaper cannot turn
-  its background muddy. Use glass for navigation and transient controls.
-- Colour lives only in the `:root` block of `styles.css`: the neutral scale
-  `--g0`..`--g9` and the semantic tokens (`--accent`, `--accent-fill`,
-  `--success`, `--danger`, `--surface`, `--sidebar`, tone tiles, ...) that
-  reference it. Rules elsewhere use semantic tokens only, with no hex or rgb
-  colour literals (rgba shadows of pure black are fine), so a palette change is a
-  token remap. Keep `--accent-fill` dark enough for small button labels.
+- Keep the workspace and sidebar opaque (`--surface`, `--panel`): a maximized
+  Windows 10 window has no backdrop, so any translucency shows the desktop.
+- Colour lives only in the light `:root` block of `styles.css` and the
+  `:root[data-theme="dark"]` block after it: the neutral scale `--g0`..`--g9`,
+  the semantic tokens (`--accent`, `--accent-fill`, `--success`, `--danger`,
+  `--surface`, tone tiles, ...) and the terminal palette `--term-*`. A token
+  whose value differs by theme is redefined in the dark block; `data-theme`
+  always holds the resolved `light` or `dark`. Rules elsewhere use semantic
+  tokens only, with no hex or rgb colour literals (rgba shadows of pure black
+  are fine), so a palette change is a token remap. Keep `--accent-fill` dark
+  enough for small button labels.
 - Icon colour has its own tokens: eight `--icon-*` values (`default`, `secondary`,
   `disabled`, `active`, `hover`, `success`, `warning`, `error`) colour every
   standalone icon. Icons inside filled or inverting buttons inherit the label
