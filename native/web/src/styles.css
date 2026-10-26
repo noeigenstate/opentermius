@@ -63,7 +63,7 @@
   --icon-error: #b42318;     /* errors, lost connections, ring above 90 % */
 
   --ring-track: var(--g3);
-  --ring-ok: var(--g8);
+  --ring-ok: var(--icon-active);
   --ring-warn: var(--icon-warning);
   --ring-crit: var(--icon-error);
 
@@ -232,11 +232,11 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 
 .chip { display: inline-flex; align-items: center; flex: none; height: 22px; max-width: 100px; padding: 0 10px; border-radius: 11px; font-size: 11px; font-weight: 500; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--secondary); background: var(--accent-soft); }
 
-/* Status dots: filled green is connected, a hollow grey ring is not connected, a hollow red ring is a lost connection. */
-.dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--icon-disabled); }
-.dot-online { background: var(--icon-success); box-shadow: none; }
-.dot-lost { box-shadow: inset 0 0 0 2px var(--icon-error); }
-.dot-busy { background: conic-gradient(var(--icon-success) 0 50%, var(--icon-disabled) 0); box-shadow: none; }
+/* Status dots are solid: green is connected, grey is not connected, red is a lost connection; the label carries the state too. */
+.dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--icon-disabled); }
+.dot-online { background: var(--icon-success); }
+.dot-lost { background: var(--icon-error); }
+.dot-busy { background: conic-gradient(var(--icon-success) 0 50%, var(--icon-disabled) 0); }
 
 .banner { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; padding: 11px 14px; border-radius: 11px; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--card-border); }
 .banner > svg { flex: none; margin-top: 3px; }
@@ -372,7 +372,7 @@ input[role="switch"]:disabled { opacity: .45; cursor: default; }
   .sidebar { background: var(--panel); }
 }
 @media (forced-colors: active) {
-  /* Icons fall back to system colours: statuses are told apart by shape (filled, hollow, "!"), not hue. */
+  /* Icons fall back to system colours: statuses are told apart by their labels and the "!" badge, not hue. */
   :root { --icon-default: CanvasText; --icon-secondary: CanvasText; --icon-disabled: GrayText; --icon-active: Highlight; --icon-hover: Highlight; --icon-success: CanvasText; --icon-warning: CanvasText; --icon-error: CanvasText; }
   .nav-indicator, .tab-active, .pill[aria-pressed="true"] { outline: 1px solid Highlight; }
   .dot { border: 1px solid CanvasText; }

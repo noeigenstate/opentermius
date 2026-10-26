@@ -23,8 +23,8 @@ configuration formats independent of visual changes.
   `disabled`, `active`, `hover`, `success`, `warning`, `error`) colour every
   standalone icon. Icons inside filled or inverting buttons inherit the label
   colour, and forced colours remap the tokens to system colours.
-- State is never carried by hue alone: online is a filled dot with a bold label
-  (offline is a hollow dot), usage rings thicken from 70 % and gain a badge from
+- State is never carried by hue alone: status dots are solid and always sit
+  next to a text label (connected is bold), usage rings thicken from 70 % and gain a badge from
   90 %, destructive actions use the outlined `btn-danger`. Unknown metrics
   remain unknown; screenshots must not invent usage.
 - Keep shared control styles in `styles.css`, host workspace styles in
