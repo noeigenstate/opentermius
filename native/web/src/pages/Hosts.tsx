@@ -42,7 +42,7 @@ function HostCard({ host, usage, online, selected, busy, onSelect, onConnect, on
         <span className="host-server-glyph" data-tone={hostTone(host.id)}><Icon name="hosts" size={22} /></span>
         <div className="host-card-identity">
           <h3 title={host.name}>{host.name}</h3>
-          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : ""}`} />{online ? t("Online") : t("Disconnected")}</span>
+          <span className={`host-connection-state${online ? " is-connected" : ""}`}><i className={`dot${online ? " dot-online" : ""}`} />{online ? t("SSH connected") : t("SSH not connected")}</span>
           <p className="host-endpoint" title={`${host.username ? `${host.username}@` : ""}${host.host}:${host.port}`}>
             <span>{host.username && `${host.username}@`}{host.host}</span><span className="host-port-number">:{host.port}</span>
           </p>
