@@ -34,7 +34,11 @@
 .log-table td:nth-child(2) { font-weight: 600; color: var(--text); }
 .log-table tbody tr:hover td { background: var(--surface); }
 .log-table td .feature-mono { margin: 0; font-size: 11px; }
-.log-table td.log-error { font-weight: 600; color: var(--ink); }
+/* Long errors wrap inside their column instead of pushing Actions out of the card. */
+.log-table td.log-error { min-width: 168px; padding-top: 8px; padding-bottom: 8px; white-space: normal; line-height: 1.45; font-weight: 600; color: var(--ink); }
+/* Narrow windows still scroll the table; Actions stays pinned to the card's right edge. */
+.log-table :is(th, td):last-child { position: sticky; right: 0; background: var(--card); }
+.log-table th:last-child { background: var(--panel); }
 .status-chip { display: inline-flex; align-items: center; gap: 7px; height: 22px; padding: 0 10px 0 8px; border-radius: 11px; font-size: 11px; color: var(--text); background: var(--accent-soft); }
 .status-failed { font-weight: 700; color: var(--on-accent); background: var(--ink); }
 
