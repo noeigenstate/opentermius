@@ -121,9 +121,10 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       const copy = !event.altKey && event.ctrlKey && ((key === "c" && (event.shiftKey || xterm.hasSelection())) || (!event.shiftKey && key === "insert"));
       const pasteShortcut = !event.altKey && ((event.ctrlKey && key === "v") || (!event.ctrlKey && event.shiftKey && key === "insert"));
       if (copy || pasteShortcut) {
-        event.preventDefault();
         event.stopPropagation();
-        if (event.type === "keydown") { if (copy) void copySelection(); else void readClipboard(); }
+        // Paste shortcuts keep their default action: the native paste event below carries the text without
+        // a clipboard read permission, which WebView2 may otherwise deny on first use.
+        if (copy) { event.preventDefault(); if (event.type === "keydown") void copySelection(); }
         return false;
       }
       if (current.current.ended) {

@@ -43,15 +43,17 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .manage(updates::UpdateState::default())
         .manage(state)
-        .setup(|_app| {
+        .setup(|app| {
+            // Built here rather than by the config: only the builder lets the page read the clipboard
+            // without a WebView2 permission prompt (paste from the terminal context menu).
+            let config = app.config().app.windows.first().ok_or("missing main window config")?.clone();
+            let _window = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?.enable_clipboard_access().build()?;
             #[cfg(windows)]
             {
                 use tauri::Manager;
-                if let Some(window) = _app.get_webview_window("main") {
-                    let state = _app.state::<AppState>();
-                    let store = state.store().map_err(std::io::Error::other)?;
-                    window_frame::configure(&window, &store.data.settings)?;
-                }
+                let state = app.state::<AppState>();
+                let store = state.store().map_err(std::io::Error::other)?;
+                window_frame::configure(&_window, &store.data.settings)?;
             }
             Ok(())
         })

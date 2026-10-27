@@ -14,8 +14,10 @@ async function mountTerminal(context, initial = {}) {
   const observers = new Set();
   const themeObservers = new Set();
   const root = { dataset: { theme: "light" } };
+  const clipboard = { reads: 0 };
   const globals = {
     document: { documentElement: root },
+    navigator: { clipboard: { async readText() { clipboard.reads++; return ""; } } },
     getComputedStyle(element) {
       assert.equal(element, root);
       return { getPropertyValue(name) { return ` ${root.dataset.theme}:${name} `; } };
@@ -55,7 +57,7 @@ async function mountTerminal(context, initial = {}) {
     export const instances = [];
     export const sizes = [];
     export const calls = [];
-    export const element = { clientWidth: 900, clientHeight: 500, addEventListener() {}, removeEventListener() {} };
+    export const element = { clientWidth: 900, clientHeight: 500, listeners: {}, addEventListener(type, listener) { this.listeners[type] = listener; }, removeEventListener() {} };
     export function begin() { cursor = 0; }
     export function useRef(initial) {
       const index = cursor++;
@@ -101,7 +103,7 @@ async function mountTerminal(context, initial = {}) {
       refresh(start, end) { calls.push("refresh"); this.refreshes.push([start, end]); }
       scrollToBottom() { calls.push("scroll"); this.scrolls++; this.buffer.active.viewportY = this.buffer.active.baseY; }
       focus() { calls.push("focus"); }
-      attachCustomKeyEventHandler() {}
+      attachCustomKeyEventHandler(handler) { this.keyHandler = handler; }
       onData() { return { dispose() {} }; }
       onBinary() { return { dispose() {} }; }
       write(data) { this.writes.push(data); }
@@ -145,7 +147,7 @@ async function mountTerminal(context, initial = {}) {
   }
   render();
   return {
-    mock, frames, render, themeObservers,
+    mock, frames, render, themeObservers, clipboard,
     theme(value) { root.dataset.theme = value; for (const observer of themeObservers) observer.callback(); },
     terminal: mock.instances[0],
     resize() { for (const observer of observers) observer.callback(); },
@@ -172,6 +174,22 @@ test("terminal palette comes from CSS and changes in place with the resolved app
   assert.deepEqual(page.terminal.options.theme, expected("light"));
   page.mock.unmount();
   assert.equal(page.themeObservers.size, 0);
+});
+
+test("paste shortcuts keep the native paste event, which needs no clipboard read permission", async (context) => {
+  const page = await mountTerminal(context);
+  const press = (init) => {
+    const event = { type: "keydown", altKey: false, ctrlKey: false, shiftKey: false, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {}, ...init };
+    return { handled: page.terminal.keyHandler(event), prevented: event.prevented };
+  };
+  for (const init of [{ key: "v", ctrlKey: true }, { key: "V", ctrlKey: true, shiftKey: true }, { key: "Insert", shiftKey: true }]) {
+    assert.deepEqual(press(init), { handled: false, prevented: false }, init.key);
+  }
+  assert.equal(page.clipboard.reads, 0);
+  const pasted = [];
+  page.terminal.paste = text => pasted.push(text);
+  page.mock.element.listeners.paste({ preventDefault() {}, stopImmediatePropagation() {}, clipboardData: { getData: () => "ls -la" } });
+  assert.deepEqual(pasted, ["ls -la"]);
 });
 
 test("returning to a terminal repaints every row at unchanged geometry without new output or remounting", async (context) => {

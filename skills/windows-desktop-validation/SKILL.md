@@ -23,6 +23,14 @@ keep outputs, caches and temporary files on E:.
    visible-only size synchronization; SFTP changes need transfer, cancellation
    and confirmations. Use isolated test data; never save personal connection
    details or credentials in the repository.
+   For a debuggable QA build, put the full `main` window object (arrays are
+   replaced, not merged) with `additionalBrowserArgs` containing a loopback
+   `--remote-debugging-port` into `TAURI_CONFIG` and build with `-p
+   opentermius-desktop`. The value is compiled in, so afterwards run
+   `cargo clean -p opentermius-desktop` and rebuild, and check that the
+   executable no longer contains the port string. Run with `--data-dir` and
+   `WEBVIEW2_USER_DATA_FOLDER` pointing to new folders on E: so that the
+   WebView2 permissions and storage start fresh.
 3. From the repository root run `./native/scripts/package.ps1`. It builds the
    frontend and runs `cargo build --release --locked -p opentermius-desktop
    --features tauri/custom-protocol` inside `native/`, then uses our NSIS script.
