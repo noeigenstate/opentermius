@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import * as api from "../api/sftp";
 import { t } from "../i18n";
 import { Icon } from "../icons";
+import { Menu, type MenuItem } from "../components/Menu";
 
 type Side = "local" | "remote";
 type Column = "name" | "modified" | "size" | "kind";
@@ -117,7 +118,7 @@ interface PaneProps {
   side: Side; path: string; entries: api.FileEntry[]; loading: boolean; offline?: boolean;
   showHidden: boolean; selected: string; onSelect: (name: string) => void;
   onNavigate: (path: string) => void; onBack: () => void; backDisabled?: boolean;
-  onOpen: (entry: api.FileEntry) => void; onAction: (action: string) => void; onReconnect?: () => void;
+  onOpen: (entry: api.FileEntry) => void; onAction: (action: string, name?: string) => void; onReconnect?: () => void;
   transferDisabled?: boolean;
 }
 function FilePane(props: PaneProps) {
@@ -126,6 +127,7 @@ function FilePane(props: PaneProps) {
   const chooseAction = (operation: string) => { if (menu.current) menu.current.open = false; props.onAction(operation); };
   const [draft, setDraft] = useState(path);
   const [sort, setSort] = useState<{ column: Column; ascending: boolean }>({ column: "name", ascending: true });
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry?: api.FileEntry } | null>(null);
   useEffect(() => { setDraft(path); onSelect(""); }, [path, onSelect]);
   const sorted = useMemo(() => entries.filter((entry) => props.showHidden || !entry.name.startsWith(".")).sort((a, b) => {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
@@ -135,6 +137,18 @@ function FilePane(props: PaneProps) {
     return (value || a.name.localeCompare(b.name)) * (sort.ascending ? 1 : -1);
   }), [entries, props.showHidden, sort]);
   const title = side === "local" ? t("Local") : t("Remote");
+  const entry = contextMenu?.entry;
+  const items: MenuItem[] = entry ? [
+    ...(entry.isDir ? [{ label: t("Open"), icon: "folder" as const, disabled: props.offline, onSelect: () => props.onOpen(entry) }] : []),
+    { label: side === "local" ? t("Upload") : t("Download"), icon: side === "local" ? "arrowUp" : "download", disabled: props.offline || props.transferDisabled, onSelect: () => props.onAction("transfer", entry.name) },
+    { label: t("Copy name"), icon: "copy", onSelect: () => props.onAction("copyName", entry.name) },
+    { label: t("Copy path"), icon: "copy", onSelect: () => props.onAction("copyPath", entry.name) },
+    { label: t("Rename"), icon: "edit", disabled: props.offline, onSelect: () => props.onAction("rename", entry.name) },
+    { label: t("Delete"), icon: "trash", danger: true, disabled: props.offline, onSelect: () => props.onAction("delete", entry.name) },
+  ] : [
+    { label: t("New folder"), icon: "plus", disabled: props.offline || !path, onSelect: () => props.onAction("mkdir") },
+    { label: t("Refresh"), icon: "refresh", disabled: props.offline || props.loading, onSelect: () => props.onNavigate(path) },
+  ];
   return <section className="sftp-pane" aria-label={title}>
     <header className="sftp-pane-head"><strong>{title}</strong>
       <span className={`dot${side === "local" || !props.offline ? " dot-online" : ""}`} />
@@ -151,17 +165,21 @@ function FilePane(props: PaneProps) {
       <button type="submit" className="btn btn-s" disabled={props.offline || props.loading}>{t("Go")}</button>
       <button type="button" className="icon-button icon-button-boxed" title={t("Refresh")} aria-label={`${title}: ${t("Refresh")}`} disabled={props.offline || props.loading} onClick={() => props.onNavigate(path)}><Icon name="refresh" size={16} /></button>
     </form>
-    {props.offline ? <div className="sftp-empty"><span>{t("Not connected — Reconnect")}</span><button className="btn btn-primary" onClick={props.onReconnect}>{t("Reconnect")}</button></div>
-      : <div className="sftp-table-wrap" aria-busy={props.loading}>
+    <div className="sftp-table-wrap" aria-busy={props.loading} onContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }); }}>
+      {props.offline ? <div className="sftp-empty"><span>{t("Not connected — Reconnect")}</span><button className="btn btn-primary" onClick={props.onReconnect}>{t("Reconnect")}</button></div>
+      : <>
         <table className="sftp-table"><thead><tr>{([ ["name", "Name"], ["modified", "Modified"], ["size", "Size"], ["kind", "Kind"] ] as [Column, string][]).map(([column, label]) =>
           <th key={column} aria-sort={sort.column === column ? sort.ascending ? "ascending" : "descending" : "none"}><button onClick={() => setSort({ column, ascending: sort.column === column ? !sort.ascending : true })}>{t(label)}{sort.column === column && <Icon name="chevronDown" size={13} />}</button></th>)}</tr></thead>
-          <tbody>{sorted.map((entry) => <tr key={entry.name} className={selected === entry.name ? "sftp-selected" : ""} onClick={() => onSelect(entry.name)}>
+          <tbody>{sorted.map((entry) => <tr key={entry.name} className={selected === entry.name ? "sftp-selected" : ""} onClick={() => onSelect(entry.name)}
+            onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onSelect(entry.name); setContextMenu({ x: event.clientX, y: event.clientY, entry }); }}>
             <td><button className="sftp-file" onFocus={() => onSelect(entry.name)} onDoubleClick={() => props.onOpen(entry)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); props.onOpen(entry); } }} title={entry.name}>
               <Icon name={entry.isDir ? "folder" : "file"} size={16} /><span>{entry.name}</span>
             </button></td><td>{modified(entry.modified)}</td><td>{entry.isDir ? "—" : size(entry.size)}</td><td>{kind(entry)}</td>
           </tr>)}</tbody></table>
         {sorted.length === 0 && <div className="sftp-empty">{props.loading ? t("Loading…") : t("This folder is empty")}</div>}
-      </div>}
+      </>}
+    </div>
+    {contextMenu && <Menu x={contextMenu.x} y={contextMenu.y} items={items} onClose={() => setContextMenu(null)} />}
   </section>;
 }
 
@@ -231,15 +249,22 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
     } catch (error) { session.finish(id, String(error), true); }
   }
 
-  async function action(side: Side, operation: string) {
+  async function action(side: Side, operation: string, selectedName?: string) {
     session.update({ error: "" });
     const path = side === "local" ? local.path : remote.path;
-    const name = side === "local" ? localSelection : remoteSelection;
+    const name = selectedName ?? (side === "local" ? localSelection : remoteSelection);
     if (operation === "mkdir" || operation === "rename") {
       setValue(operation === "rename" ? name : ""); setDialog({ kind: operation, side, path, name }); return;
     }
     if (!name) { session.fail(t("Select a file or folder first")); return; }
-    if (operation === "transfer") { await transfer(side, (side === "local" ? local.entries : remote.entries).find((entry) => entry.name === name)); return; }
+    const entry = (side === "local" ? local.entries : remote.entries).find((entry) => entry.name === name);
+    if (operation === "transfer") { await transfer(side, entry); return; }
+    if ((operation === "copyName" || operation === "copyPath") && entry) {
+      const fullPath = side === "local" ? entry.path : path ? `${path.replace(/\/+$/, "")}/${name}` : name;
+      try { await navigator.clipboard.writeText(operation === "copyName" ? name : fullPath); }
+      catch { session.fail(t("Cannot access clipboard")); }
+      return;
+    }
     if (operation === "delete") await run(async () => {
       if (side === "remote") await api.remoteDelete(sessionId, path, name);
       else setDialog({ kind: "localDelete", path, name, summary: await api.localDelete(path, name) });
@@ -294,10 +319,10 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
       <FilePane side="local" path={local.path} entries={local.entries} selected={localSelection} onSelect={setLocalSelection} loading={localBusy} showHidden={showHidden}
         transferDisabled={!remote.connected}
         onNavigate={(path) => void loadLocal(path)} onBack={() => local.parent && void loadLocal(local.parent)} backDisabled={!local.parent}
-        onAction={(operation) => void action("local", operation)} onOpen={(entry) => entry.isDir ? void loadLocal(entry.path) : void transfer("local", entry)} />
+        onAction={(operation, name) => void action("local", operation, name)} onOpen={(entry) => entry.isDir ? void loadLocal(entry.path) : void transfer("local", entry)} />
       <FilePane side="remote" path={remote.path} entries={remote.entries} selected={remoteSelection} onSelect={setRemoteSelection} loading={remote.loading} offline={!remote.connected && !remote.loading} showHidden={showHidden}
         onNavigate={(path) => void session.refresh(path)} onBack={() => void session.refresh(parentRemote(remote.path))} backDisabled={remote.path === "/"}
-        onAction={(operation) => void action("remote", operation)} onOpen={(entry) => entry.isDir ? void session.refresh(entry.path) : void transfer("remote", entry)}
+        onAction={(operation, name) => void action("remote", operation, name)} onOpen={(entry) => entry.isDir ? void session.refresh(entry.path) : void transfer("remote", entry)}
         onReconnect={() => void run(async () => { await session.start(); await api.reconnect(sessionId); })} />
     </div>
     <section className="sftp-transfers" aria-label={t("Transfers")}><header><strong>{t("Transfers")}</strong><span>{t("8 queued maximum")}</span><span className="sftp-queue-count">{remote.transfers.filter((row) => row.pending).length} / 8</span></header>

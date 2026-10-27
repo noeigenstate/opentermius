@@ -2,6 +2,7 @@ export default {
   "Remote": "远程",
   "Show hidden files": "显示隐藏文件", "Actions": "操作", "New folder": "新建文件夹",
   "Rename": "重命名", "Upload": "上传", "Download": "下载", "Delete": "删除",
+  "Copy name": "复制文件名", "Copy path": "复制路径",
   "Name": "名称", "Modified": "修改时间", "Size": "大小", "Kind": "类型",
   "Folder": "文件夹", "File": "文件", "{extension} file": "{extension} 文件",
   "Back": "返回上级", "Refresh": "刷新", "Go": "前往", "Home": "主目录",
