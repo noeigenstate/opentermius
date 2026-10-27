@@ -57,8 +57,11 @@ configuration formats independent of visual changes.
   to `open()`: FitAddon reads that parent's computed size (padding included
   under the global `border-box`, so extra rows get clipped) and subtracts only
   `.xterm` padding, and xterm listens for selection presses only on `.xterm`.
-  After a resize, check that `.xterm-screen` ends inside the padding and that a
-  drag starting in the gutter selects from the first column.
+  The absolutely positioned `.xterm-viewport` spans that padding and xterm.css
+  paints it black, so keep it transparent. After a resize, check that
+  `.xterm-screen` ends inside the padding and that a drag starting in the
+  gutter selects from the first column. Check a screenshot in both themes as
+  well: geometry probes cannot see paint.
 - Keep terminal instances and keys stable. Use their existing `visible` path
   for fitting and rendering; do not remount them for page transitions.
 - Polling UI such as Logs runs only while its page and document are visible.

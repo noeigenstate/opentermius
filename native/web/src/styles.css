@@ -365,6 +365,8 @@ button, input, select, textarea, summary { -webkit-tap-highlight-color: transpar
 .xterm-container { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 /* The gutter is padding on .xterm itself: FitAddon subtracts it, and a press there still starts or extends a selection. */
 .xterm-container .xterm { height: 100%; padding: 14px 18px; }
+/* xterm.css paints the viewport black, and it spans that padding: let the card show through instead. */
+.xterm-container .xterm .xterm-viewport { background-color: transparent; }
 .terminal-notice { position: absolute; bottom: 19px; left: 50%; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); padding: 9px 14px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 8px 24px rgba(0, 0, 0, .18); transform: translateX(-50%); }
 .terminal-error { bottom: 67px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; box-shadow: inset 4px 0 0 var(--danger), 0 0 0 1.5px var(--danger), 0 8px 24px rgba(0, 0, 0, .18); }
 .terminal-error > svg { color: var(--icon-error); }
