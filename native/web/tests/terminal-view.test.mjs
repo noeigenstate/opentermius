@@ -192,6 +192,14 @@ test("paste shortcuts keep the native paste event, which needs no clipboard read
   assert.deepEqual(pasted, ["ls -la"]);
 });
 
+test("double-click word selection keeps xterm's separators and stops at full-width punctuation", async (context) => {
+  const page = await mountTerminal(context);
+  const separators = page.terminal.options.wordSeparator;
+  for (const ch of " ()[]{}',\"`") assert.ok(separators.includes(ch), JSON.stringify(ch));
+  for (const ch of "：，。；！？、（）【】《》「」“”‘’") assert.ok(separators.includes(ch), ch);
+  for (const ch of "/.:-_=@") assert.ok(!separators.includes(ch), `paths, URLs and user@host stay one word: ${ch}`);
+});
+
 test("returning to a terminal repaints every row at unchanged geometry without new output or remounting", async (context) => {
   const page = await mountTerminal(context);
   page.flush();

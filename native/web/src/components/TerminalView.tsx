@@ -9,6 +9,8 @@ import { Icon } from "../icons";
 import { Dialog } from "./Dialog";
 
 const FONT_FAMILY = '"Cascadia Mono", Consolas, monospace';
+// xterm's default separators plus full-width CJK punctuation, so double-click selects "地址" without "：".
+const WORD_SEPARATOR = " ()[]{}',\"`：，。；！？、（）【】《》「」“”‘’";
 
 function terminalTheme() {
   const style = getComputedStyle(document.documentElement);
@@ -59,7 +61,7 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
     const element = container.current!;
     const xterm = new Terminal({
       fontFamily: FONT_FAMILY, fontSize: 14, cursorBlink: true,
-      scrollback: 10000, allowProposedApi: false,
+      scrollback: 10000, allowProposedApi: false, wordSeparator: WORD_SEPARATOR,
       theme: terminalTheme(),
     });
     const fit = new FitAddon();
