@@ -102,7 +102,7 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` embeds `web/dist` into the executable; a plain release build does not. `native/installer/installer.nsi` packages `target/release/opentermius.exe` (honouring Cargo's configured target directory) into `native/releases/OpenTermius-<version>-windows-x64-setup.exe` and `checksums.json`. Tauri's own bundler stays disabled. See [packaging details](native/installer/README.md) for NSIS discovery, a cached bootstrapper and `-SkipBuild`.
 
-The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.1`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the release workflow, which builds, verifies and publishes the installer and `checksums.json` in the format the updater reads. Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
+The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.2`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the release workflow, which builds, verifies and publishes the installer and `checksums.json` in the format the updater reads. Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
 
 `native/installer/verify-install.ps1` checks silent install, overwrite upgrade, shortcuts, registration, uninstall and configuration retention on a clean Windows account. It refuses to run over a real installation.
 
@@ -200,6 +200,6 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` 会把 `web/dist` 内嵌进程序，普通 release 构建不会内嵌。`native/installer/installer.nsi` 将 `target/release/opentermius.exe`（遵循 Cargo 配置的目标目录）打包为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 与 `checksums.json`，不使用 Tauri 自带安装器。详细参数见 [安装程序说明](native/installer/README.md)。
 
-版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.1`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发发布流程：构建、验证并发布安装包和更新器读取的 `checksums.json`。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
+版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.2`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发发布流程：构建、验证并发布安装包和更新器读取的 `checksums.json`。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
 
 在干净的 Windows 账号运行 `native/installer/verify-install.ps1` 可验证静默安装、覆盖升级、快捷方式、注册项、卸载和配置保留；发现真实安装时脚本会拒绝运行。
