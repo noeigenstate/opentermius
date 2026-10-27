@@ -53,6 +53,11 @@ configuration formats independent of visual changes.
   the final static content. Pausing an entrance at opacity zero hides content.
 - Preserve reduced motion, reduced transparency, forced colours, keyboard
   focus and disabled states. Tooltip text must wrap and work inside dialogs.
+- xterm's FitAddon sizes the grid from the computed height and width of the
+  element passed to `open()`. Under the global `border-box` these include its
+  padding, which adds rows and columns that `overflow: hidden` then clips. Keep
+  `.xterm-container` `content-box`, and check after a window resize that the
+  `.xterm-screen` bottom stays inside the container's padding box.
 - Keep terminal instances and keys stable. Use their existing `visible` path
   for fitting and rendering; do not remount them for page transitions.
 - Polling UI such as Logs runs only while its page and document are visible.
