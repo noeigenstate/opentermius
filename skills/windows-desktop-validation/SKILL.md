@@ -60,5 +60,11 @@ keep outputs, caches and temporary files on E:.
 
 Keep GUI evidence under ignored `native/test-output/` and identify the platform
 and executable tested. Old screenshots/tests are not Tauri evidence. The shell
-must wire `--apply-update` before updater end-to-end verification. Windows
+must wire `--apply-update` before updater end-to-end verification. Outbound
+HTTP (ureq) needs its `socks-proxy` and `win-system-proxy` features: without
+them a SOCKS `ALL_PROXY` and the Windows system proxy are silently skipped and
+the request goes direct, which fails where GitHub needs a proxy. Test the
+updater with `ALL_PROXY=socks5://127.0.0.1:9` (must fail, proving the proxy is
+used) and with env proxies unset, and show errors with `{error:#}` so the cause
+follows the translated context. Windows
 results do not certify macOS/Linux. See `native/installer/README.md` for details.

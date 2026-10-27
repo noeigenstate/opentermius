@@ -43,7 +43,7 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<UpdateCheck, String> 
                 Ok(UpdateCheck {
                     version: None,
                     up_to_date: false,
-                    error: Some(error.to_string()),
+                    error: Some(format!("{error:#}")),
                 })
             }
         }
@@ -66,8 +66,8 @@ pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
         #[cfg(windows)]
         if let Some(install_dir) = update::install_dir() {
             let work = std::env::temp_dir().join("opentermius-update");
-            let installer = update::download(release, &work).map_err(|e| e.to_string())?;
-            update::launch_installer(&installer, &install_dir, &work).map_err(|e| e.to_string())?;
+            let installer = update::download(release, &work).map_err(|e| format!("{e:#}"))?;
+            update::launch_installer(&installer, &install_dir, &work).map_err(|e| format!("{e:#}"))?;
             app.exit(0);
             return Ok(());
         }

@@ -5466,6 +5466,7 @@ dependencies = [
  "ureq-proto",
  "utf8-zero",
  "webpki-roots",
+ "winreg 0.56.0",
 ]
 
 [[package]]
