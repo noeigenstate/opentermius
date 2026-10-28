@@ -55,6 +55,12 @@ keep outputs, caches and temporary files on E:.
    and `web/package.json` plus both `web/package-lock.json` fields, then run
    step 1. Commit, tag `vX.Y.Z` on that commit and push `main` and the tag; the
    `Release` workflow (`.github/workflows/release.yml`) publishes the GitHub release.
+   Also bump the two "currently `X.Y.Z`" strings in README. Its publish job runs
+   only on tags and needs the Windows job plus the Linux x64/arm64 (Ubuntu
+   22.04) and macOS arm64 jobs, so expect six assets: the installer, two
+   `linux-*.tar.gz`, `macos-arm64.dmg`, `checksums.json` (updater format,
+   Windows only, never change it) and `SHA256SUMS`. Download them into a new
+   scratch folder and check size and SHA-256 against both manifests.
    README images use synthetic fixture data only (192.0.2.0/24 addresses) and
    new file names; existing `docs/screenshots/` files are historical records.
 
