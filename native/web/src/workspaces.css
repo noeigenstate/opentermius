@@ -65,6 +65,35 @@
 .settings-path { overflow-wrap: anywhere; }
 .settings-code { display: block; width: 100%; height: 106px; margin: 8px 0 11px; padding: 10px; border: 1px solid var(--card-border); border-radius: 10px; font: 11px/1.6 var(--mono); color: var(--text); background: var(--surface); overflow-wrap: anywhere; resize: vertical; }
 .settings-code-label { display: block; padding-top: 13px; font-size: 12px; }
+/* Navigation rows end the About card; the whole row is one button. Inset focus ring: the card clips an outline. */
+.settings-nav { width: 100%; justify-content: flex-start; gap: 14px; text-align: left; border-top: 1px solid var(--divider); transition: background-color var(--duration-fast); }
+.settings-nav > span { flex: 1; min-width: 0; }
+.settings-nav strong { font-weight: 700; }
+.settings-nav svg { flex: none; color: var(--icon-default); transition: color var(--duration-fast); }
+.settings-nav > svg:last-child { color: var(--icon-secondary); }
+.settings-nav:hover:not(:disabled) { background: var(--card-hover); }
+.settings-nav:active:not(:disabled) { background: var(--hover); }
+.settings-nav:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus); }
+.settings-nav:focus-visible svg { color: var(--icon-hover); }
+@media (hover: hover) and (pointer: fine) { .settings-nav:hover:not(:disabled) svg { color: var(--icon-hover); } }
+.settings-subview { margin-top: 21px; animation: page-in 220ms var(--ease-out); }
+.settings-back { margin-left: -14px; }
+.settings-back + h1 { margin-top: 4px; }
+.settings-page h1:focus { outline: none; }
+.changelog-release { padding: 16px 18px 17px; }
+.changelog-release + .changelog-release { border-top: 1px solid var(--divider); }
+.changelog-release h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 9px; font-size: 14px; }
+.changelog-release time { font-size: 11.5px; font-weight: 400; color: var(--secondary); font-variant-numeric: tabular-nums; }
+.changelog-release ul { margin: 0; padding-left: 18px; }
+.changelog-release li { font-size: 13px; line-height: 1.6; }
+.changelog-release li + li { margin-top: 4px; }
+.changelog-release li::marker { color: var(--secondary); }
+.changelog-foot { margin: 12px 0 0 3px; }
+.settings-link { font-size: 11.5px; color: var(--secondary); text-decoration: underline; text-underline-offset: 3px; transition: color var(--duration-fast); }
+.settings-link:hover { color: var(--ink); }
+.about-head { display: flex; align-items: center; gap: 16px; margin: 0 0 18px 3px; }
+.about-head h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 19px; line-height: 26px; letter-spacing: -.2px; }
+.about-head p { margin: 3px 0 0; font-size: 13px; color: var(--secondary); }
 .dialog-wide .settings-fields { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .dialog-wide .settings-hint { padding: 0; }
 .dialog-wide :is(.settings-row, .settings-actions) { padding-right: 0; padding-left: 0; }
@@ -154,6 +183,8 @@
   input[role="switch"] { appearance: auto; width: 24px; height: 24px; background: Canvas; }
   input[role="switch"]::after { display: none; }
   .status-chip { border: 1px solid CanvasText; }
+  .settings-nav:focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+  .settings-nav:hover:not(:disabled) { outline: 1px solid Highlight; outline-offset: -1px; }
   .sftp-table tr.sftp-selected td { outline: 1px solid Highlight; }
   .sftp-places button[aria-selected="true"] { outline: 1px solid Highlight; }
 }

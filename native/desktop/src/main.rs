@@ -94,7 +94,7 @@ fn main() {
             keychain::import_key, keychain::rename_key, keychain::delete_key, keychain::export_public_key,
             snippets::list_snippets, snippets::save_snippet, snippets::delete_snippet,
             logs::list_logs, logs::clear_logs,
-            settings::get_settings, settings::save_settings, settings::get_app_info, settings::open_config_folder,
+            settings::get_settings, settings::save_settings, settings::get_app_info, settings::open_config_folder, settings::open_project_link,
             data::import_hosts_json, data::detect_xshell_folder, data::import_xshell, data::import_windterm,
             data::export_hosts, data::recovery_generate, data::recovery_restore,
             updates::check_update, updates::install_update,

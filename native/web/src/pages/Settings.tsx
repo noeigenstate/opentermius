@@ -1,11 +1,21 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
-import { getAppInfo, openConfigFolder, type AppInfo, type Settings } from "../api/settings";
+import { getAppInfo, openConfigFolder, openProjectLink, type AppInfo, type Settings } from "../api/settings";
 import { detectXshellFolder, exportHosts, importHostsJson, importWindterm, importXshell } from "../api/data";
 import type { Updates } from "../api/updates";
+import { changelog } from "../changelog";
 import { t } from "../i18n";
 import { Icon, type IconName } from "../icons";
 import { Recovery } from "./Recovery";
+
+/** Pages opened from the About group; each replaces the settings list until Esc or the back button. */
+const subviews = {
+  changelog: { icon: "list", title: "Changelog", note: "Recent improvements and fixes" },
+  about: { icon: "info", title: "About OpenTermius", note: "Version, project links and configuration folder" },
+} as const;
+type SubView = keyof typeof subviews;
+type ProjectLink = Parameters<typeof openProjectLink>[0];
+const projectLinks = [["Project page", "repository"], ["Releases", "releases"], ["Report an issue", "issues"]] as const;
 
 function Group({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
   return <section className="settings-group" aria-label={t(title)}><h2><Icon name={icon} />{t(title)}</h2><div className="settings-card">{children}</div></section>;
@@ -29,6 +39,33 @@ function NumberSetting({ label, value, min, max, step = 1, onChange }: { label: 
   return <label className="settings-row"><span>{t(label)}</span><input type="number" min={min} max={max} step={step} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }} /></label>;
 }
 
+function OpenRow({ label, detail, onOpen }: { label: string; detail?: string; onOpen: () => void }) {
+  return <div className="settings-row"><span>{t(label)}{detail && <small className="settings-path">{detail}</small>}</span><button className="btn" aria-label={`${t("Open")} ${t(label)}`} onClick={onOpen}>{t("Open")}</button></div>;
+}
+
+function Changelog({ current, onLink }: { current?: string; onLink: (link: ProjectLink) => void }) {
+  return <div className="settings-subview">
+    <div className="settings-card">{changelog.map(({ version, date, items }) => <section className="changelog-release" key={version}>
+      <h2><strong>{version}</strong><time dateTime={date}>{date}</time>{version === current && <span className="chip">{t("Current")}</span>}</h2>
+      <ul>{items.map(item => <li key={item}>{t(item)}</li>)}</ul>
+    </section>)}</div>
+    <p className="settings-hint changelog-foot"><button className="settings-link" onClick={() => onLink("releases")}>{t("All releases")}</button></p>
+  </div>;
+}
+
+function About({ info, onFolder, onLink }: { info: AppInfo | null; onFolder: () => void; onLink: (link: ProjectLink) => void }) {
+  return <div className="settings-subview">
+    <div className="about-head">
+      <span className="brand-mark"><Icon name="logo" size={34} /></span>
+      <div><h2>{t("OpenTermius")}<span className="chip">{info?.version ?? "—"}</span></h2><p>{t("Local-first SSH and SFTP client")}</p></div>
+    </div>
+    <div className="settings-card">
+      <OpenRow label="Configuration folder" detail={info?.configFolder ?? "—"} onOpen={onFolder} />
+      {projectLinks.map(([label, link]) => <OpenRow key={link} label={label} onOpen={() => onLink(link)} />)}
+    </div>
+  </div>;
+}
+
 export function SettingsPage({ settings, saving, onChange, onDataChanged, updates }: {
   settings: Settings | null; saving: boolean;
   onChange: (settings: Settings) => Promise<void>;
@@ -40,7 +77,26 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
   const [recovery, setRecovery] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [view, setView] = useState<"main" | SubView>("main");
+  const page = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const opener = useRef<SubView | null>(null);
   useEffect(() => { getAppInfo().then(setInfo).catch(e => setError(String(e))); }, []);
+
+  const go = (next: "main" | SubView) => { setError(""); setMessage(""); setView(next); };
+  useEffect(() => {
+    if (view === "main") {
+      // The rows are remounted on return, so look the one that opened the page up again instead of keeping its element.
+      if (opener.current) page.current?.querySelector<HTMLElement>(`[data-view="${opener.current}"]`)?.focus();
+      return;
+    }
+    opener.current = view;
+    page.current?.closest(".content")?.scrollTo(0, 0);
+    heading.current?.focus({ preventScroll: true });
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); go("main"); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [view]);
 
   const change = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     if (!settings) return;
@@ -59,6 +115,9 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   }
+
+  const openExternal = (action: () => Promise<void>) => void dataAction(async () => { await action(); return null; });
+  const openLink = (link: ProjectLink) => openExternal(() => openProjectLink(link));
 
   async function importJson() {
     const path = await open({ title: t("Import hosts JSON"), filters: [{ name: "JSON", extensions: ["json"] }] });
@@ -101,14 +160,21 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
 
   if (!settings) return <div className="empty" role="status">{t("Loading settings…")}</div>;
 
-  return <div className="page settings-page">
+  return <div className="page settings-page" ref={page}>
     <header className="page-header">
-      <div><h1>{t("Settings")}</h1><p>{t("Customize your workspace and connections.")}</p></div>
-      <div className="page-actions"><span className="settings-save-state" data-saving={saving} role="status"><i className={`dot${saving ? " dot-busy" : " dot-online"}`} />{saving ? t("Saving…") : t("Changes save automatically")}</span></div>
+      {view === "main" ? <>
+        <div><h1>{t("Settings")}</h1><p>{t("Customize your workspace and connections.")}</p></div>
+        <div className="page-actions"><span className="settings-save-state" data-saving={saving} role="status"><i className={`dot${saving ? " dot-busy" : " dot-online"}`} />{saving ? t("Saving…") : t("Changes save automatically")}</span></div>
+      </> : <div>
+        <button className="btn btn-ghost settings-back" onClick={() => go("main")}><Icon name="chevronLeft" size={14} />{t("Settings")}</button>
+        <h1 ref={heading} tabIndex={-1}>{t(subviews[view].title)}</h1>
+      </div>}
     </header>
     {error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{error}</span></div>}
     {message && <div className="banner banner-ok" role="status"><Icon name="check" size={16} /><span>{message}</span></div>}
-    <fieldset className="settings-fields" disabled={saving || busy || recovery}>
+    {view === "changelog" && <Changelog current={info?.version} onLink={openLink} />}
+    {view === "about" && <About info={info} onFolder={() => openExternal(openConfigFolder)} onLink={openLink} />}
+    {view === "main" && <fieldset className="settings-fields" disabled={saving || busy || recovery}>
       <Group title="Appearance" icon="settings">
         <label className="settings-row"><span>{t("Language")}</span><select aria-label={t("Language")} value={settings.language} onChange={e => change("language", e.target.value as Settings["language"])}><option value="en">{t("English")}</option><option value="zh-CN">{t("Simplified Chinese")}</option><option value="system">{t("System")}</option></select></label>
         <label className="settings-row"><span>{t("Theme")}</span><select aria-label={t("Theme")} value={settings.themeSchedule ? "schedule" : settings.appearance} onChange={e => {
@@ -143,13 +209,15 @@ export function SettingsPage({ settings, saving, onChange, onDataChanged, update
       </Group>
       <Group title="About" icon="hosts">
         <div className="settings-row"><span>{t("Version")}</span><span className="chip">{info?.version ?? "—"}</span></div>
-        <div className="settings-row"><span>{t("Configuration folder")}<small className="settings-path">{info?.configFolder ?? "—"}</small></span><button className="btn" onClick={() => void dataAction(async () => { await openConfigFolder(); return null; })}>{t("Open")}</button></div>
         <Toggle label="Check for updates automatically" value={settings.autoUpdate} onChange={v => change("autoUpdate", v)} />
         <div className="settings-actions"><button className="btn" disabled={updates.busy} onClick={() => void updates.check()}>{t("Check now")}</button>{updates.result?.version && <button className="btn btn-primary" disabled={updates.busy} onClick={() => void updates.install(updates.result!.version!)}>{t("Update to {version}", { version: updates.result.version })}</button>}</div>
         <p className="settings-hint" role="status">{updates.busy ? t(updates.installing ? "Downloading and verifying update…" : "Checking for updates…") : updates.result?.upToDate ? t("OpenTermius is up to date") : updates.result?.version ? t("Version {version} is available", { version: updates.result.version }) : t("Build copies open the release page for manual installation.")}</p>
         {updates.error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{updates.error}</span></div>}
+        {(Object.keys(subviews) as SubView[]).map(key => <button key={key} className="settings-row settings-nav" data-view={key} onClick={() => go(key)}>
+          <Icon name={subviews[key].icon} size={20} /><span><strong>{t(subviews[key].title)}</strong><small>{t(subviews[key].note)}</small></span><Icon name="chevronRight" />
+        </button>)}
       </Group>
-    </fieldset>
+    </fieldset>}
     {busy && <p className="feature-loading" role="status">{t("Working…")}</p>}
     {recovery && <Recovery onClose={() => setRecovery(false)} onRestored={onDataChanged} />}
   </div>;

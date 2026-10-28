@@ -54,6 +54,8 @@ const paths = {
   drive: "M3 13l2.2-7a1.5 1.5 0 0 1 1.4-1h10.8a1.5 1.5 0 0 1 1.4 1L21 13M3 13h18v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM7 16h.01M11 16h.01",
   chevronDown: "M6 9l6 6 6-6",
   chevronRight: "M9 6l6 6-6 6",
+  chevronLeft: "M15 6l-6 6 6 6",
+  info: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 11v5M12 8h.01",
   copy: "M9 9h11v11H9zM5 15V4h11",
   download: "M12 4v12M6 11l6 6 6-6M5 20h14",
   edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",

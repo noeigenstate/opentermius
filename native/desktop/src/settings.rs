@@ -70,9 +70,35 @@ pub async fn open_config_folder(app: tauri::AppHandle) -> Result<(), String> {
     .map_err(|_| i18n::t("Settings operation failed").to_string())?
 }
 
+/// Project links are fixed here; the page only names one, it never supplies a URL.
+fn project_link(link: &str) -> Option<&'static str> {
+    match link {
+        "repository" => Some("https://github.com/noeigenstate/opentermius"),
+        "releases" => Some("https://github.com/noeigenstate/opentermius/releases"),
+        "issues" => Some("https://github.com/noeigenstate/opentermius/issues"),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+pub fn open_project_link(app: tauri::AppHandle, link: String) -> Result<(), String> {
+    let url = project_link(&link).ok_or_else(|| i18n::t("Settings operation failed").to_string())?;
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_links_are_fixed_project_urls() {
+        for link in ["repository", "releases", "issues"] {
+            assert!(project_link(link).unwrap().starts_with("https://github.com/noeigenstate/opentermius"));
+        }
+        for link in ["", "https://example.invalid/", "Repository", "../issues"] {
+            assert_eq!(project_link(link), None);
+        }
+    }
 
     #[test]
     fn command_settings_round_trip_normalizes_without_changing_other_preferences() {

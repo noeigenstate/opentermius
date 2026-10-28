@@ -29,3 +29,4 @@ export const saveSettings = (settings: Settings) => invoke<Settings>("save_setti
 export const onSettingsChanged = (handler: (settings: Settings) => void) => listen<Settings>("settings://changed", event => handler(event.payload));
 export const getAppInfo = () => invoke<AppInfo>("get_app_info");
 export const openConfigFolder = () => invoke<void>("open_config_folder");
+export const openProjectLink = (link: "repository" | "releases" | "issues") => invoke<void>("open_project_link", { link });

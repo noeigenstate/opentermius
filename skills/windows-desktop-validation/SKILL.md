@@ -55,7 +55,10 @@ keep outputs, caches and temporary files on E:.
    and `web/package.json` plus both `web/package-lock.json` fields, then run
    step 1. Commit, tag `vX.Y.Z` on that commit and push `main` and the tag; the
    `Release` workflow (`.github/workflows/release.yml`) publishes the GitHub release.
-   Also bump the two "currently `X.Y.Z`" strings in README. Its publish job runs
+   Also bump the two "currently `X.Y.Z`" strings in README, and add the release
+   at the top of `web/src/changelog.ts` (user-visible sentences, newest first)
+   with their Chinese in `web/src/i18n/zh/changelog.ts`; Settings marks the
+   entry that matches the running version as current. Its publish job runs
    only on tags and needs the Windows job plus the Linux x64/arm64 (Ubuntu
    22.04) and macOS arm64 jobs, so expect seven assets: the installer, two
    `linux-*.AppImage`, `macos-arm64.dmg`, `macos-arm64.zip`, `checksums.json` (updater format,

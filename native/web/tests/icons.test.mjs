@@ -20,7 +20,7 @@ test("OS glyphs are single filled paths while existing icons keep their strokes"
     assert.equal(icon.props.children.type, "path");
     assert(icon.props.children.props.d.length > 0);
   }
-  for (const name of ["hosts", "more", "star"]) {
+  for (const name of ["hosts", "more", "star", "list", "info", "chevronLeft", "chevronRight"]) {
     const icon = Icon({ name });
     assert.equal(icon.props.fill, "none");
     assert.equal(icon.props.stroke, "currentColor");
