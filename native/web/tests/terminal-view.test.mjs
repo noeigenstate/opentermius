@@ -14,10 +14,22 @@ async function mountTerminal(context, initial = {}) {
   const observers = new Set();
   const themeObservers = new Set();
   const root = { dataset: { theme: "light" } };
-  const clipboard = { reads: 0 };
+  const clipboard = { reads: 0, writes: [], copied: [], execCommand: true };
+  const copyListeners = new Set();
   const globals = {
-    document: { documentElement: root },
-    navigator: { clipboard: { async readText() { clipboard.reads++; return ""; } } },
+    document: {
+      documentElement: root,
+      addEventListener(type, listener) { if (type === "copy") copyListeners.add(listener); },
+      removeEventListener(type, listener) { if (type === "copy") copyListeners.delete(listener); },
+      execCommand(command) {
+        assert.equal(command, "copy");
+        if (!clipboard.execCommand) return false;
+        const event = { clipboardData: { setData(type, text) { assert.equal(type, "text/plain"); clipboard.copied.push(text); } }, preventDefault() {} };
+        for (const listener of copyListeners) listener(event);
+        return true;
+      },
+    },
+    navigator: { clipboard: { async readText() { clipboard.reads++; return ""; }, async writeText(text) { clipboard.writes.push(text); } } },
     getComputedStyle(element) {
       assert.equal(element, root);
       return { getPropertyValue(name) { return ` ${root.dataset.theme}:${name} `; } };
@@ -103,6 +115,10 @@ async function mountTerminal(context, initial = {}) {
       refresh(start, end) { calls.push("refresh"); this.refreshes.push([start, end]); }
       scrollToBottom() { calls.push("scroll"); this.scrolls++; this.buffer.active.viewportY = this.buffer.active.baseY; }
       focus() { calls.push("focus"); }
+      selection = "";
+      hasSelection() { return this.selection !== ""; }
+      getSelection() { return this.selection; }
+      clearSelection() { this.selection = ""; }
       attachCustomKeyEventHandler(handler) { this.keyHandler = handler; }
       onData() { return { dispose() {} }; }
       onBinary() { return { dispose() {} }; }
@@ -190,6 +206,27 @@ test("paste shortcuts keep the native paste event, which needs no clipboard read
   page.terminal.paste = text => pasted.push(text);
   page.mock.element.listeners.paste({ preventDefault() {}, stopImmediatePropagation() {}, clipboardData: { getData: () => "ls -la" } });
   assert.deepEqual(pasted, ["ls -la"]);
+});
+
+test("right-click copies the selection in the gesture and never pastes", async (context) => {
+  const page = await mountTerminal(context);
+  const rightClick = () => page.mock.element.listeners.contextmenu({ preventDefault() {}, stopPropagation() {} });
+  rightClick();
+  await Promise.resolve();
+  assert.deepEqual([page.clipboard.reads, page.clipboard.copied, page.clipboard.writes], [0, [], []]);
+  page.terminal.selection = "uname -a";
+  rightClick();
+  assert.deepEqual(page.clipboard.copied, ["uname -a"], "copied synchronously, before any await");
+  await Promise.resolve();
+  assert.equal(page.terminal.selection, "");
+  rightClick();
+  await Promise.resolve();
+  assert.deepEqual([page.clipboard.reads, page.clipboard.copied.length, page.clipboard.writes], [0, 1, []], "a second right-click does nothing");
+  page.clipboard.execCommand = false;
+  page.terminal.selection = "df -h";
+  rightClick();
+  await Promise.resolve();
+  assert.deepEqual(page.clipboard.writes, ["df -h"], "falls back to the async clipboard API");
 });
 
 test("double-click word selection keeps xterm's separators and stops at full-width punctuation", async (context) => {

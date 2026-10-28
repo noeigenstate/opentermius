@@ -108,13 +108,17 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       if (lines > 1) setPaste(text);
       else xterm.paste(text.replace(/\x1b/g, ""));
     }
-    async function readClipboard() {
-      try { requestPaste(await navigator.clipboard.readText()); } catch { report(t("Cannot access clipboard")); }
-    }
+    // Copy synchronously inside the click or key gesture: execCommand needs no clipboard permission and
+    // cannot lose focus to an await. The async API is only the fallback.
     async function copySelection() {
       if (!xterm.hasSelection()) return;
+      const text = xterm.getSelection();
+      const onCopy = (event: ClipboardEvent) => { event.clipboardData?.setData("text/plain", text); event.preventDefault(); };
+      document.addEventListener("copy", onCopy, true);
+      let copied = false;
+      try { copied = document.execCommand("copy"); } catch { copied = false; } finally { document.removeEventListener("copy", onCopy, true); }
       try {
-        await navigator.clipboard.writeText(xterm.getSelection());
+        if (!copied) await navigator.clipboard.writeText(text);
         if (!disposed) xterm.clearSelection();
       } catch { report(t("Cannot access clipboard")); }
     }
@@ -144,10 +148,12 @@ export function TerminalView({ sessionId, visible, ended, local, blocked, onReco
       event.stopImmediatePropagation();
       requestPaste(event.clipboardData?.getData("text/plain") ?? "");
     }
+    // Right-click only copies a selection. Pasting is Ctrl+V / Shift+Insert, so a second right-click after
+    // a copy (which clears the selection) cannot paste into the shell.
     function contextMenu(event: MouseEvent) {
       event.preventDefault();
       event.stopPropagation();
-      if (xterm.hasSelection()) void copySelection(); else void readClipboard();
+      void copySelection();
     }
     function rightMouseDown(event: MouseEvent) {
       if (event.button === 2) { event.preventDefault(); event.stopImmediatePropagation(); }
