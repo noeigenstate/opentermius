@@ -298,7 +298,7 @@ jobs:
             ''
             '### macOS arm64 (Apple Silicon)'
             ''
-            'Unsigned DMG (no Developer ID) with an ad-hoc-signed app; not notarized. First launch via right-click > Open or System Settings > Privacy & Security > Open Anyway, or `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.'
+            'Unsigned DMG (no Developer ID) with an ad-hoc-signed app; not notarized. macOS blocks the first launch: open it once, then click Open Anyway in System Settings > Privacy & Security (macOS 15+ has no right-click > Open bypass), or run `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.'
             ''
             'SHA-256:'
             '```text'

@@ -46,7 +46,7 @@ In-app updates download the new installer only when its size and SHA-256 match t
 
 **Linux x64 / arm64**: download `OpenTermius-<version>-linux-x86_64.AppImage` or `OpenTermius-<version>-linux-aarch64.AppImage` and `SHA256SUMS` from [Releases](https://github.com/noeigenstate/opentermius/releases). Verify the AppImage's SHA-256 against `SHA256SUMS`, make it executable with `chmod +x <file>.AppImage` and run `./<file>.AppImage`. These unsigned AppImages bundle GTK and WebKitGTK and need glibc 2.35 or newer (built on Ubuntu 22.04). On systems without FUSE 2, run `./<file>.AppImage --appimage-extract-and-run`.
 
-**macOS arm64 (Apple Silicon)**: download `OpenTermius-<version>-macos-arm64.dmg` and `SHA256SUMS` from [Releases](https://github.com/noeigenstate/opentermius/releases), verify the DMG's SHA-256 against `SHA256SUMS`, then open it and drag OpenTermius to Applications. The DMG is unsigned (no Developer ID), the app is ad-hoc-signed, and neither is notarized. On first launch, use right-click > Open or System Settings > Privacy & Security > Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.
+**macOS arm64 (Apple Silicon)**: download `OpenTermius-<version>-macos-arm64.dmg` and `SHA256SUMS` from [Releases](https://github.com/noeigenstate/opentermius/releases), verify the DMG's SHA-256 against `SHA256SUMS`, then open it and drag OpenTermius to Applications. The DMG is unsigned (no Developer ID), the app is ad-hoc-signed, and neither is notarized. On first launch macOS blocks it: open it once, then click Open Anyway in System Settings > Privacy & Security (macOS 15 and later no longer offer right-click > Open), or run `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.
 
 CI builds and tests macOS and Linux, but these packages have not yet been verified on a real desktop. In-app updates on these platforms open the release page.
 
@@ -148,7 +148,7 @@ NSIS 安装程序按当前用户安装，创建快捷方式并覆盖升级原目
 
 **Linux x64 / arm64**：从 [Releases](https://github.com/noeigenstate/opentermius/releases) 下载 `OpenTermius-<version>-linux-x86_64.AppImage` 或 `OpenTermius-<version>-linux-aarch64.AppImage` 及 `SHA256SUMS`，按 `SHA256SUMS` 核对 AppImage 的 SHA-256，执行 `chmod +x <file>.AppImage` 后运行 `./<file>.AppImage`。这些未签名的 AppImage 内含 GTK 和 WebKitGTK，构建环境为 Ubuntu 22.04，需要 glibc 2.35 或更新版本。系统没有 FUSE 2 时，运行 `./<file>.AppImage --appimage-extract-and-run`。
 
-**macOS arm64（Apple Silicon）**：从 [Releases](https://github.com/noeigenstate/opentermius/releases) 下载 `OpenTermius-<version>-macos-arm64.dmg` 及 `SHA256SUMS`，按 `SHA256SUMS` 核对 DMG 的 SHA-256，再打开并将 OpenTermius 拖入 Applications。DMG 未签名（无 Developer ID），应用采用临时签名（ad-hoc），两者均未公证。首次启动请右键选择“打开”，或前往“系统设置 > 隐私与安全性 > 仍要打开”，也可运行 `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`。
+**macOS arm64（Apple Silicon）**：从 [Releases](https://github.com/noeigenstate/opentermius/releases) 下载 `OpenTermius-<version>-macos-arm64.dmg` 及 `SHA256SUMS`，按 `SHA256SUMS` 核对 DMG 的 SHA-256，再打开并将 OpenTermius 拖入 Applications。DMG 未签名（无 Developer ID），应用采用临时签名（ad-hoc），两者均未公证。首次启动会被 macOS 拦截：先打开一次，再到“系统设置 > 隐私与安全性”点击“仍要打开”（macOS 15 起已不能通过右键“打开”绕过），也可运行 `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`。
 
 macOS 和 Linux 会在 CI 中构建并测试，但这些包尚未在真实桌面上验证。这两个平台的应用内更新会打开发布页面。
 
