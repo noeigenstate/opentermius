@@ -45,7 +45,7 @@ jobs:
         run: npm run build
       - name: Check packaging scripts
         if: runner.os == 'Linux'
-        run: shellcheck scripts/package-macos.sh scripts/package-linux.sh
+        run: shellcheck scripts/package-macos.sh scripts/package-linux.sh scripts/install-macos.sh
       - name: Build
         run: cargo build --locked --workspace
       - name: Test workspace (consolidated integration suite; desktop tests stay ignored)

@@ -229,6 +229,24 @@ jobs:
           codesign --verify --deep --strict "$bundle"
           plutil -lint "$bundle/Contents/Info.plist"
 
+      - name: Verify macOS ZIP installer
+        if: runner.os == 'macOS'
+        run: |
+          shopt -s nullglob
+          packages=(releases/*.zip)
+          if [[ ${#packages[@]} -ne 1 ]]; then
+            printf '%s\n' 'Release artifacts must contain exactly one macOS ZIP.' >&2
+            exit 1
+          fi
+          OPENTERMIUS_INSTALL_DIR="$RUNNER_TEMP/Applications" OPENTERMIUS_OPEN=0 bash scripts/install-macos.sh "${packages[0]}"
+          bundle=$RUNNER_TEMP/Applications/OpenTermius.app
+          codesign --verify --deep --strict "$bundle"
+          attributes=$(xattr -r "$bundle")
+          if [[ $attributes == *com.apple.quarantine* ]]; then
+            printf '%s\n' 'Installed macOS app must not have a quarantine attribute.' >&2
+            exit 1
+          fi
+
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
@@ -236,6 +254,7 @@ jobs:
           path: |
             native/releases/*.AppImage
             native/releases/*.dmg
+            native/releases/*.zip
           if-no-files-found: error
 
   release:
@@ -271,7 +290,7 @@ jobs:
           }
           $version = $Matches[1]
           $packages = @($installer)
-          foreach ($suffix in @('linux-x86_64.AppImage', 'linux-aarch64.AppImage', 'macos-arm64.dmg')) {
+          foreach ($suffix in @('linux-x86_64.AppImage', 'linux-aarch64.AppImage', 'macos-arm64.dmg', 'macos-arm64.zip')) {
             $package = @(Get-ChildItem -Path "native/releases/OpenTermius-*-$suffix" -File)
             if ($package.Count -ne 1 -or $package[0].Name -cne "OpenTermius-$version-$suffix") {
               throw "发布产物必须包含且仅包含一个版本为 $version 的 $suffix 包。"
@@ -298,6 +317,14 @@ jobs:
             ''
             '### macOS arm64 (Apple Silicon)'
             ''
+            'Recommended: run this command in Terminal. It installs or updates without the Gatekeeper prompt; verifies the SHA-256 against SHA256SUMS.'
+            ''
+            '```sh'
+            'curl -fsSL https://raw.githubusercontent.com/noeigenstate/opentermius/main/native/scripts/install-macos.sh | bash'
+            '```'
+            ''
+            'Or download the DMG and verify its SHA-256 against SHA256SUMS, then drag OpenTermius to Applications.'
+            ''
             'Unsigned DMG (no Developer ID) with an ad-hoc-signed app; not notarized. macOS blocks the first launch: open it once, then click Open Anyway in System Settings > Privacy & Security (macOS 15+ has no right-click > Open bypass), or run `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.'
             ''
             'SHA-256:'
@@ -317,6 +344,7 @@ jobs:
             native/releases/OpenTermius-*-linux-x86_64.AppImage
             native/releases/OpenTermius-*-linux-aarch64.AppImage
             native/releases/OpenTermius-*-macos-arm64.dmg
+            native/releases/OpenTermius-*-macos-arm64.zip
             native/releases/checksums.json
             native/releases/SHA256SUMS
           fail_on_unmatched_files: true

@@ -57,5 +57,6 @@ ln -s /Applications "$image_root/Applications"
 arch=$(uname -m)
 if [[ -n ${CARGO_BUILD_TARGET:-} ]]; then arch=${CARGO_BUILD_TARGET%%-*}; fi
 ditto "$bundle" "releases/OpenTermius.app"
+ditto -c -k --keepParent "releases/OpenTermius.app" "releases/OpenTermius-$version-macos-$arch.zip"
 hdiutil create -volname OpenTermius -srcfolder "$image_root" -ov -format UDZO "releases/OpenTermius-$version-macos-$arch.dmg"
-printf 'Created releases/OpenTermius.app and macOS %s DMG\n' "$arch"
+printf 'Created releases/OpenTermius.app and macOS %s ZIP and DMG\n' "$arch"

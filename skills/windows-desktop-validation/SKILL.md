@@ -57,14 +57,14 @@ keep outputs, caches and temporary files on E:.
    `Release` workflow (`.github/workflows/release.yml`) publishes the GitHub release.
    Also bump the two "currently `X.Y.Z`" strings in README. Its publish job runs
    only on tags and needs the Windows job plus the Linux x64/arm64 (Ubuntu
-   22.04) and macOS arm64 jobs, so expect six assets: the installer, two
-   `linux-*.AppImage`, `macos-arm64.dmg`, `checksums.json` (updater format,
+   22.04) and macOS arm64 jobs, so expect seven assets: the installer, two
+   `linux-*.AppImage`, `macos-arm64.dmg`, `macos-arm64.zip`, `checksums.json` (updater format,
    Windows only, never change it) and `SHA256SUMS`. Download them into a new
    scratch folder and check size and SHA-256 against both manifests.
    Linux AppImages bundle GTK and WebKitGTK and require glibc 2.35 or newer;
    run `chmod +x <file>.AppImage` before launching, and add
    `--appimage-extract-and-run` on systems without FUSE 2.
-   Desktop CI runs ShellCheck on both packaging scripts; on Windows, lint them
+   Desktop CI runs ShellCheck on both packaging scripts and the macOS installer; on Windows, lint them
    first with the release `shellcheck.exe` unpacked into a scratch folder on E:.
    README images use synthetic fixture data only (192.0.2.0/24 addresses) and
    new file names; existing `docs/screenshots/` files are historical records.
