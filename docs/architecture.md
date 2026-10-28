@@ -32,6 +32,6 @@ macOS 随机 256 位主密钥存于默认 Keychain 的 generic password，以配
 
 Windows 自定义标题栏拖动继续使用 Win32；Unix 使用 Slint 的 winit 0.30 window accessor 调用 `drag_window`。终端测量、输入法和显示共享平台等宽字体（Consolas / Menlo / DejaVu Sans Mono）及设置中的字号。Linux 文件选择启用 XDG portal backend，需要运行中的 desktop portal 服务及桌面实现。设置页打开配置目录分别使用 Windows `explorer`、macOS `open`、Linux `xdg-open`。Xshell 默认目录探测和系统主题注册表查询仅在 Windows 启用；Unix 不预选 Xshell 目录，System 主题回退为浅色。
 
-`.github/workflows/ci.yml` 在 Windows、macOS、Ubuntu 上构建、测试及上传 release 可执行文件；交互式 GUI 测试保持 ignored。`native/scripts/package-macos.sh` 生成未签名 `.app`/DMG，`package-linux.sh` 生成 tar.gz、桌面文件及 PNG，均须在对应宿主执行。后续工作为真实桌面验证、发布者签名/公证及 Linux Secret Service 集成；CI 配置的存在不等于已通过平台验证。
+`.github/workflows/ci.yml` 在 Windows、macOS、Ubuntu 上构建、测试及上传 release 可执行文件；交互式 GUI 测试保持 ignored。`native/scripts/package-macos.sh` 生成未签名 `.app`/DMG，`package-linux.sh` 通过 Tauri 打包器生成内含 GTK 和 WebKitGTK 的未签名 AppImage，均须在对应宿主执行。Linux 包构建于 Ubuntu 22.04，需要 glibc 2.35 或更新版本；执行 `chmod +x <file>.AppImage` 后运行，系统没有 FUSE 2 时加 `--appimage-extract-and-run`。后续工作为真实桌面验证、发布者签名/公证及 Linux Secret Service 集成；CI 配置的存在不等于已通过平台验证。
 
 本次 Windows 构建、测试、GUI 自检及交叉检查的边界见 [跨平台验证记录](cross-platform-validation.md)。

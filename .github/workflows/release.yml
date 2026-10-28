@@ -156,7 +156,7 @@ jobs:
         run: |
           sudo apt-get update
           # Ayatana is the AppIndicator implementation in current Tauri prerequisites.
-          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libxdo-dev
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libxdo-dev file xvfb
 
       - name: Install frontend dependencies
         working-directory: native/web
@@ -179,31 +179,35 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           shopt -s nullglob
-          packages=(releases/*)
-          if [[ ${#packages[@]} -ne 1 || ! -f ${packages[0]} || ${packages[0]} != *.tar.gz ]]; then
-            printf '%s\n' 'Release artifacts must contain exactly one Linux archive.' >&2
+          packages=(releases/*.AppImage)
+          if [[ ${#packages[@]} -ne 1 || ! -f ${packages[0]} ]]; then
+            printf '%s\n' 'Release artifacts must contain exactly one Linux AppImage.' >&2
             exit 1
           fi
-          archive=${packages[0]}
-          name=$(basename "$archive" .tar.gz)
-          contents=$(tar -tzf "$archive")
-          grep -Fx "$name/bin/opentermius" <<< "$contents"
-          stage=$(mktemp -d)
-          trap 'rm -rf -- "$stage"' EXIT
-          tar -xzf "$archive" -C "$stage"
-          binary=$stage/$name/bin/opentermius
+          appimage=$PWD/${packages[0]}
           case $(uname -m) in
             x86_64) machine=x86-64 ;;
             aarch64) machine=aarch64 ;;
             *) printf '%s\n' 'Unsupported Linux architecture.' >&2; exit 1 ;;
           esac
-          description=$(file "$binary")
+          description=$(file "$appimage")
           printf '%s\n' "$description"
           [[ $description == *ELF* && $description == *"$machine"* ]]
-          libraries=$(ldd "$binary")
-          printf '%s\n' "$libraries"
-          if [[ $libraries == *'not found'* ]]; then
-            printf '%s\n' 'Linux package has missing shared libraries.' >&2
+          stage=$(mktemp -d)
+          trap 'rm -rf -- "$stage"' EXIT
+          (cd "$stage" && "$appimage" --appimage-extract)
+          [[ -f $stage/squashfs-root/usr/bin/opentermius ]]
+          webkit=$(find "$stage/squashfs-root" -name 'libwebkit2gtk-4.1.so*' -print -quit)
+          if [[ -z $webkit ]]; then
+            printf '%s\n' 'Linux AppImage must bundle WebKitGTK 4.1.' >&2
+            exit 1
+          fi
+          data_dir=$(mktemp -d "$stage/data.XXXXXX")
+          status=0
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a timeout 20 "$appimage" --data-dir="$data_dir" >"$stage/launch.log" 2>&1 || status=$?
+          if [[ $status -ne 124 ]]; then
+            cat "$stage/launch.log"
+            printf 'Linux AppImage launch exited with status %s; expected 124.\n' "$status" >&2
             exit 1
           fi
 
@@ -230,7 +234,7 @@ jobs:
         with:
           name: OpenTermius-${{ runner.os }}-${{ runner.arch }}
           path: |
-            native/releases/*.tar.gz
+            native/releases/*.AppImage
             native/releases/*.dmg
           if-no-files-found: error
 
@@ -267,7 +271,7 @@ jobs:
           }
           $version = $Matches[1]
           $packages = @($installer)
-          foreach ($suffix in @('linux-x86_64.tar.gz', 'linux-aarch64.tar.gz', 'macos-arm64.dmg')) {
+          foreach ($suffix in @('linux-x86_64.AppImage', 'linux-aarch64.AppImage', 'macos-arm64.dmg')) {
             $package = @(Get-ChildItem -Path "native/releases/OpenTermius-*-$suffix" -File)
             if ($package.Count -ne 1 -or $package[0].Name -cne "OpenTermius-$version-$suffix") {
               throw "发布产物必须包含且仅包含一个版本为 $version 的 $suffix 包。"
@@ -288,7 +292,9 @@ jobs:
             ''
             '### Linux x64 / arm64'
             ''
-            'Portable tar.gz, unsigned. Requires GTK 3, WebKitGTK 4.1, an AppIndicator implementation and an XDG desktop portal (see README.txt inside). Built on Ubuntu 22.04 (glibc 2.35 or newer).'
+            'AppImage, unsigned. Bundles WebKitGTK; needs glibc 2.35 or newer (built on Ubuntu 22.04). `chmod +x` it and run; on systems without FUSE 2 run it with `--appimage-extract-and-run`.'
+            ''
+            'Linux saved secrets use AES-256-GCM with a 0600 master-key-v1 file in the config directory, not an OS keyring; keep it private and back it up with the config.'
             ''
             '### macOS arm64 (Apple Silicon)'
             ''
@@ -308,8 +314,8 @@ jobs:
           body_path: release-notes.md
           files: |
             native/releases/OpenTermius-*-windows-x64-setup.exe
-            native/releases/OpenTermius-*-linux-x86_64.tar.gz
-            native/releases/OpenTermius-*-linux-aarch64.tar.gz
+            native/releases/OpenTermius-*-linux-x86_64.AppImage
+            native/releases/OpenTermius-*-linux-aarch64.AppImage
             native/releases/OpenTermius-*-macos-arm64.dmg
             native/releases/checksums.json
             native/releases/SHA256SUMS

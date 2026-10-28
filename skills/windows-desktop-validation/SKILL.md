@@ -58,9 +58,12 @@ keep outputs, caches and temporary files on E:.
    Also bump the two "currently `X.Y.Z`" strings in README. Its publish job runs
    only on tags and needs the Windows job plus the Linux x64/arm64 (Ubuntu
    22.04) and macOS arm64 jobs, so expect six assets: the installer, two
-   `linux-*.tar.gz`, `macos-arm64.dmg`, `checksums.json` (updater format,
+   `linux-*.AppImage`, `macos-arm64.dmg`, `checksums.json` (updater format,
    Windows only, never change it) and `SHA256SUMS`. Download them into a new
    scratch folder and check size and SHA-256 against both manifests.
+   Linux AppImages bundle GTK and WebKitGTK and require glibc 2.35 or newer;
+   run `chmod +x <file>.AppImage` before launching, and add
+   `--appimage-extract-and-run` on systems without FUSE 2.
    README images use synthetic fixture data only (192.0.2.0/24 addresses) and
    new file names; existing `docs/screenshots/` files are historical records.
 
