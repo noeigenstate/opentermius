@@ -86,7 +86,7 @@ fn main() {
             sessions::connect_host, sessions::open_local_terminal, sessions::reconnect_session,
             sessions::duplicate_session, sessions::session_input, sessions::session_resize,
             sessions::close_session, sessions::answer_prompt, sessions::list_sessions,
-            sftp::local_home, sftp::local_list, sftp::local_mkdir, sftp::local_rename, sftp::local_delete,
+            sftp::local_home, sftp::local_places, sftp::local_list, sftp::local_mkdir, sftp::local_rename, sftp::local_delete,
             sftp::sftp_list, sftp::sftp_upload, sftp::sftp_download, sftp::sftp_mkdir,
             sftp::sftp_rename, sftp::sftp_delete, sftp::sftp_confirm_delete,
             sftp::sftp_confirm_overwrite, sftp::sftp_cancel_transfer,

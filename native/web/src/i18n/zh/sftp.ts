@@ -6,6 +6,7 @@ export default {
   "Name": "名称", "Modified": "修改时间", "Size": "大小", "Kind": "类型",
   "Folder": "文件夹", "File": "文件", "{extension} file": "{extension} 文件",
   "Back": "返回上级", "Refresh": "刷新", "Go": "前往", "Home": "主目录",
+  "Places": "位置", "Desktop": "桌面", "Downloads": "下载", "Documents": "文档", "Local disk": "本地磁盘",
   "Local path": "本地路径", "Remote path": "远程路径", "This folder is empty": "此文件夹为空",
   "Loading…": "正在加载…", "Not connected — Reconnect": "未连接 — 重新连接",
   "Transfers": "传输", "8 queued maximum": "最多排队 8 项",

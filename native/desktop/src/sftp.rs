@@ -25,6 +25,14 @@ pub struct LocalListing {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LocalPlace {
+    kind: &'static str,
+    path: String,
+    name: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalDeletion {
     deleted: bool,
     files: u64,
@@ -123,6 +131,100 @@ pub async fn local_home() -> Result<String, String> {
         let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
             .ok_or_else(|| t("Select a local folder").to_string())?;
         local_root(&home.to_string_lossy()).map(|path| ssh::display_local_path(&path))
+    })
+    .await
+}
+
+fn folder_places(candidates: [(&'static str, Option<PathBuf>); 4]) -> Vec<LocalPlace> {
+    let mut places: Vec<LocalPlace> = Vec::new();
+    for (kind, path) in candidates {
+        let Some(path) = path.and_then(|path| local_root(&path.to_string_lossy()).ok()) else {
+            continue;
+        };
+        let path = ssh::display_local_path(&path);
+        if !places.iter().any(|place| place.path == path) {
+            places.push(LocalPlace {
+                kind,
+                path,
+                name: None,
+            });
+        }
+    }
+    places
+}
+
+#[cfg(windows)]
+fn drive_places() -> Vec<LocalPlace> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
+    };
+    let mut places = Vec::new();
+    let drives = unsafe { GetLogicalDrives() };
+    for index in 0..26 {
+        if drives & (1 << index) == 0 {
+            continue;
+        }
+        let path = format!("{}:\\", (b'A' + index) as char);
+        let root: Vec<u16> = path.encode_utf16().chain(Some(0)).collect();
+        let kind = unsafe { GetDriveTypeW(root.as_ptr()) };
+        if matches!(kind, 0 | 1) {
+            // DRIVE_UNKNOWN | DRIVE_NO_ROOT_DIR
+            continue;
+        }
+        let mut name = None;
+        // Do not query volumes on remote shares or spin up optical drives.
+        if !matches!(kind, 4 | 5) {
+            // DRIVE_REMOTE | DRIVE_CDROM
+            let mut label = [0u16; 261];
+            if unsafe {
+                GetVolumeInformationW(
+                    root.as_ptr(),
+                    label.as_mut_ptr(),
+                    label.len() as u32,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    0,
+                )
+            } == 0
+            {
+                continue;
+            }
+            let len = label.iter().position(|&c| c == 0).unwrap_or(label.len());
+            if len != 0 {
+                name = Some(String::from_utf16_lossy(&label[..len]));
+            }
+        }
+        places.push(LocalPlace {
+            kind: "drive",
+            path,
+            name,
+        });
+    }
+    places
+}
+
+#[cfg(not(windows))]
+fn drive_places() -> Vec<LocalPlace> {
+    vec![LocalPlace {
+        kind: "drive",
+        path: "/".into(),
+        name: None,
+    }]
+}
+
+#[tauri::command]
+pub async fn local_places() -> Result<Vec<LocalPlace>, String> {
+    blocking(|| {
+        let mut places = folder_places([
+            ("home", dirs::home_dir()),
+            ("desktop", dirs::desktop_dir()),
+            ("downloads", dirs::download_dir()),
+            ("documents", dirs::document_dir()),
+        ]);
+        places.extend(drive_places());
+        Ok(places)
     })
     .await
 }
@@ -439,6 +541,100 @@ mod tests {
             ));
         std::fs::create_dir_all(&path).unwrap();
         path
+    }
+
+    #[test]
+    fn local_places_serialize_contract() {
+        for kind in ["home", "desktop", "downloads", "documents", "drive"] {
+            let place = LocalPlace {
+                kind,
+                path: "/".into(),
+                name: None,
+            };
+            assert_eq!(
+                serde_json::to_value(place).unwrap(),
+                serde_json::json!({ "kind": kind, "path": "/", "name": null })
+            );
+        }
+        let place = LocalPlace {
+            kind: "drive",
+            path: "/".into(),
+            name: Some("Volume".into()),
+        };
+        assert_eq!(serde_json::to_value(place).unwrap()["name"], "Volume");
+    }
+
+    #[test]
+    fn local_places_drop_home_equal_and_duplicate_folders() {
+        let root = fixture();
+        let folder = root.join("folder");
+        std::fs::create_dir(&folder).unwrap();
+        let places = folder_places([
+            ("home", Some(root.clone())),
+            ("desktop", Some(root.join("."))),
+            ("downloads", Some(folder.clone())),
+            ("documents", Some(folder)),
+        ]);
+        assert_eq!(
+            places.iter().map(|place| place.kind).collect::<Vec<_>>(),
+            ["home", "downloads"]
+        );
+        assert_eq!(
+            places[0].path,
+            list_local(root.to_str().unwrap(), false).unwrap().path
+        );
+        assert!(
+            places
+                .iter()
+                .all(|place| place.name.is_none() && !place.path.starts_with(r"\\?\"))
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn local_places_skip_unavailable_folders() {
+        let root = fixture();
+        let file = root.join("file");
+        std::fs::write(&file, b"data").unwrap();
+        let places = folder_places([
+            ("home", None),
+            ("desktop", Some(root.join("missing"))),
+            ("downloads", Some(file)),
+            ("documents", Some(root.clone())),
+        ]);
+        assert_eq!(places.len(), 1);
+        assert_eq!(places[0].kind, "documents");
+        assert!(
+            folder_places([
+                ("home", None),
+                ("desktop", None),
+                ("downloads", None),
+                ("documents", None)
+            ])
+            .is_empty()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn local_places_include_system_drive() {
+        let places = local_places().await.unwrap();
+        let drives: Vec<_> = places
+            .iter()
+            .filter(|place| place.kind == "drive")
+            .collect();
+        assert!(
+            drives
+                .iter()
+                .all(|place| place.path.len() == 3 && place.path.ends_with(":\\"))
+        );
+        let system_drive = format!("{}\\", std::env::var("SystemDrive").unwrap());
+        assert!(
+            drives
+                .iter()
+                .any(|place| place.path.eq_ignore_ascii_case(&system_drive))
+        );
     }
 
     #[test]

@@ -64,6 +64,10 @@
   --icon-warning: #b45309;   /* warnings, ring above 70 % */
   --icon-error: #b42318;     /* errors, lost connections, ring above 90 % */
 
+  /* File glyphs in the SFTP lists: git and document files are toned, folders and other files use --icon-secondary. */
+  --file-git: #d03a1e;       /* .gitignore, .gitattributes and other git files */
+  --file-doc: #2f6bd0;       /* markdown and text documents */
+
   --ring-track: var(--g3);
   --ring-ok: var(--icon-active);
   --ring-warn: var(--icon-warning);
@@ -132,6 +136,9 @@
   --icon-success: #4ade80;
   --icon-warning: #fbbf24;
   --icon-error: #f87171;
+
+  --file-git: #ee6a50;
+  --file-doc: #6aa5f0;
 
   /* Official brand colours include black and navy, so host tiles become light plates: every logo keeps its own colour. */
   --tone-blue: #e4e4e7;
@@ -438,7 +445,7 @@ input[role="switch"]:disabled { opacity: .45; cursor: default; }
 }
 @media (forced-colors: active) {
   /* Icons fall back to system colours: statuses are told apart by their labels and the "!" badge, not hue. */
-  :root, :root[data-theme="dark"] { --icon-default: CanvasText; --icon-secondary: CanvasText; --icon-disabled: GrayText; --icon-active: Highlight; --icon-hover: Highlight; --icon-success: CanvasText; --icon-warning: CanvasText; --icon-error: CanvasText; }
+  :root, :root[data-theme="dark"] { --icon-default: CanvasText; --icon-secondary: CanvasText; --icon-disabled: GrayText; --icon-active: Highlight; --icon-hover: Highlight; --icon-success: CanvasText; --icon-warning: CanvasText; --icon-error: CanvasText; --file-git: CanvasText; --file-doc: CanvasText; }
   .nav-indicator, .tab-active, .pill[aria-pressed="true"] { outline: 1px solid Highlight; }
   .dot { border: 1px solid CanvasText; }
   .dot-online, .dot-busy { background: Highlight; }

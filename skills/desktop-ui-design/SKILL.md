@@ -62,6 +62,14 @@ configuration formats independent of visual changes.
   `.xterm-screen` ends inside the padding and that a drag starting in the
   gutter selects from the first column. Check a screenshot in both themes as
   well: geometry probes cannot see paint.
+- Terminal right-click only copies a selection (copying clears it, so a
+  paste-on-empty right-click would paste on the second click). Copy
+  synchronously inside the gesture with `execCommand("copy")` and a capture
+  `copy` listener; the async clipboard API is only the fallback. Paste stays on
+  Ctrl+V / Shift+Insert through the native paste event.
+- Dropdowns and comboboxes reuse the `.menu` classes so row height, padding,
+  icon gap and hover match `Menu`; a combobox keeps focus in its input and
+  moves `aria-activedescendant` instead of roving focus.
 - Keep terminal instances and keys stable. Use their existing `visible` path
   for fitting and rendering; do not remount them for page transitions.
 - Polling UI such as Logs runs only while its page and document are visible.

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as api from "../api/sftp";
 import { t } from "../i18n";
-import { Icon } from "../icons";
+import { Icon, type IconName } from "../icons";
 import { Menu, type MenuItem } from "../components/Menu";
 
 type Side = "local" | "remote";
@@ -114,12 +114,101 @@ function parentRemote(path: string) {
   return `${path.replace(/\/$/, "")}/..`;
 }
 
+// Explorer-style glyphs: folders and plain files stay neutral, git and document files get a tone (their shapes differ too, so colour is never the only cue).
+function fileIcon(entry: api.FileEntry): { icon: IconName; tone?: "git" | "doc" } {
+  if (entry.isDir) return { icon: "folder" };
+  if (/^\.git(?:ignore|attributes|modules|keep)$/i.test(entry.name)) return { icon: "gitBranch", tone: "git" };
+  if (/\.(?:md|markdown|txt|log|rst)$|^(?:readme|license|changelog)(?:\.|$)/i.test(entry.name)) return { icon: "fileText", tone: "doc" };
+  return { icon: "file" };
+}
+
+const placeIcons: Record<api.LocalPlace["kind"], IconName> = { home: "home", desktop: "desktop", downloads: "download", documents: "fileText", drive: "drive" };
+// Explorer-style drive names ("Data (D:)", "Local disk (C:)"); systems without drive letters show the mount name or root alone.
+function placeLabel({ kind, path, name }: api.LocalPlace) {
+  const known = { home: t("Home"), desktop: t("Desktop"), downloads: t("Downloads"), documents: t("Documents") };
+  if (kind !== "drive") return known[kind];
+  const letter = /^[A-Za-z]:/.exec(path)?.[0];
+  return letter ? `${name || t("Local disk")} (${letter})` : name || path;
+}
+const trimmed = (path: string) => path.replace(/[\\/]+$/, "").toLowerCase();
+
+/** The local path input as an editable combobox: its list holds the user folders and drives, and picking one navigates like typing the path and pressing Go. */
+function PlacesField({ label, value, current, disabled, onChange, onPick, onError }: {
+  label: string; value: string; current: string; disabled?: boolean;
+  onChange: (value: string) => void; onPick: (path: string) => void; onError?: (error: unknown) => void;
+}) {
+  const id = useId();
+  const field = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const [places, setPlaces] = useState<api.LocalPlace[] | null>(null); // null while the list is closed
+  const [active, setActive] = useState(0);
+  const [keys, setKeys] = useState(false); // keyboard highlights get the focus ring, pointer ones only the hover fill
+  const open = places !== null;
+  const isCurrent = (place: api.LocalPlace) => current !== "" && trimmed(place.path) === trimmed(current);
+  const firstDrive = places?.findIndex((place) => place.kind === "drive") ?? -1;
+
+  async function show(byKeys: boolean) {
+    try {
+      const found = await api.localPlaces(); // drives come and go, so every opening asks again
+      if (found.length === 0) return;
+      setPlaces(found); setActive(Math.max(0, found.findIndex(isCurrent))); setKeys(byKeys);
+    } catch (error) { onError?.(error); }
+  }
+  const pick = (place: api.LocalPlace) => { setPlaces(null); onChange(place.path); onPick(place.path); };
+  function onKeyDown(event: { key: string; preventDefault: () => void }) {
+    if (!places) {
+      if (event.key === "ArrowDown") { event.preventDefault(); void show(true); }
+      return;
+    }
+    const last = places.length - 1;
+    const next = event.key === "ArrowDown" ? (active + 1) % places.length : event.key === "ArrowUp" ? (active + last) % places.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
+    if (next >= 0) { event.preventDefault(); setActive(next); setKeys(true); }
+    else if (event.key === "Enter") { event.preventDefault(); pick(places[active]); }
+    else if (event.key === "Escape") { event.preventDefault(); setPlaces(null); }
+    else if (event.key === "Tab") setPlaces(null);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: Event) => { if (!field.current?.contains(event.target as Node)) setPlaces(null); };
+    const dismiss = () => setPlaces(null);
+    document.addEventListener("pointerdown", outside, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", outside, true); // scrolling the list itself keeps it open
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", outside, true);
+    };
+  }, [open]);
+  useEffect(() => { field.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" }); }, [open, active]);
+
+  return <div className="sftp-path-field" ref={field}>
+    <input ref={input} role="combobox" aria-label={label} aria-expanded={open} aria-haspopup="listbox" aria-controls={`${id}-list`} aria-autocomplete="none" aria-activedescendant={open ? `${id}-${active}` : undefined}
+      value={value} disabled={disabled} spellCheck={false} onChange={(event) => { setPlaces(null); onChange(event.target.value); }} onKeyDown={onKeyDown} />
+    <button type="button" tabIndex={-1} className="icon-button sftp-path-toggle" title={t("Places")} aria-label={t("Places")} aria-expanded={open} aria-controls={`${id}-list`} disabled={disabled}
+      onMouseDown={(event) => event.preventDefault()} onClick={() => { input.current?.focus(); if (open) setPlaces(null); else void show(false); }}><Icon name="chevronDown" size={14} /></button>
+    {places && <div className="menu sftp-places" id={`${id}-list`} role="listbox" aria-label={t("Places")} data-keys={keys || undefined} onMouseDown={(event) => event.preventDefault()}>
+      {places.map((place, index) => <Fragment key={`${place.kind}:${place.path}`}>
+        {index > 0 && index === firstDrive && <hr aria-hidden />}
+        <button type="button" role="option" id={`${id}-${index}`} tabIndex={-1} aria-selected={index === active} aria-current={isCurrent(place) || undefined}
+          onPointerEnter={() => { setActive(index); setKeys(false); }} onClick={() => pick(place)}>
+          <Icon name={placeIcons[place.kind]} size={16} />
+          <span>{placeLabel(place)}</span>
+          {place.kind !== "drive" && <span className="place-path">{place.path}</span>}
+          <span className="place-mark">{isCurrent(place) && <Icon name="check" size={14} />}</span>
+        </button>
+      </Fragment>)}
+    </div>}
+  </div>;
+}
+
 interface PaneProps {
   side: Side; path: string; entries: api.FileEntry[]; loading: boolean; offline?: boolean;
   showHidden: boolean; selected: string; onSelect: (name: string) => void;
   onNavigate: (path: string) => void; onBack: () => void; backDisabled?: boolean;
   onOpen: (entry: api.FileEntry) => void; onAction: (action: string, name?: string) => void; onReconnect?: () => void;
-  transferDisabled?: boolean;
+  transferDisabled?: boolean; onError?: (error: unknown) => void;
 }
 function FilePane(props: PaneProps) {
   const { side, path, entries, selected, onSelect } = props;
@@ -161,7 +250,8 @@ function FilePane(props: PaneProps) {
     </header>
     <form className="sftp-path" onSubmit={(event) => { event.preventDefault(); props.onNavigate(draft); }}>
       <button type="button" className="icon-button icon-button-boxed" title={t("Back")} aria-label={`${title}: ${t("Back")}`} disabled={props.backDisabled || props.offline || props.loading} onClick={props.onBack}><Icon name="arrowUp" size={16} /></button>
-      <input aria-label={side === "local" ? t("Local path") : t("Remote path")} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={props.offline} spellCheck={false} />
+      {side === "local" ? <PlacesField label={t("Local path")} value={draft} current={path} disabled={props.offline} onChange={setDraft} onPick={props.onNavigate} onError={props.onError} />
+        : <input aria-label={t("Remote path")} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={props.offline} spellCheck={false} />}
       <button type="submit" className="btn btn-s" disabled={props.offline || props.loading}>{t("Go")}</button>
       <button type="button" className="icon-button icon-button-boxed" title={t("Refresh")} aria-label={`${title}: ${t("Refresh")}`} disabled={props.offline || props.loading} onClick={() => props.onNavigate(path)}><Icon name="refresh" size={16} /></button>
     </form>
@@ -170,12 +260,12 @@ function FilePane(props: PaneProps) {
       : <>
         <table className="sftp-table"><thead><tr>{([ ["name", "Name"], ["modified", "Modified"], ["size", "Size"], ["kind", "Kind"] ] as [Column, string][]).map(([column, label]) =>
           <th key={column} aria-sort={sort.column === column ? sort.ascending ? "ascending" : "descending" : "none"}><button onClick={() => setSort({ column, ascending: sort.column === column ? !sort.ascending : true })}>{t(label)}{sort.column === column && <Icon name="chevronDown" size={13} />}</button></th>)}</tr></thead>
-          <tbody>{sorted.map((entry) => <tr key={entry.name} className={selected === entry.name ? "sftp-selected" : ""} onClick={() => onSelect(entry.name)}
+          <tbody>{sorted.map((entry) => { const { icon, tone } = fileIcon(entry); return <tr key={entry.name} className={selected === entry.name ? "sftp-selected" : ""} onClick={() => onSelect(entry.name)}
             onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onSelect(entry.name); setContextMenu({ x: event.clientX, y: event.clientY, entry }); }}>
-            <td><button className="sftp-file" onFocus={() => onSelect(entry.name)} onDoubleClick={() => props.onOpen(entry)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); props.onOpen(entry); } }} title={entry.name}>
-              <Icon name={entry.isDir ? "folder" : "file"} size={16} /><span>{entry.name}</span>
+            <td><button className="sftp-file" data-tone={tone} onFocus={() => onSelect(entry.name)} onDoubleClick={() => props.onOpen(entry)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); props.onOpen(entry); } }} title={entry.name}>
+              <Icon name={icon} size={16} /><span>{entry.name}</span>
             </button></td><td>{modified(entry.modified)}</td><td>{entry.isDir ? "—" : size(entry.size)}</td><td>{kind(entry)}</td>
-          </tr>)}</tbody></table>
+          </tr>; })}</tbody></table>
         {sorted.length === 0 && <div className="sftp-empty">{props.loading ? t("Loading…") : t("This folder is empty")}</div>}
       </>}
     </div>
@@ -317,7 +407,7 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
     {remote.error && <div className="banner banner-error" role="alert"><Icon name="alert" size={16} /><span>{remote.error}</span><button className="icon-button icon-button-sm" aria-label={t("Close")} onClick={() => session.update({ error: "" })}><Icon name="close" size={14} /></button></div>}
     <div className="sftp-panes">
       <FilePane side="local" path={local.path} entries={local.entries} selected={localSelection} onSelect={setLocalSelection} loading={localBusy} showHidden={showHidden}
-        transferDisabled={!remote.connected}
+        transferDisabled={!remote.connected} onError={(error) => session.update({ error: String(error) })}
         onNavigate={(path) => void loadLocal(path)} onBack={() => local.parent && void loadLocal(local.parent)} backDisabled={!local.parent}
         onAction={(operation, name) => void action("local", operation, name)} onOpen={(entry) => entry.isDir ? void loadLocal(entry.path) : void transfer("local", entry)} />
       <FilePane side="remote" path={remote.path} entries={remote.entries} selected={remoteSelection} onSelect={setRemoteSelection} loading={remote.loading} offline={!remote.connected && !remote.loading} showHidden={showHidden}

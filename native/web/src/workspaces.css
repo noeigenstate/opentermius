@@ -87,6 +87,22 @@
 .sftp-path .icon-button { --size: 30px; }
 .sftp-path input { flex: 1; min-width: 0; height: 32px; padding: 0 11px; border: 1px solid transparent; border-radius: 10px; font: 11.5px var(--mono); color: var(--text); background: var(--surface); }
 .sftp-path input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--card-border); }
+.sftp-path-field { position: relative; display: flex; flex: 1; min-width: 0; }
+.sftp-path-field input { padding-right: 38px; }
+.sftp-path .sftp-path-toggle { --size: 24px; position: absolute; top: 4px; right: 4px; border-radius: 7px; color: var(--icon-secondary); }
+.sftp-path-toggle svg { transition: transform var(--duration-fast); }
+.sftp-path-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* The places list reuses the .menu rows; focus stays in the input, so the highlighted row is aria-selected instead of focused. */
+.sftp-places { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: max(100%, 300px); max-height: min(340px, calc(100vh - 160px)); overflow-y: auto; }
+.sftp-places > * { flex: none; }
+.sftp-places hr { height: 1px; margin: 5px 10px; border: 0; background: var(--card-border); }
+.sftp-places button:hover:not(:disabled, [aria-selected="true"]) { color: var(--text); background: transparent; }
+.sftp-places button[aria-selected="true"] { color: var(--ink); background: var(--hover); }
+.sftp-places[data-keys] button[aria-selected="true"] { box-shadow: inset 0 0 0 2px var(--focus); }
+.sftp-places span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sftp-places .place-path { flex: 1 1 0; font-size: 11px; text-align: right; color: var(--muted); }
+.sftp-places .place-mark { display: grid; flex: none; width: 14px; margin-left: auto; }
+.sftp-places .place-mark svg { color: var(--icon-active); }
 .sftp-table-wrap { flex: 1; min-height: 0; overflow: auto; border-radius: 0 0 13px 13px; }
 .sftp-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; }
 .sftp-table th { position: sticky; top: 0; z-index: 1; padding: 0; text-align: left; font-size: 10.5px; font-weight: 600; white-space: nowrap; color: var(--secondary); background: var(--panel); border-bottom: 1px solid var(--divider); }
@@ -106,7 +122,9 @@
 .sftp-file { display: flex; align-items: center; gap: 8px; width: 100%; height: 33px; padding: 0 10px; text-align: left; }
 .sftp-file:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus); }
 .sftp-file svg { flex: none; color: var(--icon-secondary); }
-.sftp-table tr.sftp-selected .sftp-file svg { color: var(--icon-active); }
+.sftp-file[data-tone="git"] svg { color: var(--file-git); }
+.sftp-file[data-tone="doc"] svg { color: var(--file-doc); }
+.sftp-table tr.sftp-selected .sftp-file:not([data-tone]) svg { color: var(--icon-active); }
 .sftp-file span { overflow: hidden; text-overflow: ellipsis; }
 .sftp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 13px; height: 100%; min-height: 120px; padding: 20px; text-align: center; font-size: 12px; color: var(--secondary); }
 .sftp-transfers { flex: none; overflow: hidden; border-radius: 13px; background: var(--card); box-shadow: 0 0 0 1px var(--card-border), 0 1px 3px rgba(0, 0, 0, .05); }
@@ -139,4 +157,5 @@
   input[role="switch"]::after { display: none; }
   .status-chip { border: 1px solid CanvasText; }
   .sftp-table tr.sftp-selected td { outline: 1px solid Highlight; }
+  .sftp-places button[aria-selected="true"] { outline: 1px solid Highlight; }
 }

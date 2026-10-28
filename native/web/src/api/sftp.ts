@@ -10,6 +10,8 @@ export interface FileEntry {
   permissions?: number | null;
 }
 export interface LocalListing { path: string; parent: string | null; entries: FileEntry[] }
+// Local quick-access places: drive roots (C:\ on Windows, / elsewhere) and known user folders; name is the volume label.
+export interface LocalPlace { kind: "home" | "desktop" | "downloads" | "documents" | "drive"; path: string; name: string | null }
 export interface DeletionSummary { deleted?: boolean; files: number; dirs: number; bytes: number }
 // SFTP payloads are the camelCase ssh::Event variants (id is the session id).
 export interface FilesEvent { id: string; path: string; entries: FileEntry[] }
@@ -26,6 +28,7 @@ export interface DeleteEvent extends DeletionSummary { id: string; directory: st
 export interface StatusEvent { sessionId: string; connected: boolean; ended: boolean; error: boolean; message: string }
 
 export const localHome = () => invoke<string>("local_home");
+export const localPlaces = () => invoke<LocalPlace[]>("local_places");
 export const localList = (path: string, showHidden: boolean) => invoke<LocalListing>("local_list", { path, showHidden });
 export const localMkdir = (path: string, name: string) => invoke<void>("local_mkdir", { path, name });
 export const localRename = (path: string, from: string, to: string) => invoke<void>("local_rename", { path, from, to });
