@@ -10,7 +10,7 @@ export default {
   "Local path": "本地路径", "Remote path": "远程路径", "This folder is empty": "此文件夹为空",
   "Loading…": "正在加载…", "Not connected — Reconnect": "未连接 — 重新连接",
   "Transfers": "传输", "8 queued maximum": "最多排队 8 项",
-  "No transfers yet": "暂无传输任务", "Queued": "排队中",
+  "{count} more": "还有 {count} 项", "Queued": "排队中",
   "Cancelled": "已取消", "Cancelling…": "正在取消…",
   "Transfer queue is full (up to 8 tasks). Wait or cancel a task": "传输队列已满（最多 8 项），请等待或取消任务",
   "Confirm deletion": "确认删除", "Delete {name}? {files} files, {dirs} subfolders, {size}. This cannot be undone.": "删除 {name}？共 {files} 个文件、{dirs} 个子文件夹、{size}。此操作无法撤销。",

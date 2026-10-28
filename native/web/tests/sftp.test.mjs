@@ -38,7 +38,10 @@ async function createPage(context) {
     export function useSyncExternalStore(subscribe, snapshot) { return snapshot(); }
     export function jsx(type, props) { return { type, props }; }
     export const jsxs = jsx, Fragment = "Fragment", Menu = "Menu";
-    export function t(text) { return text; }
+    export function t(text, values = {}) {
+      for (const [key, value] of Object.entries(values)) text = text.replaceAll("{" + key + "}", String(value));
+      return text;
+    }
     export function Icon() {}
     export const entries = [
       { name: "other.txt", isDir: false, size: 10, modified: 0 },
@@ -79,6 +82,8 @@ async function createPage(context) {
     export async function remoteList(id, path) { calls.push(["remoteList", path]); files(path === "." ? "/fixture" : path); }
     export async function upload(...args) { calls.push(["upload", ...args]); }
     export async function download(...args) { calls.push(["download", ...args]); }
+    export async function cancelTransfer(...args) { calls.push(["cancelTransfer", ...args]); }
+    export async function confirmOverwrite(...args) { calls.push(["confirmOverwrite", ...args]); }
     export async function remoteDelete(...args) { calls.push(["remoteDelete", ...args]); }
     export async function localDelete(...args) { calls.push(["localDelete", ...args]); return { files: 1, dirs: 0, bytes: 20 }; }
   `);
@@ -93,6 +98,7 @@ async function createPage(context) {
     mock.clipboard.push(text);
   } } } });
   context.after(() => {
+    mock.handlers.closed();
     if (original) Object.defineProperty(globalThis, "navigator", original);
     else delete globalThis.navigator;
   });
@@ -131,6 +137,137 @@ function nodes(node) {
   if (!node || typeof node !== "object") return [];
   return [node, ...nodes(node.props?.children)];
 }
+
+test("the transfer section stays hidden until a transfer is queued", async context => {
+  const page = await createPage(context);
+  assert(!nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+  page.pane("local").node.props.onAction("transfer", "report.txt");
+  assert(nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+});
+
+test("transfers show the first three in queue order, finished rows keep their place until removed", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await createPage(context);
+  for (const name of ["other.txt", "report.txt", "README.md", "LICENSE", "archive.tar.gz"]) {
+    page.pane("local").node.props.onAction("transfer", name);
+  }
+  const calls = page.mock.calls.filter(call => call[0] === "upload");
+  const shown = () => nodes(page.render()).filter(node => node.type === "progress").map(node => node.props["aria-label"]);
+  const tree = page.render();
+  assert.equal(nodes(tree).filter(node => node.props?.className === "sftp-transfer").length, 3);
+  assert(nodes(tree).some(node => node.type === "span" && node.props.children === "2 more"));
+  assert.deepEqual(nodes(tree).find(node => node.props?.className === "sftp-queue-count").props.children, [5, " / 8"]);
+  assert.deepEqual(shown(), ["Upload · other.txt", "Upload · report.txt", "Upload · README.md"]);
+  page.mock.handlers.finished({ transfer: calls[0].at(-1), message: "Complete", error: false });
+  assert.deepEqual(shown(), ["Upload · other.txt", "Upload · report.txt", "Upload · README.md"]);
+  context.mock.timers.tick(1500);
+  assert.deepEqual(shown(), ["Upload · report.txt", "Upload · README.md", "Upload · LICENSE"]);
+  for (const call of calls.slice(1)) page.mock.handlers.finished({ transfer: call.at(-1), message: "Complete", error: false });
+  context.mock.timers.tick(1500);
+  assert(!nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+});
+
+test("a completed transfer shows its final progress briefly, then the section disappears and ignores late progress", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await createPage(context);
+  page.pane("local").node.props.onAction("transfer", "report.txt");
+  const transfer = page.mock.calls.findLast(call => call[0] === "upload").at(-1);
+  const progress = { transfer, transferred: 20, total: 20, speed: 10 };
+  page.mock.handlers.progress(progress);
+  page.mock.handlers.finished({ transfer, message: "Complete", error: false });
+  assert.equal(nodes(page.render()).find(node => node.type === "progress").props.value, 100);
+  context.mock.timers.tick(1499);
+  assert(nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+  context.mock.timers.tick(1);
+  assert(!nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+  page.mock.handlers.progress(progress);
+  assert(!nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+});
+
+test("a failed transfer leaves its details in the banner after removal and subsequent successful events", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await createPage(context);
+  page.pane("remote").node.props.onAction("transfer", "report.txt");
+  const transfer = page.mock.calls.findLast(call => call[0] === "download").at(-1);
+  page.mock.handlers.finished({ transfer, message: "Permission denied", error: true });
+  const banner = () => nodes(page.render()).find(node => node.props?.role === "alert");
+  assert(nodes(banner()).some(node => node.props?.children === "Download · report.txt: Permission denied"));
+  assert(nodes(page.render()).some(node => node.props?.className === "sftp-transfer sftp-transfer-error"));
+  context.mock.timers.tick(1500);
+  assert(!nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+  page.mock.handlers.files({ path: "/fixture", entries: [] });
+  page.mock.handlers.transfer({ error: false, message: "Complete" });
+  page.mock.handlers.finished({ transfer: 0, error: false, message: "Complete" });
+  page.pane("local").node.props.onAction("transfer", "report.txt");
+  const next = page.mock.calls.findLast(call => call[0] === "upload").at(-1);
+  page.mock.handlers.finished({ transfer: next, error: false, message: "Complete" });
+  context.mock.timers.tick(1500);
+  assert(nodes(banner()).some(node => node.props?.children === "Download · report.txt: Permission denied"));
+  nodes(banner()).find(node => node.type === "button").props.onClick();
+  assert.equal(banner(), undefined);
+});
+
+test("disconnect finishes every pending row and the banner keeps the real disconnect reason", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await createPage(context);
+  for (const name of ["other.txt", "report.txt"]) page.pane("local").node.props.onAction("transfer", name);
+  page.mock.handlers.status({ connected: false, error: true, message: "Connection lost" });
+  assert.equal(nodes(page.render()).filter(node => node.props?.className === "sftp-transfer sftp-transfer-error").length, 2);
+  context.mock.timers.tick(1500);
+  assert(!nodes(page.render()).some(node => node.props?.className === "sftp-transfers"));
+  assert(nodes(page.render()).some(node => node.props?.children === "Connection lost"));
+});
+
+test("removal uses current transfers and the eight-pending queue limit remains unchanged", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await createPage(context);
+  page.pane("local").node.props.onAction("transfer", "other.txt");
+  const transfer = page.mock.calls.findLast(call => call[0] === "upload").at(-1);
+  page.mock.handlers.finished({ transfer, message: "Complete", error: false });
+  for (let i = 0; i < 9; i++) page.pane("local").node.props.onAction("transfer", "report.txt");
+  assert.equal(page.mock.calls.filter(call => call[0] === "upload").length, 9);
+  context.mock.timers.tick(1500);
+  page.mock.handlers.progress({ transfer, transferred: 20, total: 20, speed: 10 });
+  const tree = page.render();
+  assert.deepEqual(nodes(tree).find(node => node.props?.className === "sftp-queue-count").props.children, [8, " / 8"]);
+  assert(nodes(tree).some(node => node.props?.children === "5 more"));
+  assert(nodes(tree).some(node => node.props?.children === "Transfer queue is full (up to 8 tasks). Wait or cancel a task"));
+});
+
+test("cancelling a paused overwrite shows Cancelled briefly and late prompts cannot reopen it", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await createPage(context);
+  page.pane("local").node.props.onAction("transfer", "report.txt");
+  const transfer = page.mock.calls.findLast(call => call[0] === "upload").at(-1);
+  const overwrite = { transfer, local: "report.txt", folder: false };
+  page.mock.handlers.overwrite(overwrite);
+  assert(nodes(page.render()).some(node => node.type === "dialog"));
+  const row = nodes(page.render()).find(node => node.props?.className === "sftp-transfer");
+  nodes(row).find(node => node.type === "button").props.onClick();
+  await flush();
+  assert.equal(page.mock.calls.findLast(call => call[0] === "cancelTransfer").at(-1), transfer);
+  assert(nodes(page.render()).some(node => node.type === "span" && node.props.children?.includes?.("Cancelled")));
+  assert(!nodes(page.render()).some(node => node.type === "dialog"));
+  context.mock.timers.tick(1500);
+  page.mock.handlers.overwrite(overwrite);
+  assert(!nodes(page.render()).some(node => node.type === "dialog" || node.props?.className === "sftp-transfers"));
+});
+
+test("session closure clears removal timers and creates none for closed sessions", async context => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const scheduled = context.mock.method(globalThis, "setTimeout");
+  const cleared = context.mock.method(globalThis, "clearTimeout");
+  const page = await createPage(context);
+  for (const name of ["other.txt", "report.txt"]) page.pane("local").node.props.onAction("transfer", name);
+  const transfer = page.mock.calls.find(call => call[0] === "upload").at(-1);
+  page.mock.handlers.finished({ transfer, message: "Complete", error: false });
+  page.mock.handlers.closed();
+  assert.equal(scheduled.mock.callCount(), 1);
+  const pending = page.mock.calls.findLast(call => call[0] === "upload").at(-1);
+  page.mock.handlers.finished({ transfer: pending, message: "Complete", error: false });
+  assert.equal(scheduled.mock.callCount(), 1);
+  for (const call of scheduled.mock.calls) assert(cleared.mock.calls.some(clear => clear.arguments[0] === call.result));
+});
 
 test("folder and file menus on each side have the required order, icons and destructive item", async context => {
   const page = await createPage(context);

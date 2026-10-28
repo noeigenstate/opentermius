@@ -23,6 +23,7 @@ let nextTransfer = Date.now();
 function createSession(sessionId: string) {
   let state: SessionState = { path: ".", entries: [], connected: false, loading: true, error: "", transfers: [], overwrites: [], deletions: [], revision: 0, localPath: "", showHidden: false };
   const observers = new Set<() => void>();
+  const removals = new Map<number, ReturnType<typeof setTimeout>>();
   let starting: Promise<void> | undefined;
   let stop: (() => void) | undefined;
   let closed = false;
@@ -31,16 +32,27 @@ function createSession(sessionId: string) {
     observers.forEach((notify) => notify());
   };
   const fail = (error: unknown) => update({ error: String(error), loading: false });
-  const finish = (transfer: number, message: string, error: boolean) => update({
-    transfers: state.transfers.map((row) => row.transfer === transfer ? { ...row, pending: false, speed: 0, message, error } : row),
-    overwrites: state.overwrites.filter((event) => event.transfer !== transfer),
-  });
-  const offline = () => update({
-    connected: false, loading: false, overwrites: [], deletions: [],
-    transfers: state.transfers.map((row) => row.pending ? { ...row, pending: false, error: true, speed: 0, message: t("Disconnected") } : row),
-  });
+  const finish = (transfer: number, message: string, error: boolean) => {
+    const row = state.transfers.find((row) => row.transfer === transfer);
+    if (!row) return;
+    update({
+      transfers: state.transfers.map((row) => row.transfer === transfer ? { ...row, pending: false, speed: 0, message, error } : row),
+      overwrites: state.overwrites.filter((event) => event.transfer !== transfer),
+      ...(error ? { error: `${row.direction} · ${row.name}: ${message}` } : {}),
+    });
+    clearTimeout(removals.get(transfer));
+    if (closed) return;
+    removals.set(transfer, setTimeout(() => {
+      removals.delete(transfer);
+      update({ transfers: state.transfers.filter((row) => row.transfer !== transfer) });
+    }, 1500));
+  };
+  const offline = () => {
+    update({ connected: false, loading: false, overwrites: [], deletions: [] });
+    state.transfers.filter((row) => row.pending).forEach((row) => finish(row.transfer, t("Disconnected"), true));
+  };
   const refresh = async (path = state.path) => {
-    update({ loading: true, error: "" });
+    update({ loading: true });
     try { await api.remoteList(sessionId, path); }
     catch (error) { fail(error); }
   };
@@ -52,7 +64,7 @@ function createSession(sessionId: string) {
       try {
         stop = await api.listenSftp(sessionId, {
           files: (event) => update({ path: event.path, entries: event.entries, connected: true, loading: false }),
-          transfer: (event) => update({ error: event.error ? event.message : "", loading: false }),
+          transfer: (event) => update({ error: event.error ? event.message : state.error, loading: false }),
           progress: (event) => {
             if (!state.transfers.some((row) => row.transfer === event.transfer)) return;
             update({ transfers: state.transfers.map((row) => row.transfer === event.transfer && row.pending ? { ...row, ...event, message: "" } : row) });
@@ -73,10 +85,14 @@ function createSession(sessionId: string) {
           },
           delete: (event) => update({ deletions: [...state.deletions, event] }),
           status: (event) => {
-            if (!event.connected) { offline(); if (event.error) fail(event.message); }
+            if (!event.connected) { offline(); if (event.error) fail(event.message); } // the real reason replaces the per-row "Disconnected" messages
             else { update({ connected: true }); void refresh(); }
           },
-          closed: () => { closed = true; offline(); stop?.(); sessions.delete(sessionId); },
+          closed: () => {
+            closed = true; offline(); stop?.();
+            removals.forEach(clearTimeout); removals.clear();
+            sessions.delete(sessionId);
+          },
         });
         if (closed) stop();
         else await refresh();
@@ -318,7 +334,6 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
   useEffect(() => { void loadLocal(localPath.current); }, [showHidden, remote.revision]); // Reload after completed downloads, including while this tab was hidden.
 
   async function run(work: () => Promise<unknown>) {
-    session.update({ error: "" });
     try { await work(); } catch (error) { session.fail(error); }
   }
 
@@ -330,9 +345,7 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
     }
     const id = ++nextTransfer;
     const row: Transfer = { transfer: id, name: entry.name, direction: side === "local" ? t("Upload") : t("Download"), transferred: 0, total: entry.size, speed: 0, message: t("Queued"), pending: true, error: false };
-    const pending = current.transfers.filter((item) => item.pending);
-    const completed = current.transfers.filter((item) => !item.pending).slice(-Math.max(0, 31 - pending.length));
-    session.update({ transfers: [...pending, ...completed, row], error: "" });
+    session.update({ transfers: [...current.transfers, row] }); // queue order: the panel shows the first three, finished rows keep their place until removed
     try {
       if (side === "local") await api.upload(sessionId, current.path, local.path, entry.name, id);
       else await api.download(sessionId, current.path, entry.name, local.path, entry.isDir, id);
@@ -340,7 +353,6 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
   }
 
   async function action(side: Side, operation: string, selectedName?: string) {
-    session.update({ error: "" });
     const path = side === "local" ? local.path : remote.path;
     const name = selectedName ?? (side === "local" ? localSelection : remoteSelection);
     if (operation === "mkdir" || operation === "rename") {
@@ -415,8 +427,8 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
         onAction={(operation, name) => void action("remote", operation, name)} onOpen={(entry) => entry.isDir ? void session.refresh(entry.path) : void transfer("remote", entry)}
         onReconnect={() => void run(async () => { await session.start(); await api.reconnect(sessionId); })} />
     </div>
-    <section className="sftp-transfers" aria-label={t("Transfers")}><header><strong>{t("Transfers")}</strong><span>{t("8 queued maximum")}</span><span className="sftp-queue-count">{remote.transfers.filter((row) => row.pending).length} / 8</span></header>
-      {remote.transfers.length === 0 ? <div className="sftp-no-transfers">{t("No transfers yet")}</div> : <div className="sftp-transfer-list">{[...remote.transfers].sort((a, b) => Number(b.pending) - Number(a.pending) || b.transfer - a.transfer).map((row) => {
+    {remote.transfers.length > 0 && <section className="sftp-transfers" aria-label={t("Transfers")}><header><strong>{t("Transfers")}</strong><span>{t("8 queued maximum")}</span><span className="sftp-queue-count">{remote.transfers.filter((row) => row.pending).length} / 8</span>{remote.transfers.length > 3 && <span>{t("{count} more", { count: remote.transfers.length - 3 })}</span>}</header>
+      <div className="sftp-transfer-list">{remote.transfers.slice(0, 3).map((row) => {
         const percent = row.total > 0 ? Math.min(100, Math.round(row.transferred / row.total * 100)) : !row.pending && !row.error ? 100 : 0;
         return <div className={`sftp-transfer${row.error ? " sftp-transfer-error" : ""}`} key={row.transfer}><div className="sftp-transfer-detail"><strong>{row.direction} · {row.name}</strong><span>{row.error && <Icon name="alert" size={14} />}{row.message || `${size(row.transferred)} / ${size(row.total)} · ${size(row.speed)}/s`}</span>
           <progress aria-label={`${row.direction} · ${row.name}`} max={100} value={percent} /></div>
@@ -428,8 +440,8 @@ function SftpWorkspace({ sessionId }: { sessionId: string }) {
             if (snapshot.overwrites.some((event) => event.transfer === row.transfer)) session.finish(row.transfer, t("Cancelled"), false);
             else session.update({ transfers: snapshot.transfers.map((item) => item.transfer === row.transfer && item.pending ? { ...item, cancelling: true, message: t("Cancelling…") } : item) });
           })}>{row.cancelling && row.pending ? t("Cancelling…") : t("Cancel")}</button></div>;
-      })}</div>}
-    </section>
+      })}</div>
+    </section>}
     {activeDialog && <dialog className="dialog" aria-labelledby="sftp-dialog-title" ref={(node) => { if (node && !node.open) node.showModal(); }} onCancel={(event) => { event.preventDefault(); if (!dialogBusy) dismissDialog(); }}>
       <form onSubmit={(event) => { event.preventDefault(); void acceptDialog(); }}>
         <h2 id="sftp-dialog-title">{dialogTitle}</h2>

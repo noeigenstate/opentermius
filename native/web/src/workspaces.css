@@ -132,8 +132,6 @@
 .sftp-transfers header strong { font-size: 13px; }
 .sftp-transfers header span { font-size: 10.5px; color: var(--secondary); }
 .sftp-queue-count { margin-left: auto; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
-.sftp-no-transfers { padding: 0 14px 14px; font-size: 11.5px; color: var(--muted); }
-.sftp-transfer-list { max-height: 176px; overflow: auto; }
 .sftp-transfer { display: flex; align-items: center; gap: 13px; padding: 8px 14px 10px; border-top: 1px solid var(--divider); }
 .sftp-transfer-detail { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
 .sftp-transfer-detail strong { overflow: hidden; font-size: 11.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
