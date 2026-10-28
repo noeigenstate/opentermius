@@ -115,7 +115,7 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` embeds `web/dist` into the executable; a plain release build does not. `native/installer/installer.nsi` packages `target/release/opentermius.exe` (honouring Cargo's configured target directory) into `native/releases/OpenTermius-<version>-windows-x64-setup.exe` and `checksums.json`. Tauri's own bundler stays disabled by default; `native/scripts/package-linux.sh` enables it only for AppImages, with Tauri building the frontend and enabling `custom-protocol`. See [packaging details](native/installer/README.md) for NSIS discovery, a cached bootstrapper and `-SkipBuild`.
 
-The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.5`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the [Release workflow](.github/workflows/release.yml), which builds, verifies and publishes the Windows installer, macOS DMG and ZIP, Linux x64/arm64 AppImages, `checksums.json` (the Windows updater format) and `SHA256SUMS` (all five packages). Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
+The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.6`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the [Release workflow](.github/workflows/release.yml), which builds, verifies and publishes the Windows installer, macOS DMG and ZIP, Linux x64/arm64 AppImages, `checksums.json` (the Windows updater format) and `SHA256SUMS` (all five packages). Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
 
 `native/installer/verify-install.ps1` checks silent install, overwrite upgrade, shortcuts, registration, uninstall and configuration retention on a clean Windows account. It refuses to run over a real installation.
 
@@ -226,6 +226,6 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` 会把 `web/dist` 内嵌进程序，普通 release 构建不会内嵌。`native/installer/installer.nsi` 将 `target/release/opentermius.exe`（遵循 Cargo 配置的目标目录）打包为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 与 `checksums.json`。Tauri 自带打包器默认关闭；`native/scripts/package-linux.sh` 仅为 AppImage 启用它，由 Tauri 构建前端并启用 `custom-protocol`。详细参数见 [安装程序说明](native/installer/README.md)。
 
-版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.5`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发 [Release 工作流](.github/workflows/release.yml)：构建、验证并发布 Windows 安装包、macOS DMG 和 ZIP、Linux x64/arm64 AppImage、`checksums.json`（Windows 更新器格式）及 `SHA256SUMS`（覆盖全部五个包）。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
+版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.6`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发 [Release 工作流](.github/workflows/release.yml)：构建、验证并发布 Windows 安装包、macOS DMG 和 ZIP、Linux x64/arm64 AppImage、`checksums.json`（Windows 更新器格式）及 `SHA256SUMS`（覆盖全部五个包）。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
 
 在干净的 Windows 账号运行 `native/installer/verify-install.ps1` 可验证静默安装、覆盖升级、快捷方式、注册项、卸载和配置保留；发现真实安装时脚本会拒绝运行。
