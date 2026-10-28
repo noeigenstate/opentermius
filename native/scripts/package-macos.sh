@@ -50,6 +50,9 @@ $icon_entry
 </dict></plist>
 PLIST
 plutil -lint "$bundle/Contents/Info.plist"
+# Apple Silicon requires signed code; ad-hoc sealing avoids "damaged" downloads and allows right-click > Open / Privacy & Security > Open Anyway without notarization.
+codesign --force --deep --sign - "$bundle"
+codesign --verify --deep --strict "$bundle"
 ln -s /Applications "$image_root/Applications"
 arch=$(uname -m)
 if [[ -n ${CARGO_BUILD_TARGET:-} ]]; then arch=${CARGO_BUILD_TARGET%%-*}; fi

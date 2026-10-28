@@ -54,7 +54,7 @@ keep outputs, caches and temporary files on E:.
    manifests, the `opentermius`/`opentermius-desktop` entries of `Cargo.lock`
    and `web/package.json` plus both `web/package-lock.json` fields, then run
    step 1. Commit, tag `vX.Y.Z` on that commit and push `main` and the tag; the
-   `Windows installer` workflow publishes the GitHub release.
+   `Release` workflow (`.github/workflows/release.yml`) publishes the GitHub release.
    README images use synthetic fixture data only (192.0.2.0/24 addresses) and
    new file names; existing `docs/screenshots/` files are historical records.
 

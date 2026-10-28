@@ -44,7 +44,11 @@ Uninstall keeps your configuration by default. Tick the data-removal box (or pas
 
 In-app updates download the new installer only when its size and SHA-256 match the release's `checksums.json`, then run the silent upgrade. Copies that were not installed open the release page instead.
 
-**macOS and Linux**: CI builds and tests both platforms, and `native/scripts/package-macos.sh` / `package-linux.sh` produce unsigned archives. No signed packages are published, and these platforms still need real desktop verification.
+**Linux x64 / arm64**: download `OpenTermius-<version>-linux-x86_64.tar.gz` or `OpenTermius-<version>-linux-aarch64.tar.gz` and `SHA256SUMS` from [Releases](https://github.com/noeigenstate/opentermius/releases). Verify the archive's SHA-256 against `SHA256SUMS`, extract it and run `bin/opentermius`. These unsigned portable packages require GTK 3, WebKitGTK 4.1, an AppIndicator implementation and an XDG desktop portal; see `README.txt` inside for runtime and installation details. Built on Ubuntu 22.04 (glibc 2.35 or newer).
+
+**macOS arm64 (Apple Silicon)**: download `OpenTermius-<version>-macos-arm64.dmg` and `SHA256SUMS` from [Releases](https://github.com/noeigenstate/opentermius/releases), verify the DMG's SHA-256 against `SHA256SUMS`, then open it and drag OpenTermius to Applications. The DMG is unsigned (no Developer ID), the app is ad-hoc-signed, and neither is notarized. On first launch, use right-click > Open or System Settings > Privacy & Security > Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.
+
+CI builds and tests macOS and Linux, but these packages have not yet been verified on a real desktop. In-app updates on these platforms open the release page.
 
 ### Development
 
@@ -102,7 +106,7 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` embeds `web/dist` into the executable; a plain release build does not. `native/installer/installer.nsi` packages `target/release/opentermius.exe` (honouring Cargo's configured target directory) into `native/releases/OpenTermius-<version>-windows-x64-setup.exe` and `checksums.json`. Tauri's own bundler stays disabled. See [packaging details](native/installer/README.md) for NSIS discovery, a cached bootstrapper and `-SkipBuild`.
 
-The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.5`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the release workflow, which builds, verifies and publishes the installer and `checksums.json` in the format the updater reads. Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
+The canonical version is `native/desktop/tauri.conf.json` (currently `0.8.5`). It must match both Cargo manifests, `Cargo.lock` and the web manifest and lockfile; packaging and CI enforce this. Pushing a matching `vX.Y.Z` tag runs the [Release workflow](.github/workflows/release.yml), which builds, verifies and publishes the Windows installer, macOS/Linux packages, `checksums.json` (the Windows updater format) and `SHA256SUMS` (all four packages). Silent upgrades use `installer /S /D=<install-dir>`, with `/D` last and unquoted.
 
 `native/installer/verify-install.ps1` checks silent install, overwrite upgrade, shortcuts, registration, uninstall and configuration retention on a clean Windows account. It refuses to run over a real installation.
 
@@ -142,7 +146,11 @@ NSIS 安装程序按当前用户安装，创建快捷方式并覆盖升级原目
 
 应用内更新只在新安装包的大小和 SHA-256 与发布中的 `checksums.json` 一致时才会使用，然后执行静默升级；未安装的程序副本会改为打开发布页面。
 
-**macOS 与 Linux**：CI 会构建并测试这两个平台，`native/scripts/package-macos.sh` / `package-linux.sh` 可生成未签名的归档包。目前不发布签名安装包，仍需在真实桌面上验证。
+**Linux x64 / arm64**：从 [Releases](https://github.com/noeigenstate/opentermius/releases) 下载 `OpenTermius-<version>-linux-x86_64.tar.gz` 或 `OpenTermius-<version>-linux-aarch64.tar.gz` 及 `SHA256SUMS`，按 `SHA256SUMS` 核对归档包的 SHA-256，解压后运行 `bin/opentermius`。这些未签名的便携包需要 GTK 3、WebKitGTK 4.1、AppIndicator 实现及 XDG 桌面门户；运行依赖与安装详情见包内 `README.txt`。构建环境为 Ubuntu 22.04（需要 glibc 2.35 或更新版本）。
+
+**macOS arm64（Apple Silicon）**：从 [Releases](https://github.com/noeigenstate/opentermius/releases) 下载 `OpenTermius-<version>-macos-arm64.dmg` 及 `SHA256SUMS`，按 `SHA256SUMS` 核对 DMG 的 SHA-256，再打开并将 OpenTermius 拖入 Applications。DMG 未签名（无 Developer ID），应用采用临时签名（ad-hoc），两者均未公证。首次启动请右键选择“打开”，或前往“系统设置 > 隐私与安全性 > 仍要打开”，也可运行 `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`。
+
+macOS 和 Linux 会在 CI 中构建并测试，但这些包尚未在真实桌面上验证。这两个平台的应用内更新会打开发布页面。
 
 ### 开发
 
@@ -200,6 +208,6 @@ cargo build --release --locked -p opentermius-desktop --features tauri/custom-pr
 
 `tauri/custom-protocol` 会把 `web/dist` 内嵌进程序，普通 release 构建不会内嵌。`native/installer/installer.nsi` 将 `target/release/opentermius.exe`（遵循 Cargo 配置的目标目录）打包为 `native/releases/OpenTermius-<version>-windows-x64-setup.exe` 与 `checksums.json`，不使用 Tauri 自带安装器。详细参数见 [安装程序说明](native/installer/README.md)。
 
-版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.5`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发发布流程：构建、验证并发布安装包和更新器读取的 `checksums.json`。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
+版本以 `native/desktop/tauri.conf.json` 为准（当前为 `0.8.5`），必须与两个 Cargo 清单、`Cargo.lock` 及前端清单和锁文件一致，打包脚本和 CI 会检查。推送匹配的 `vX.Y.Z` 标签会触发 [Release 工作流](.github/workflows/release.yml)：构建、验证并发布 Windows 安装包、macOS/Linux 包、`checksums.json`（Windows 更新器格式）及 `SHA256SUMS`（覆盖全部四个包）。静默升级使用 `installer /S /D=<安装目录>`，`/D` 必须放在最后且不加引号。
 
 在干净的 Windows 账号运行 `native/installer/verify-install.ps1` 可验证静默安装、覆盖升级、快捷方式、注册项、卸载和配置保留；发现真实安装时脚本会拒绝运行。

@@ -1,0 +1,316 @@
+name: Release
+
+"on":
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows x64 installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: native/web/package-lock.json
+
+      - name: Check release versions and version-check tests
+        run: |
+          node scripts/check-versions.mjs
+          node --test scripts/check-versions.test.mjs
+
+      - name: Check tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = node scripts/check-versions.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Release versions do not match.' }
+          if ($env:RELEASE_TAG -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or $env:RELEASE_TAG -cne "v$version") {
+            throw "Release tag '$env:RELEASE_TAG' must match Tauri version 'v$version'."
+          }
+
+      - name: Install stable Rust (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "native -> target"
+
+      - name: Install frontend dependencies
+        working-directory: native/web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: native/web
+        run: npm run build
+
+      - name: Build workspace
+        run: cargo build --locked --workspace
+
+      - name: Test workspace (consolidated integration suite)
+        run: cargo test --locked --workspace
+
+      - name: Build release with embedded frontend
+        run: cargo build --release --locked -p opentermius-desktop --features tauri/custom-protocol
+
+      - name: Locate or install NSIS
+        id: nsis
+        run: |
+          function Find-Nsis {
+            $command = Get-Command makensis.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($command) { return $command.Source }
+            foreach ($root in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+              if ($root) {
+                $candidate = Join-Path $root 'NSIS/makensis.exe'
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+              }
+            }
+          }
+          $makensis = Find-Nsis
+          if (-not $makensis) {
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'NSIS 安装失败。' }
+            $makensis = Find-Nsis
+          }
+          if (-not $makensis) { throw '未找到 makensis.exe，无法生成 Windows 安装程序。' }
+          "path=$makensis" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Package NSIS installer
+        working-directory: .
+        env:
+          MAKENSIS_PATH: ${{ steps.nsis.outputs.path }}
+          OPENTERMIUS_TEST_EXECUTABLE: ${{ github.workspace }}/native/target/release/opentermius.exe
+        run: ./native/scripts/package.ps1 -SkipBuild -MakensisPath $env:MAKENSIS_PATH
+
+      - name: Verify silent install, upgrade and uninstall
+        run: ./installer/verify-install.ps1
+
+      - name: Upload installer and SHA-256 manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenTermius-windows-x64-setup
+          path: |
+            native/releases/OpenTermius-*-windows-x64-setup.exe
+            native/releases/checksums.json
+          if-no-files-found: error
+
+  unix:
+    name: Build ${{ matrix.name }} package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-22.04
+            script: package-linux.sh
+          - name: Linux arm64
+            os: ubuntu-22.04-arm
+            script: package-linux.sh
+          - name: macOS arm64
+            os: macos-15
+            script: package-macos.sh
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: native/web/package-lock.json
+
+      - name: Check release versions and version-check tests
+        run: |
+          node scripts/check-versions.mjs
+          node --test scripts/check-versions.test.mjs
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "native -> target"
+
+      - name: Install Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          # Ayatana is the AppIndicator implementation in current Tauri prerequisites.
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libxdo-dev
+
+      - name: Install frontend dependencies
+        working-directory: native/web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: native/web
+        run: npm run build
+
+      - name: Build workspace
+        run: cargo build --locked --workspace
+
+      - name: Test workspace (consolidated integration suite)
+        run: cargo test --locked --workspace
+
+      - name: Package release with embedded frontend
+        run: ./scripts/${{ matrix.script }}
+
+      - name: Verify Linux package
+        if: runner.os == 'Linux'
+        run: |
+          shopt -s nullglob
+          packages=(releases/*)
+          if [[ ${#packages[@]} -ne 1 || ! -f ${packages[0]} || ${packages[0]} != *.tar.gz ]]; then
+            printf '%s\n' 'Release artifacts must contain exactly one Linux archive.' >&2
+            exit 1
+          fi
+          archive=${packages[0]}
+          name=$(basename "$archive" .tar.gz)
+          contents=$(tar -tzf "$archive")
+          grep -Fx "$name/bin/opentermius" <<< "$contents"
+          stage=$(mktemp -d)
+          trap 'rm -rf -- "$stage"' EXIT
+          tar -xzf "$archive" -C "$stage"
+          binary=$stage/$name/bin/opentermius
+          case $(uname -m) in
+            x86_64) machine=x86-64 ;;
+            aarch64) machine=aarch64 ;;
+            *) printf '%s\n' 'Unsupported Linux architecture.' >&2; exit 1 ;;
+          esac
+          description=$(file "$binary")
+          printf '%s\n' "$description"
+          [[ $description == *ELF* && $description == *"$machine"* ]]
+          libraries=$(ldd "$binary")
+          printf '%s\n' "$libraries"
+          if [[ $libraries == *'not found'* ]]; then
+            printf '%s\n' 'Linux package has missing shared libraries.' >&2
+            exit 1
+          fi
+
+      - name: Verify macOS package
+        if: runner.os == 'macOS'
+        run: |
+          shopt -s nullglob
+          packages=(releases/*.dmg)
+          if [[ ${#packages[@]} -ne 1 ]]; then
+            printf '%s\n' 'Release artifacts must contain exactly one macOS DMG.' >&2
+            exit 1
+          fi
+          mountpoint=$(mktemp -d)
+          trap 'hdiutil detach "$mountpoint" && rmdir "$mountpoint"' EXIT
+          hdiutil attach -nobrowse -readonly -mountpoint "$mountpoint" "${packages[0]}"
+          bundle=$mountpoint/OpenTermius.app
+          [[ -f $bundle/Contents/MacOS/opentermius ]]
+          [[ $(lipo -archs "$bundle/Contents/MacOS/opentermius") == arm64 ]]
+          codesign --verify --deep --strict "$bundle"
+          plutil -lint "$bundle/Contents/Info.plist"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenTermius-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            native/releases/*.tar.gz
+            native/releases/*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Publish release packages
+    needs: [build, unix]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: OpenTermius-*
+          path: native/releases
+          merge-multiple: true
+
+      - name: Prepare release notes
+        run: |
+          $manifest = Get-Content -LiteralPath native/releases/checksums.json -Raw | ConvertFrom-Json
+          $installers = @(Get-ChildItem -Path native/releases/OpenTermius-*-windows-x64-setup.exe -File)
+          if ($installers.Count -ne 1) { throw '发布产物必须包含且仅包含一个 Windows 安装程序。' }
+          $installer = $installers[0]
+          $sha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($manifest.file -cne $installer.Name -or $manifest.sha256 -cne $sha256) {
+            throw '安装程序与 checksums.json 中的文件名或 SHA-256 不一致。'
+          }
+          if ($manifest.bytes -ne $installer.Length) { throw '安装程序与 checksums.json 中的文件大小不一致。' }
+          if ($installer.Name -cnotmatch '^OpenTermius-([0-9]+\.[0-9]+\.[0-9]+)-windows-x64-setup\.exe$') {
+            throw 'Windows 安装程序的文件名或版本无效。'
+          }
+          $version = $Matches[1]
+          $packages = @($installer)
+          foreach ($suffix in @('linux-x86_64.tar.gz', 'linux-aarch64.tar.gz', 'macos-arm64.dmg')) {
+            $package = @(Get-ChildItem -Path "native/releases/OpenTermius-*-$suffix" -File)
+            if ($package.Count -ne 1 -or $package[0].Name -cne "OpenTermius-$version-$suffix") {
+              throw "发布产物必须包含且仅包含一个版本为 $version 的 $suffix 包。"
+            }
+            $packages += $package[0]
+          }
+          $checksumLines = @($packages | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          })
+          [System.IO.File]::WriteAllText((Join-Path $PWD 'native/releases/SHA256SUMS'), ($checksumLines -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
+          @(
+            'Windows x64 NSIS installer.'
+            ''
+            'This installer is unsigned. Windows SmartScreen may display a warning.'
+            ''
+            'Requires Microsoft Edge WebView2 Runtime. Setup installs it when missing (internet required).'
+            ''
+            '### Linux x64 / arm64'
+            ''
+            'Portable tar.gz, unsigned. Requires GTK 3, WebKitGTK 4.1, an AppIndicator implementation and an XDG desktop portal (see README.txt inside). Built on Ubuntu 22.04 (glibc 2.35 or newer).'
+            ''
+            '### macOS arm64 (Apple Silicon)'
+            ''
+            'Unsigned DMG (no Developer ID) with an ad-hoc-signed app; not notarized. First launch via right-click > Open or System Settings > Privacy & Security > Open Anyway, or `xattr -dr com.apple.quarantine /Applications/OpenTermius.app`.'
+            ''
+            'SHA-256:'
+            '```text'
+            $checksumLines
+            '```'
+            ''
+            'The same hashes are in SHA256SUMS; checksums.json covers the Windows installer for the in-app updater.'
+          ) | Set-Content -LiteralPath release-notes.md -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: |
+            native/releases/OpenTermius-*-windows-x64-setup.exe
+            native/releases/OpenTermius-*-linux-x86_64.tar.gz
+            native/releases/OpenTermius-*-linux-aarch64.tar.gz
+            native/releases/OpenTermius-*-macos-arm64.dmg
+            native/releases/checksums.json
+            native/releases/SHA256SUMS
+          fail_on_unmatched_files: true

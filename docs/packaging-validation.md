@@ -23,7 +23,7 @@ observed in the browser command line and is not counted as an offline test.
 
 `installer/verify-install.ps1` refused the existing local installation as intended;
 it did not modify it. Clean silent install, overwrite upgrade and uninstall are
-configured in `windows-release.yml` and still need a clean-account/CI run. The
+configured in `release.yml` and still need a clean-account/CI run. The
 missing-WebView2 and failed-bootstrapper branches require a disposable Windows
 VM. No runtime was removed from this machine. macOS/Linux CI and archive scripts
 were not executed locally. The initial Tauri shell also needs `--apply-update`
