@@ -64,6 +64,8 @@ keep outputs, caches and temporary files on E:.
    Linux AppImages bundle GTK and WebKitGTK and require glibc 2.35 or newer;
    run `chmod +x <file>.AppImage` before launching, and add
    `--appimage-extract-and-run` on systems without FUSE 2.
+   Desktop CI runs ShellCheck on both packaging scripts; on Windows, lint them
+   first with the release `shellcheck.exe` unpacked into a scratch folder on E:.
    README images use synthetic fixture data only (192.0.2.0/24 addresses) and
    new file names; existing `docs/screenshots/` files are historical records.
 

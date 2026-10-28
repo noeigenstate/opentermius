@@ -21,7 +21,7 @@ case $arch in
 esac
 (cd desktop && ../web/node_modules/.bin/tauri build --bundles appimage --config '{"bundle":{"active":true,"category":"Utility"}}' -- --locked)
 shopt -s nullglob
-appimages=("$target_root/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release/bundle/appimage"/OpenTermius_"$version"_*.AppImage)
+appimages=("$target_root/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release/bundle/appimage/OpenTermius_${version}_"*.AppImage)
 if [[ ${#appimages[@]} -ne 1 || ! -f ${appimages[0]} || ${appimages[0]} != *"_${bundle_arch}.AppImage" ]]; then
     printf 'Expected exactly one OpenTermius %s %s AppImage in the Cargo target directory.\n' "$version" "$bundle_arch" >&2
     exit 1
